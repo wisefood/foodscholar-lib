@@ -78,14 +78,23 @@ def test_upsert_chunks_routes_to_store() -> None:
 
 def test_deferred_phases_raise_not_implemented() -> None:
     fs = FoodScholar.in_memory()
-    for method in ["annotate", "build_layer_a", "attach", "build_layer_b", "build_layer_c"]:
+    for method in ["build_layer_a", "attach", "build_layer_b", "build_layer_c"]:
         with pytest.raises(NotImplementedError, match="not implemented yet"):
             getattr(fs, method)()
 
 
 def test_build_stops_at_first_deferred_phase() -> None:
+    """`fs.build()` runs annotate (real) then trips on build-layer-a (deferred)."""
+    from pathlib import Path
+
+    from foodscholar import FoodOnAPI
+    from foodscholar.ontology import load_ontology
+
     fs = FoodScholar.in_memory()
-    with pytest.raises(NotImplementedError, match="'annotate'"):
+    fs.attach_ontology(
+        FoodOnAPI(load_ontology(Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"))
+    )
+    with pytest.raises(NotImplementedError, match="'build-layer-a'"):
         fs.build()
 
 

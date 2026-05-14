@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ontology = ["pronto"]
-annotate = ["torch", "transformers", "sentence-transformers"]
+annotate = ["torch", "transformers", "sentence-transformers", "rapidfuzz"]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
 elastic = ["elasticsearch>=8"]
@@ -34,6 +34,7 @@ all = [
     "torch",
     "transformers",
     "sentence-transformers",
+    "rapidfuzz",
     "leidenalg",
     "python-igraph",
     "hdbscan",
@@ -42,7 +43,7 @@ all = [
     "elasticsearch>=8",
     "neo4j>=5",
 ]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto", "rapidfuzz"]
 
 [project.urls]
 Homepage = "https://github.com/wisefood/foodscholar-lib"
@@ -67,8 +68,9 @@ include = [
 testpaths = ["tests"]
 markers = [
     "integration: requires real Elasticsearch + Neo4j (skipped by default)",
+    "slow: downloads or runs real ML models (skipped by default)",
 ]
-addopts = "-ra -q --strict-markers -m 'not integration'"
+addopts = "-ra -q --strict-markers -m 'not integration and not slow'"
 
 [tool.ruff]
 line-length = 100

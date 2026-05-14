@@ -60,6 +60,28 @@ fs.build()
 answer = fs.query("Is olive oil heart-healthy?")
 ```
 
+## Annotating chunks
+
+Once the ontology is in place, `fs.annotate()` runs NER + the three-tier
+linker + embeddings over every chunk in the store and writes the enriched
+copies back. The two pieces are independently probeable:
+
+```python
+fs.ner.extract("Mediterranean diet rich in olive oil.")  # list[Mention]
+fs.linker.dry_run("evo")
+# EntityLink(ontology_id="FOODON:...", method="lexical_fuzzy", confidence=0.86)
+
+fs.annotate()                                            # full phase
+```
+
+The linker tries `lexical_exact` → `lexical_fuzzy` (rapidfuzz) → `dense`
+(cosine over precomputed term embeddings, opt-in). Each `EntityLink`
+records the `method` and `confidence` so it's easy to audit which tier
+resolved a mention.
+
+The §17 gate (entity-linking coverage ≥ 70% on a held-out gold set) is a
+unit test that fails CI if the linker regresses below threshold.
+
 ## Loading the ontology
 
 `fs.ontology` is the FoodOn lookup API used by the linker, the layer_a
@@ -142,7 +164,7 @@ foodscholar/
     ├── logging.py                  # structlog setup
     ├── io/                         # Pydantic data contracts
     ├── corpus/                     # chunk loading
-    ├── annotate/                   # NER + linking + embeddings   (stub)
+    ├── annotate/                   # NER + linking + embeddings   (M2 ✓)
     ├── ontology/                   # FoodOn loader + lookup       (M1 ✓)
     ├── layer_a/                    # backbone builder             (stub)
     ├── layer_b/                    # theme discovery              (stub)

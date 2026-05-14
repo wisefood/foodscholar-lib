@@ -143,7 +143,8 @@ fs = FoodScholar.in_memory()
 | `fs.load_chunks(path)` | corpus loader → `chunk_store.upsert` |
 | `fs.upsert_chunks(chunks)` | direct upsert (notebooks/tests) |
 | `fs.init()` | provisions backing stores (ES index, Neo4j constraints) |
-| `fs.annotate()` | NER + linking + embeddings phase |
+| `fs.annotate()` | NER + 3-tier linker + embeddings (returns ArtifactMeta) |
+| `fs.ner` / `fs.linker` | lazy-built NER + Linker objects, individually probeable |
 | `fs.build_layer_a()` | backbone phase |
 | `fs.attach()` | chunk→shelf attachments + denormalize |
 | `fs.build_layer_b()` | theme discovery phase |
@@ -204,6 +205,29 @@ fs.ontology.search("olive", limit=25)             # substring prefilter for SapB
 ```
 
 First access triggers `load_ontology(path, cache_path=...)` which uses pronto with `import_depth=0` (FoodOn only — MONDO and ChEBI deferred to v2 per §2). Results cache to a Parquet file alongside the source, keyed on `(source_size, source_mtime)` so the cache invalidates when FoodOn is updated. Tests bypass the loader with `fs.attach_ontology(api)`.
+
+### Annotate (`fs.ner` / `fs.linker` / `fs.annotate()`)
+
+The annotate phase is owned by three pluggable pieces, each with a default that works against the in-memory facade:
+
+```python
+fs.ner.extract("Mediterranean diet rich in olive oil.")  # list[Mention]
+fs.linker.link(mention)                                  # EntityLink | None
+fs.linker.dry_run("evo")                                 # convenience: text -> EntityLink
+fs.annotate()                                            # full phase, returns ArtifactMeta
+```
+
+Defaults:
+
+- **NER** — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym in the ontology (obsolete terms excluded). Real `SciFoodNERAdapter` is gated by the `[annotate]` extra and runs behind `@pytest.mark.slow`.
+- **Linker** — `ThreeTierLinker(fs.ontology, ...)`. Tries in order: `lexical_exact` (exact case-insensitive match) → `lexical_fuzzy` (rapidfuzz `token_set_ratio`, threshold from `cfg.annotate.linker.lexical_threshold`) → `dense` (cosine over precomputed term embeddings, opt-in via the dense embedder). Each link records `method` and `confidence` so the post-hoc audit in §17 is mechanical.
+- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")` or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
+
+Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by passing `embedder=...` to either factory.
+
+### Evaluation gates
+
+`foodscholar.evaluation.evaluate_linker(linker, gold)` drives a JSONL gold set against any `Linker` and returns a `LinkerEvalReport` with `coverage`, `accuracy`, per-tier breakdown, and a list of misses. The §17 gate ("entity-linking coverage ≥ 70%") is a unit test in `tests/unit/test_evaluation_linker.py` and fails CI if the linker regresses below threshold.
 
 Design principles, in priority order:
 
