@@ -61,15 +61,16 @@ class ThreeTierLinker:
         self._embedder = dense_embedder
         self._gate = semantic_type_gate
 
-        # Precompute the (name, id) pairs for fuzzy. Labels + exact synonyms only.
-        # We deliberately do not include related synonyms in fuzzy matching: too noisy.
-        names: list[tuple[str, OntologyId]] = []
+        # Precompute the (name, id, kind) pairs for fuzzy. Labels + exact synonyms.
+        # `kind` is "label" or "synonym" — used to break ties in favor of labels.
+        # Related synonyms are deliberately excluded: too noisy.
+        names: list[tuple[str, OntologyId, str]] = []
         for term in ontology:
             if term.obsolete:
                 continue
-            names.append((term.label.lower(), term.id))
+            names.append((term.label.lower(), term.id, "label"))
             for syn in term.synonyms:
-                names.append((syn.lower(), term.id))
+                names.append((syn.lower(), term.id, "synonym"))
         self._fuzzy_pool = names
 
         # Precompute dense term embeddings if a dense embedder is provided.
@@ -145,26 +146,63 @@ class ThreeTierLinker:
     # ------------------------------------------------------------------ tiers
 
     def _fuzzy_lookup(self, text: str) -> tuple[OntologyId, float] | None:
+        """Fuzzy match against labels + exact synonyms.
+
+        Uses `WRatio` (which penalizes length differences) rather than
+        `token_set_ratio` (which doesn't, and on a 30k+ ontology routinely
+        prefers single-word generic terms like "oil" over multi-word
+        specifics like "olive oil").
+
+        Among ties (within 1 point), prefer label matches over synonym
+        matches, then prefer the shortest target name (closest length to
+        the query). This stops "arachis" from matching "peanut oil" when
+        "Arachis hypogaea" is also in the pool.
+
+        Hard gate: reject any match where the target's character length is
+        less than half the query's, even if the score is high — that's the
+        "oliv oil" → "oil" failure mode in disguise.
+        """
         from rapidfuzz import fuzz, process
 
         if not self._fuzzy_pool:
             return None
 
         query = text.lower()
-        # token_set_ratio handles plurals, word-order, and minor edits.
-        # process.extractOne returns (matched_name, score_0_to_100, index).
-        result = process.extractOne(
-            query,
-            [n for n, _ in self._fuzzy_pool],
-            scorer=fuzz.token_set_ratio,
-        )
-        if result is None:
+        names = [n for n, _, _ in self._fuzzy_pool]
+        results = process.extract(query, names, scorer=fuzz.WRatio, limit=10)
+        if not results:
             return None
-        _, score, idx = result
-        normalized = score / 100.0
-        if normalized < self._fuzzy_threshold:
+
+        # Short queries (≤4 chars) demand a much higher fuzzy threshold —
+        # WRatio finds spurious matches against any random short label
+        # otherwise. e.g. "evo" → "devonshire cream" at 0.90 with default
+        # threshold; bump to 0.95 and it's correctly rejected.
+        threshold = max(self._fuzzy_threshold, 0.95) if len(query) <= 4 else self._fuzzy_threshold
+
+        # Filter by threshold and length-ratio gate.
+        q_len = max(len(query), 1)
+        candidates: list[tuple[float, str, OntologyId, str]] = []
+        for matched, score, idx in results:
+            normalized = score / 100.0
+            if normalized < threshold:
+                continue
+            if len(matched) / q_len < 0.5:
+                continue
+            _, term_id, kind = self._fuzzy_pool[idx]
+            candidates.append((normalized, matched, term_id, kind))
+
+        if not candidates:
             return None
-        return self._fuzzy_pool[idx][1], normalized
+
+        # Tie-break (within 0.5pt only — WRatio scores are coarse but not THAT
+        # coarse, and a wider window starves real top hits in favor of shorter
+        # nearby labels). Within the window prefer label > synonym, then the
+        # match whose length is closest to the query length.
+        top_score = candidates[0][0]
+        tied = [c for c in candidates if (top_score - c[0]) <= 0.005]
+        tied.sort(key=lambda c: (0 if c[3] == "label" else 1, abs(len(c[1]) - q_len)))
+        best_score, _, best_id, _ = tied[0]
+        return best_id, best_score
 
     def _dense_lookup(self, text: str) -> tuple[OntologyId, float] | None:
         assert self._embedder is not None

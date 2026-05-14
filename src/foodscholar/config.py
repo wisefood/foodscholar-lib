@@ -25,6 +25,12 @@ class OntologyConfig(BaseModel):
     foodon_path: Path
     cache_path: Path | None = None
     include_imports: bool = False
+    prefix_filter: list[str] | None = ["FOODON:"]
+    """Term-id prefix whitelist for the loaded ontology. Real FoodOn .owl files
+    embed NCBITaxon/CHEBI/BFO/ENVO terms inline; the default keeps only FOODON:
+    so the linker doesn't match food queries against unrelated ontologies. Set
+    to ``null`` to disable filtering (useful for synthetic test fixtures with
+    custom prefixes like ``TEST:``)."""
 
 
 class LinkerConfig(BaseModel):

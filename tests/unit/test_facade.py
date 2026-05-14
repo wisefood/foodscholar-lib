@@ -92,7 +92,10 @@ def test_build_stops_at_first_deferred_phase() -> None:
 
     fs = FoodScholar.in_memory()
     fs.attach_ontology(
-        FoodOnAPI(load_ontology(Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"))
+        FoodOnAPI(
+            load_ontology(Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"),
+            prefix_filter=None,
+        )
     )
     with pytest.raises(NotImplementedError, match="'build-layer-a'"):
         fs.build()
