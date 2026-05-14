@@ -6,6 +6,79 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-14 — Iteration 4 (M2): Annotate phase (NER + 3-tier linker + embedders)
+
+**Goal:** land BRIEF §12 step 9 — the annotate phase. End state: `fs.annotate()` runs NER → 3-tier linker → embedders over every chunk and writes the enriched copies back, idempotently.
+
+### What changed
+
+- **NER + Linker protocols** ([src/foodscholar/storage/protocols.py](src/foodscholar/storage/protocols.py))
+  - `NER.extract(text) -> list[Mention]`
+  - `Linker.link(mention) -> EntityLink | None`
+  - Both `@runtime_checkable` — pluggable per-config like the other backends.
+
+- **Three-tier linker** ([src/foodscholar/annotate/linker.py](src/foodscholar/annotate/linker.py))
+  - `lexical_exact` → `lexical_fuzzy` (rapidfuzz `token_set_ratio`) → `dense` (cosine over precomputed term embeddings).
+  - Dense tier is opt-in: pass `dense_embedder=None` and the linker degrades to exact+fuzzy. Keeps unit tests fast and lets v0.1.0 run without SapBERT installed.
+  - Each link records `method` and `confidence` — surfaces which tier resolved a mention so audits are mechanical.
+  - Resolves the "evo → olive oil" question from earlier: the fuzzy tier already gets it (token_set_ratio with the EVOO synonym scores 0.86). Dense covers cases where the surface form shares no tokens with any FoodOn name.
+
+- **NER adapters** ([src/foodscholar/annotate/ner.py](src/foodscholar/annotate/ner.py))
+  - `KeywordNER` — deterministic, dependency-free, word-boundary regex. `KeywordNER.from_ontology(api)` builds it from every (non-obsolete) ontology label + exact synonym.
+  - `SciFoodNERAdapter` — wraps a HuggingFace token-classification pipeline (SciFoodNER per BRIEF §2). Lazy-imports `transformers`; behind `[annotate]` extra and `@pytest.mark.slow`.
+
+- **Embedder adapters** ([src/foodscholar/annotate/embedder.py](src/foodscholar/annotate/embedder.py))
+  - `HashEmbedder` — deterministic toy embedder; default for `FoodScholar.in_memory()`.
+  - `HFEmbedder` — sentence-transformers backed; default model `allenai/specter2_base`.
+  - `SourceTypeRouter(scientific, general)` — dispatches per `chunk.source_type` (abstract → SPECTER2; textbook/guide → BGE-large) per BRIEF §2. Itself an `Embedder` so it composes.
+
+- **Phase runner** ([src/foodscholar/annotate/runner.py](src/foodscholar/annotate/runner.py))
+  - Pure function: takes injected NER + Linker + Embedder + ChunkStore; for each chunk runs NER → link mentions → embed → write back.
+  - Idempotent: re-running replaces mentions/links/embedding (Pydantic models are frozen, so writes go through `model_copy(update=...)`).
+  - Routes through `SourceTypeRouter.embed_chunk(text, source_type)` when the embedder is a router; otherwise calls `embedder.embed([text])` and stamps the result.
+  - Returns `ArtifactMeta` so callers can persist provenance. Also exposes a `dry_run(text, *, ner, linker)` helper.
+
+- **Facade integration** ([src/foodscholar/facade.py](src/foodscholar/facade.py))
+  - `fs.ner` and `fs.linker` are lazy properties built from `cfg.annotate` on first access.
+  - `fs.attach_ner(...)` / `fs.attach_linker(...)` to override defaults.
+  - `fs.annotate()` is now real — calls `runner.run(...)` and returns `ArtifactMeta`. The deferred-message version is gone.
+  - `fs.linker.dry_run(text)` answers "what would the linker do for this string?" without going through the full phase.
+
+- **Evaluation gate** ([src/foodscholar/evaluation/linker.py](src/foodscholar/evaluation/linker.py))
+  - `evaluate_linker(linker, gold) -> LinkerEvalReport` with `coverage`, `accuracy`, per-tier breakdown, and per-record misses.
+  - 28-record gold set ([tests/fixtures/linker_gold.jsonl](tests/fixtures/linker_gold.jsonl)) covers exact, fuzzy, and negative cases.
+  - BRIEF §17 gate ("entity-linking coverage ≥ 70%") enforced as a unit test. Currently 100% on the mini ontology.
+
+- **Notebook** — §6 now reads "Annotate" (no `[STUB]`); body is a single `fs.annotate()` call. Added a "Probe the linker" subsection with the dry-run table covering `evo`, `olives`, `oliv oil`, `Arachis hypogaea`, `quinoa`. Quickstart's deferred-error probe widened to catch both `RuntimeError` and `NotImplementedError`.
+
+- **Pyproject** — `rapidfuzz` added to `[annotate]` and `[dev]`. New `slow` pytest marker registered (deselected by default; opt-in via `pytest -m slow`).
+
+- **Docs** — BRIEF §3.5 gained the annotate subsection (NER, linker, embedder, evaluation gate). README has a new "Annotating chunks" section above ontology. `annotate/` now flagged M2 ✓.
+
+### Design decisions worth remembering
+
+- **NER and Linker are separate protocols.** A user can swap one without the other (e.g. real SciFoodNER + dev-time KeywordNER linker, or vice versa). The runner only knows protocols.
+- **Linker tiers fall through, not vote.** First hit wins. This is deliberate — exact > fuzzy > dense in trustworthiness, and the `method` field makes the choice auditable.
+- **Dense tier is opt-in even when configured.** The default `_build_linker` doesn't pass `dense_embedder`. Wiring SapBERT explicitly is a Layer-3 decision the user makes per-environment. Keeps v0.1.0 functional without ML downloads.
+- **`KeywordNER.from_ontology` is the in-memory default.** It's not as good as SciFoodNER, but it gets every term that appears verbatim, with zero dependencies, and exercises the full pipeline. The right floor.
+- **Idempotent annotate.** Re-runs replace mentions/links rather than appending, so the chunk store never accumulates stale annotations from earlier model versions.
+- **Slow tests opt-in, not opt-out.** Default `pytest` stays under 35s. Real-model coverage is one flag away (`pytest -m slow`).
+
+### Verification
+
+- `ruff check src tests` — clean
+- `pytest` — **120 passed** (72 → 120; +48 new tests across linker tiers, NER, embedder, runner, evaluation, facade integration, slow stubs)
+- Linker coverage on mini gold set: 100% (28/28 — far above the 70% gate)
+- Notebook executes end-to-end on the conda env. `fs.annotate()` is one line; the linker probe shows all three tiers in action.
+
+### Status at end of iteration
+
+- v0.1.0 — UX foundation + ontology + annotate complete.
+- `fs.annotate()` is real. `fs.build()` will now run annotate then trip on `build-layer-a` (next milestone).
+- Next milestone (BRIEF §12 step 10): **Layer A backbone** — frequency-weighted ancestor propagation, prune (min-support, depth cap, single-child collapse, blacklist), facet merge. The annotate output (`Chunk.foodon_ids`) is the input to this phase.
+
+---
+
 ## 2026-05-14 — Iteration 3 (M1): FoodOn ontology layer
 
 **Goal:** land BRIEF §12 step 8 — the FoodOn loader + lookup API. This is the prerequisite for every downstream phase (annotate's linker, layer_a's backbone projection, layer_c's prompts).

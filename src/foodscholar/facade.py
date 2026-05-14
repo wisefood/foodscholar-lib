@@ -26,10 +26,18 @@ from foodscholar.config import FoodScholarConfig, load_config
 from foodscholar.graph_view import GraphView
 from foodscholar.logging import configure_logging, get_logger
 from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
-from foodscholar.storage.protocols import ChunkStore, Embedder, GraphStore, LLMClient
+from foodscholar.storage.protocols import (
+    NER,
+    ChunkStore,
+    Embedder,
+    GraphStore,
+    Linker,
+    LLMClient,
+)
 from foodscholar.versioning import config_hash
 
 if TYPE_CHECKING:
+    from foodscholar.io.artifacts import ArtifactMeta
     from foodscholar.io.chunk import Chunk
     from foodscholar.ontology import FoodOnAPI
     from foodscholar.retrieval import Answer
@@ -101,6 +109,8 @@ class FoodScholar:
         self.config_hash = config_hash(config)
         self.graph = GraphView(chunk_store, graph_store)
         self._ontology: FoodOnAPI | None = None
+        self._ner: NER | None = None
+        self._linker: Linker | None = None
         self._log = get_logger("foodscholar")
 
     # ------------------------------------------------------------------ factories
@@ -244,6 +254,68 @@ class FoodScholar:
         """
         self._ontology = api
 
+    # ------------------------------------------------------------------ annotate
+
+    @property
+    def ner(self) -> NER:
+        """Lazily-built NER. Default: `KeywordNER.from_ontology(fs.ontology)`.
+
+        Override with `fs.attach_ner(...)` before first access to install
+        SciFoodNER or a custom NER.
+        """
+        if self._ner is None:
+            self._ner = self._build_ner()
+        return self._ner
+
+    @property
+    def linker(self) -> Linker:
+        """Lazily-built linker. Default: `ThreeTierLinker(fs.ontology)`.
+
+        Override with `fs.attach_linker(...)` to inject a custom linker or
+        plug a dense embedder for tier 3.
+        """
+        if self._linker is None:
+            self._linker = self._build_linker()
+        return self._linker
+
+    def attach_ner(self, ner: NER) -> None:
+        self._ner = ner
+
+    def attach_linker(self, linker: Linker) -> None:
+        self._linker = linker
+
+    def annotate(self) -> ArtifactMeta:
+        """Run NER + linking + embedding over every chunk in `chunk_store`.
+
+        Writes mentions, entity_links, foodon_ids, embedding, embedding_model,
+        and enrichment_version back onto each chunk. Returns the artifact
+        metadata so callers can persist it.
+        """
+        from foodscholar.annotate.runner import run
+
+        return run(
+            self.chunk_store,
+            ner=self.ner,
+            linker=self.linker,
+            embedder=self.embedder,
+            config=self.config,
+        )
+
+    def _build_ner(self) -> NER:
+        from foodscholar.annotate.ner import KeywordNER
+
+        return KeywordNER.from_ontology(self.ontology)
+
+    def _build_linker(self) -> Linker:
+        from foodscholar.annotate.linker import ThreeTierLinker
+
+        return ThreeTierLinker(
+            self.ontology,
+            fuzzy_threshold=self.config.annotate.linker.lexical_threshold,
+            dense_threshold=self.config.annotate.linker.dense_threshold,
+            semantic_type_gate=self.config.annotate.linker.semantic_type_gate,
+        )
+
     def _load_ontology(self) -> FoodOnAPI:
         from foodscholar.ontology import FoodOnAPI, load_ontology
 
@@ -283,10 +355,6 @@ class FoodScholar:
             chunk_backend=chunk_backend,
             graph_backend=graph_backend,
         )
-
-    def annotate(self) -> None:
-        """Run NER + entity linking + embeddings over the loaded chunks."""
-        raise _deferred("annotate")
 
     def build_layer_a(self) -> None:
         """Build Layer A — the curated, multi-facet backbone from FoodOn."""

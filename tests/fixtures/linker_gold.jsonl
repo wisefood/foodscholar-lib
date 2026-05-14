@@ -1,0 +1,28 @@
+{"text": "olive oil", "expected_id": "TEST:0000008", "tier": "exact"}
+{"text": "Olive Oil", "expected_id": "TEST:0000008", "tier": "exact"}
+{"text": "EVOO", "expected_id": "TEST:0000008", "tier": "exact"}
+{"text": "extra-virgin olive oil", "expected_id": "TEST:0000008", "tier": "exact"}
+{"text": "olives", "expected_id": "TEST:0000007", "tier": "fuzzy"}
+{"text": "oliv oil", "expected_id": "TEST:0000008", "tier": "fuzzy"}
+{"text": "evo", "expected_id": "TEST:0000008", "tier": "fuzzy"}
+{"text": "apple", "expected_id": "TEST:0000006", "tier": "exact"}
+{"text": "Malus domestica", "expected_id": "TEST:0000006", "tier": "exact"}
+{"text": "apples", "expected_id": "TEST:0000006", "tier": "fuzzy"}
+{"text": "fruit", "expected_id": "TEST:0000004", "tier": "exact"}
+{"text": "fruits", "expected_id": "TEST:0000004", "tier": "fuzzy"}
+{"text": "vegetable", "expected_id": "TEST:0000005", "tier": "exact"}
+{"text": "peanut", "expected_id": "TEST:0000009", "tier": "exact"}
+{"text": "groundnut", "expected_id": "TEST:0000009", "tier": "exact"}
+{"text": "Arachis hypogaea", "expected_id": "TEST:0000009", "tier": "exact"}
+{"text": "peanuts", "expected_id": "TEST:0000009", "tier": "fuzzy"}
+{"text": "olive", "expected_id": "TEST:0000007", "tier": "exact"}
+{"text": "Olea europaea", "expected_id": "TEST:0000007", "tier": "exact"}
+{"text": "plant food", "expected_id": "TEST:0000002", "tier": "exact"}
+{"text": "animal food", "expected_id": "TEST:0000003", "tier": "exact"}
+{"text": "dairy product", "expected_id": "TEST:0000011", "tier": "exact"}
+{"text": "food product", "expected_id": "TEST:0000001", "tier": "exact"}
+{"text": "quinoa", "expected_id": null, "tier": "miss"}
+{"text": "kale", "expected_id": null, "tier": "miss"}
+{"text": "tofu", "expected_id": null, "tier": "miss"}
+{"text": "running shoes", "expected_id": null, "tier": "miss"}
+{"text": "asparagus", "expected_id": null, "tier": "miss"}

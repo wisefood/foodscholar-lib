@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from typing import Literal, Protocol, runtime_checkable
 
-from foodscholar.io.chunk import Chunk, ChunkId
+from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
 
 
@@ -60,3 +60,25 @@ class LLMClient(Protocol):
     model_id: str
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str: ...
+
+
+@runtime_checkable
+class NER(Protocol):
+    """Span-level food entity recognizer.
+
+    Implementations should be deterministic given fixed model weights so
+    pipeline reruns produce stable results.
+    """
+
+    model_id: str
+
+    def extract(self, text: str) -> list[Mention]: ...
+
+
+@runtime_checkable
+class Linker(Protocol):
+    """Maps a `Mention` to a single ontology id, or None if no candidate clears the threshold."""
+
+    linker_id: str
+
+    def link(self, mention: Mention) -> EntityLink | None: ...
