@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "foodscholar"
+version = "0.1.0"
+description = "Hierarchical knowledge graph over nutrition literature"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "dpetrou", email = "dpetrou@athenarc.gr" },
+]
+dependencies = [
+    "pydantic>=2",
+    "typer>=0.12",
+    "pyyaml",
+    "pyarrow",
+    "numpy",
+    "pandas",
+    "structlog",
+]
+
+[project.optional-dependencies]
+ontology = ["pronto"]
+annotate = ["torch", "transformers", "sentence-transformers"]
+clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
+bertopic = ["bertopic"]
+elastic = ["elasticsearch>=8"]
+neo4j = ["neo4j>=5"]
+all = [
+    "pronto",
+    "torch",
+    "transformers",
+    "sentence-transformers",
+    "leidenalg",
+    "python-igraph",
+    "hdbscan",
+    "scikit-learn",
+    "umap-learn",
+    "elasticsearch>=8",
+    "neo4j>=5",
+]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto"]
+
+[project.urls]
+Homepage = "https://github.com/wisefood/foodscholar-lib"
+Issues = "https://github.com/wisefood/foodscholar-lib/issues"
+
+[project.scripts]
+foodscholar = "foodscholar.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/foodscholar"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/foodscholar",
+    "README.md",
+    "LICENSE",
+    "config.example.yaml",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires real Elasticsearch + Neo4j (skipped by default)",
+]
+addopts = "-ra -q --strict-markers -m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["foodscholar"]
+mypy_path = "src"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true

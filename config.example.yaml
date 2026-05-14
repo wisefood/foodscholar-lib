@@ -1,0 +1,50 @@
+corpus:
+  chunks_path: data/chunks.parquet
+
+ontology:
+  foodon_path: data/foodon.owl
+  cache_path: data/foodon_cache.parquet
+  include_imports: false           # import_depth=0 in pronto
+
+annotate:
+  ner_model: sci_food_ner_v1
+  scientific_embedder: allenai/specter2_base
+  general_embedder: BAAI/bge-large-en-v1.5
+  linker:
+    lexical_threshold: 0.85
+    dense_threshold: 0.78
+    semantic_type_gate: true
+
+layer_a:
+  min_support: 20
+  max_depth: 5
+  collapse_single_child_chains: true
+  blacklist_terms:
+    - material entity
+    - physical object
+    - manufactured product
+  facets: [foods, health, sustainability, dietary_patterns, allergies, nutrients]
+
+layer_b:
+  min_chunks_per_shelf: 50
+  algorithm: leiden
+  resolution: 1.0
+  recurse_threshold: 200
+
+layer_c:
+  llm_model: claude-sonnet-4-6
+  prompt_version: v1
+  sample_size: 12
+  grounding_check: strict
+  safety_sensitive_facets: [allergies]
+
+storage:
+  chunk_store:
+    backend: elastic
+    url: http://localhost:9200
+    index: foodscholar_chunks
+  graph_store:
+    backend: neo4j
+    url: bolt://localhost:7687
+    user: neo4j
+    password: ${NEO4J_PASSWORD}
