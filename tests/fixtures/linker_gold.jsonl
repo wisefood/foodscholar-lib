@@ -4,7 +4,7 @@
 {"text": "extra-virgin olive oil", "expected_id": "TEST:0000008", "tier": "exact"}
 {"text": "olives", "expected_id": "TEST:0000007", "tier": "fuzzy"}
 {"text": "oliv oil", "expected_id": "TEST:0000008", "tier": "fuzzy"}
-{"text": "evo", "expected_id": "TEST:0000008", "tier": "fuzzy"}
+{"text": "evo", "expected_id": null, "tier": "miss"}
 {"text": "apple", "expected_id": "TEST:0000006", "tier": "exact"}
 {"text": "Malus domestica", "expected_id": "TEST:0000006", "tier": "exact"}
 {"text": "apples", "expected_id": "TEST:0000006", "tier": "fuzzy"}
@@ -26,3 +26,5 @@
 {"text": "tofu", "expected_id": null, "tier": "miss"}
 {"text": "running shoes", "expected_id": null, "tier": "miss"}
 {"text": "asparagus", "expected_id": null, "tier": "miss"}
+{"text": "  apple  ", "expected_id": "TEST:0000006", "tier": "exact"}
+{"text": "x", "expected_id": null, "tier": "miss"}

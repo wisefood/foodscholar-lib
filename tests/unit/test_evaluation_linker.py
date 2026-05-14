@@ -15,7 +15,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 @pytest.fixture
 def api() -> FoodOnAPI:
-    return FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo"))
+    return FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo"), prefix_filter=None)
 
 
 def test_load_gold_parses_jsonl() -> None:

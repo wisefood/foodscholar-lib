@@ -17,7 +17,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 @pytest.fixture
 def fs() -> FoodScholar:
     fs = FoodScholar.in_memory()
-    fs.attach_ontology(FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo")))
+    fs.attach_ontology(FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo"), prefix_filter=None))
     fs.upsert_chunks(
         [
             Chunk(
@@ -111,11 +111,20 @@ def test_run_function_directly(fs: FoodScholar) -> None:
 
 
 def test_facade_linker_dry_run(fs: FoodScholar) -> None:
-    link = fs.linker.dry_run("evo")
-    # Fuzzy should resolve "evo" to olive oil via the EVOO synonym
+    # Use a longer query — `evo` (3 chars) hits the short-query threshold
+    # gate (≤4 chars require 0.95+) which the mini fixture can't satisfy.
+    link = fs.linker.dry_run("oliv oil")
     assert link is not None
     assert link.ontology_id == "TEST:0000008"
     assert link.method == "lexical_fuzzy"
+
+
+def test_facade_linker_rejects_short_query_below_strict_threshold(
+    fs: FoodScholar,
+) -> None:
+    # `evo` is 3 chars; even with the EVOO synonym in the mini fixture,
+    # short-query gate (≥0.95) prevents accidental matches.
+    assert fs.linker.dry_run("evo") is None
 
 
 def test_attach_ner_overrides_default(fs: FoodScholar) -> None:

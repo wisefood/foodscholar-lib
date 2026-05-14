@@ -336,7 +336,8 @@ class FoodScholar:
             source=str(cfg.foodon_path),
             cached=cfg.cache_path is not None,
         )
-        return FoodOnAPI(terms)
+        prefix = tuple(cfg.prefix_filter) if cfg.prefix_filter is not None else None
+        return FoodOnAPI(terms, prefix_filter=prefix)
 
     # ------------------------------------------------------------------ phases (stubs)
 

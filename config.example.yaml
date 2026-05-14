@@ -5,6 +5,11 @@ ontology:
   foodon_path: data/foodon.owl
   cache_path: data/foodon_cache.parquet
   include_imports: false           # import_depth=0 in pronto
+  # FoodOn .owl files embed NCBITaxon/CHEBI/BFO/ENVO terms inline. Default
+  # filter keeps only FOODON: ids so the linker doesn't match food queries
+  # against unrelated ontologies. Add prefixes (e.g. ["FOODON:", "CHEBI:"])
+  # to broaden, or set to null to disable filtering entirely.
+  prefix_filter: ["FOODON:"]
 
 annotate:
   ner_model: sci_food_ner_v1

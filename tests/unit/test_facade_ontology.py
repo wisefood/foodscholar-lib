@@ -25,6 +25,7 @@ def _config_with_ontology(tmp_path: Path) -> FoodScholarConfig:
                 "foodon_path": str(src),
                 "cache_path": str(tmp_path / "fixture.parquet"),
                 "include_imports": False,
+                "prefix_filter": None,  # mini fixture uses TEST: prefix
             },
             "storage": {
                 "chunk_store": {"backend": "memory"},
@@ -45,7 +46,8 @@ def test_in_memory_has_no_ontology_until_attached() -> None:
 def test_attach_ontology_skips_loader() -> None:
     fs = FoodScholar.in_memory()
     api = FoodOnAPI(
-        [OntologyTerm(id="X:1", label="thing")]
+        [OntologyTerm(id="X:1", label="thing")],
+        prefix_filter=None,
     )
     fs.attach_ontology(api)
     assert fs.ontology is api

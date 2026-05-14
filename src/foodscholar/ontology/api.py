@@ -6,9 +6,19 @@ output of `load_ontology`), then queried by the linker, layer_a, and layer_c.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 from foodscholar.io.ontology import OntologyId, OntologyTerm
+
+# Normalize whitespace + dashes + underscores so "omega 3", "omega-3", and
+# "omega_3" collapse to the same lookup key. Any run of non-alphanumeric
+# becomes a single space; result lowercased + stripped.
+_NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize(name: str) -> str:
+    return _NORMALIZE_RE.sub(" ", name.lower()).strip()
 
 
 class FoodOnAPI:
@@ -16,15 +26,31 @@ class FoodOnAPI:
 
     Indexes:
       - id → term
-      - lower-case label → id
-      - lower-case exact synonym → id (synonyms can resolve to multiple ids)
+      - normalized label → id
+      - normalized exact synonym → id (synonyms can resolve to multiple ids)
       - id → set(child ids)   for descendants
 
     `obsolete` terms are loaded but excluded from name lookups so the linker
-    never resolves to a deprecated FoodOn id.
+    never resolves to a deprecated id.
+
+    `prefix_filter` (default `("FOODON:",)`) drops every term whose id doesn't
+    start with one of the allowed prefixes. Real FoodOn .owl files ship with
+    NCBITaxon, CHEBI, BFO, ENVO and other ontology terms inline; without the
+    filter the linker happily matches "EVOO" → NCBITaxon:Brevoortia (a fish
+    genus) and "iron" → CHEBI:iron(2+). Pass `prefix_filter=None` to disable
+    filtering entirely (useful for unit fixtures with synthetic prefixes like
+    `TEST:`); `prefix_filter=()` keeps no terms.
     """
 
-    def __init__(self, terms: list[OntologyTerm]) -> None:
+    def __init__(
+        self,
+        terms: list[OntologyTerm],
+        *,
+        prefix_filter: tuple[str, ...] | None = ("FOODON:",),
+    ) -> None:
+        if prefix_filter is not None:
+            terms = [t for t in terms if any(t.id.startswith(p) for p in prefix_filter)]
+
         self._by_id: dict[OntologyId, OntologyTerm] = {t.id: t for t in terms}
 
         self._name_to_ids: dict[str, list[OntologyId]] = {}
@@ -41,7 +67,7 @@ class FoodOnAPI:
                     self._descendants[parent].add(t.id)
 
     def _index_name(self, name: str, term_id: OntologyId) -> None:
-        key = name.strip().lower()
+        key = _normalize(name)
         if not key:
             return
         bucket = self._name_to_ids.setdefault(key, [])
@@ -66,17 +92,19 @@ class FoodOnAPI:
         return self._by_id.get(term_id)
 
     def name_to_id(self, name: str) -> OntologyId | None:
-        """Exact case-insensitive match against label or exact synonym.
+        """Exact match against label or exact synonym.
 
-        Returns None if no match. If a name maps to multiple ids (rare but
-        possible with synonyms), returns the first deterministically. Use
-        `name_to_ids` if you need all matches.
+        Case-insensitive and punctuation/whitespace-insensitive — `omega 3`,
+        `omega-3`, and `omega_3` all resolve identically. Returns None if no
+        match. If a name maps to multiple ids (rare but possible with
+        synonyms), returns the first deterministically. Use `name_to_ids`
+        if you need all matches.
         """
-        ids = self._name_to_ids.get(name.strip().lower())
+        ids = self._name_to_ids.get(_normalize(name))
         return ids[0] if ids else None
 
     def name_to_ids(self, name: str) -> list[OntologyId]:
-        return list(self._name_to_ids.get(name.strip().lower(), ()))
+        return list(self._name_to_ids.get(_normalize(name), ()))
 
     def id_to_label(self, term_id: OntologyId) -> str | None:
         t = self._by_id.get(term_id)
@@ -119,7 +147,7 @@ class FoodOnAPI:
         Cheap and deterministic — it's the prefilter for the dense SapBERT
         fallback. Sorted: shortest match first, then alphabetical id.
         """
-        q = query.strip().lower()
+        q = _normalize(query)
         if not q:
             return []
         hits: set[OntologyId] = set()

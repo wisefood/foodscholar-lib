@@ -21,7 +21,7 @@ def terms() -> list[OntologyTerm]:
 
 @pytest.fixture
 def api(terms: list[OntologyTerm]) -> FoodOnAPI:
-    return FoodOnAPI(terms)
+    return FoodOnAPI(terms, prefix_filter=None)
 
 
 # ---------------------------------------------------------------- loader
