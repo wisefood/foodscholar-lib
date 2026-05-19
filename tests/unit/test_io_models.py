@@ -47,6 +47,25 @@ def test_mention_entity_type_accepts_valid_value() -> None:
     assert m.entity_type == "food"
 
 
+def test_mention_entity_type_accepts_all_taxonomy_values() -> None:
+    # Every value in the EntityType taxonomy must validate on Mention.
+    for et in (
+        "food",
+        "nutrient",
+        "health",
+        "dietary_pattern",
+        "allergen",
+        "population",
+        "biomarker",
+        "processing",
+        "other",
+    ):
+        m = Mention(
+            text="x", start=0, end=1, score=1.0, ner_model_version="v0", entity_type=et
+        )
+        assert m.entity_type == et
+
+
 def test_mention_entity_type_rejects_unknown() -> None:
     import pytest
     from pydantic import ValidationError

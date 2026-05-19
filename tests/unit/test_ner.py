@@ -70,6 +70,14 @@ def test_keyword_ner_from_ontology_excludes_obsolete(api: FoodOnAPI) -> None:
     assert all(m.text.lower() != "legacy term" for m in out)
 
 
+def test_keyword_ner_mentions_typed_food() -> None:
+    # KeywordNER keywords are food-domain; mentions are typed "food" so they
+    # stay linkable past the linker's semantic-type gate.
+    ner = KeywordNER(["olive oil"])
+    [m] = ner.extract("She uses olive oil daily.")
+    assert m.entity_type == "food"
+
+
 def test_keyword_ner_no_matches_empty_list() -> None:
     ner = KeywordNER(["olive"])
     assert ner.extract("Nothing here.") == []

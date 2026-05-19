@@ -61,6 +61,20 @@ def test_extract_preserves_entity_type() -> None:
     assert m.entity_type == "food"
 
 
+def test_extract_preserves_population_entity_type() -> None:
+    # Population mentions are the category the v2 taxonomy was added for.
+    ner = _ner([{"text": "children", "entity_type": "population"}])
+    [m] = ner.extract("Peanut allergy education for children.")
+    assert m.entity_type == "population"
+    assert m.text == "children"
+
+
+def test_extract_preserves_biomarker_entity_type() -> None:
+    ner = _ner([{"text": "glycemic control", "entity_type": "biomarker"}])
+    [m] = ner.extract("Quinoa improves glycemic control.")
+    assert m.entity_type == "biomarker"
+
+
 def test_extract_unknown_entity_type_falls_back_to_other() -> None:
     ner = _ner([{"text": "olive oil", "entity_type": "condiment"}])  # not a valid type
     [m] = ner.extract("olive oil is great")
@@ -132,10 +146,10 @@ def test_extract_skips_malformed_items() -> None:
 def test_model_id_records_provider_and_prompt_version() -> None:
     ner = AgenticNER(_ScriptedLLM())
     assert "scripted-llm" in ner.model_id
-    assert "agent-ner-v1" in ner.model_id
+    assert "agent-ner-v2" in ner.model_id
 
 
 def test_ner_version_stamped_on_mentions() -> None:
     ner = _ner([{"text": "olive oil", "entity_type": "food"}])
     [m] = ner.extract("olive oil")
-    assert m.ner_model_version == "agent-ner-v1"
+    assert m.ner_model_version == "agent-ner-v2"

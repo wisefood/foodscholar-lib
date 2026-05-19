@@ -222,7 +222,7 @@ Defaults:
 
 - **NER** — selected by `cfg.annotate.ner`:
   - `keyword` (default) — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym (obsolete excluded). `expand_labels=True` also registers a noise-stripped variant of each label (`simplify_label` removes EFSA/EC code prefixes, parenthetical qualifiers, trailing category words) so `"red meat (raw)"` also matches the bare `"red meat"`. Deterministic, no LLM, no model download.
-  - `agentic` — `AgenticNER`. One `LLMClient.generate_json` call per chunk: the model returns mention strings + `entity_type`; spans are reconciled *locally* (`str.find`, cursor-advanced for repeats) because LLM character offsets are unreliable. A returned string not found verbatim in the source is dropped. LLM failure degrades to "no mentions", never crashes the phase. Each `Mention` carries `entity_type ∈ {food, nutrient, health, dietary_pattern, allergen, other}`. This is the first piece of the agentic-annotation redesign — see `docs/DESIGN_agentic_annotate.md`.
+  - `agentic` — `AgenticNER`. One `LLMClient.generate_json` call per chunk: the model returns mention strings + `entity_type`; spans are reconciled *locally* (`str.find`, cursor-advanced for repeats) because LLM character offsets are unreliable. A returned string not found verbatim in the source is dropped. LLM failure degrades to "no mentions", never crashes the phase. Each `Mention` carries `entity_type ∈ {food, nutrient, health, dietary_pattern, allergen, population, biomarker, processing, other}`. This is the first piece of the agentic-annotation redesign — see `docs/DESIGN_agentic_annotate.md`.
   - **Deviation from §2:** the brief specified SciFoodNER (a bespoke fine-tuned model). It has been removed — the project moved off proprietary ML models. `keyword` (offline default) and `agentic` are the two NER strategies; agentic is the recommended setup.
 - **Linker** — `ThreeTierLinker(fs.ontology, ...)`. A 3-or-4 tier cascade, first confident hit wins:
   1. `lexical_exact` — case- and punctuation-insensitive match against a label or exact synonym.
@@ -231,11 +231,15 @@ Defaults:
   4. `llm` — *opt-in, deviation from §2; see "Deviations" below.* When no deterministic tier clears `llm_select_threshold`, an LLM is shown the top-k candidates plus the mention and picks one or rejects. Gated so it fires only on the hard residue, not every mention.
 
   Each link records `method` ∈ `{lexical_exact, lexical_fuzzy, dense, llm}` and `confidence`, so the §17 audit is mechanical.
+
+  **Semantic-type gate** (`semantic_type_gate`, on by default): FoodOn is a food ontology, so the linker only attempts to resolve food-like mentions — `entity_type ∈ {food, nutrient, dietary_pattern}`. A `population`, `health`, `biomarker`, etc. mention is kept on the chunk but never linked, instead of being forced onto a spurious low-confidence FoodOn term. `KeywordNER` mentions are typed `food` (its vocabulary is the FoodOn labels), so the gate is transparent to the keyword path.
 - **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")`, `SapBERTEmbedder` (entity-linking; the dense tier's model), or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
 
 Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by passing `embedder=...` to either factory.
 
 **Deviation from §2 — the `llm` tier.** BRIEF §2 specifies the linker as "lexical then dense (SapBERT)". The `llm` tier is an addition: on real FoodOn the lexical/dense tiers cannot *reject* a query that isn't semantically a food (e.g. `"iron deficiency"` orthographically matches `"flat iron steak"`). An LLM shown the candidates with context can. The tier is **off by default in the Pydantic config defaults** (so `FoodScholar.in_memory()` and tests stay deterministic and offline), but **on in `config.example.yaml`** (the recommended production setup). Even when on it fires only below a confidence threshold — not per mention. This honors §13's instruction to "treat [retrieval] as a v1 — measure, iterate, and document deviations". §15's "no agentic/multi-step retrieval" still holds: there is no retry loop, just one gated selection call.
+
+**Deviation from §15 — agentic annotation (approved).** The annotate phase is being redesigned around LLM agents (`AgenticNER` is shipped; an OntoRAG-derived retriever and a fused tool-using agent follow). This departs from §15 ("deterministic only for v1"). The brief owner explicitly approved it; the full design and decision log are in `docs/DESIGN_agentic_annotate.md`. The OntoRAG retriever (`foodscholar.annotate.ontorag`) is *retrieval-only* — Whoosh BM25 + FAISS(MiniLM) + FAISS(SapBERT) merged by Reciprocal Rank Fusion, returning ranked candidates for the agent/linker to select from. OntoRAG's own LLM selector and synonym-retry loop are **not** adopted, so no agentic *retry* loop is introduced. Gated by the `[ontorag]` extra.
 
 ### LLM client (`fs.llm`)
 
@@ -286,7 +290,10 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
-EntityType = Literal["food", "nutrient", "health", "dietary_pattern", "allergen", "other"]
+EntityType = Literal[
+    "food", "nutrient", "health", "dietary_pattern", "allergen",
+    "population", "biomarker", "processing", "other",
+]
 
 class Mention(BaseModel):
     text: str

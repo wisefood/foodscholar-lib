@@ -89,6 +89,28 @@ def test_sapbert_embedder_round_trip() -> None:
 
 
 @pytest.mark.slow
+def test_ontorag_retriever_with_real_embedders(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Tri-hybrid OntoRAG retriever with real MiniLM + SapBERT over the mini
+    ontology. Verifies the three arms + RRF merge surface the right term."""
+    pytest.importorskip("whoosh")
+    pytest.importorskip("faiss")
+
+    from foodscholar.annotate.embedder import HFEmbedder, SapBERTEmbedder
+    from foodscholar.annotate.ontorag import OntoRagRetriever, build_index
+    from foodscholar.ontology import FoodOnAPI, load_ontology
+
+    api = FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo"), prefix_filter=None)
+    minilm = HFEmbedder("sentence-transformers/all-MiniLM-L6-v2")
+    sapbert = SapBERTEmbedder()
+    index = build_index(api, minilm=minilm, sapbert=sapbert, index_dir=tmp_path / "idx")
+    retriever = OntoRagRetriever(index, api, minilm=minilm, sapbert=sapbert)
+
+    cands = retriever.retrieve("olive oil", k=5)
+    assert cands
+    assert any(c.label == "olive oil" for c in cands)
+
+
+@pytest.mark.slow
 def test_dense_tier_links_lexically_distinct_synonym() -> None:
     """The dense tier's real strength: linking a mention to a term whose name
     shares NO tokens with it, but means the same thing.
@@ -128,7 +150,14 @@ def test_dense_tier_links_lexically_distinct_synonym() -> None:
         dense_threshold=0.70,          # see docstring — a documented near-miss
     )
     link = linker.link(
-        Mention(text="ascorbate", start=0, end=9, score=1.0, ner_model_version="test")
+        Mention(
+            text="ascorbate",
+            start=0,
+            end=9,
+            score=1.0,
+            ner_model_version="test",
+            entity_type="nutrient",  # food-like → passes the semantic-type gate
+        )
     )
     assert link is not None
     assert link.method == "dense"

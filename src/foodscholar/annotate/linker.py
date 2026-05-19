@@ -39,6 +39,11 @@ _log = get_logger("foodscholar.annotate.linker")
 # Parses the LLM selector's reply: a candidate index, or "none".
 _LLM_CHOICE_RE = re.compile(r"\b(\d+|none)\b", re.IGNORECASE)
 
+# Entity types worth resolving against FoodOn. FoodOn is a food ontology, so
+# only food-like mentions have a term to link to; a `population`, `health`,
+# `biomarker`, etc. mention is kept but never linked (see `semantic_type_gate`).
+_LINKABLE_TYPES = frozenset({"food", "nutrient", "dietary_pattern"})
+
 
 class ThreeTierLinker:
     """Reference linker implementation.
@@ -98,6 +103,17 @@ class ThreeTierLinker:
         if not text:
             return None
 
+        # Semantic-type gate: FoodOn only covers food-like entities, so a
+        # non-food mention (population, biomarker, health, ...) has no term to
+        # resolve to. Skip it rather than mint a spurious low-confidence link.
+        if self._gate and mention.entity_type not in _LINKABLE_TYPES:
+            _log.debug(
+                "linker.skipped_nonfood_type",
+                entity_type=mention.entity_type,
+                mention=text,
+            )
+            return None
+
         # Tier 1: exact.
         exact_id = self._ontology.name_to_id(text)
         if exact_id is not None:
@@ -132,10 +148,21 @@ class ThreeTierLinker:
                 return self._link(mention, llm[0], llm[1], "llm")
         return None
 
-    def dry_run(self, text: str) -> EntityLink | None:
-        """Convenience for notebooks: build a Mention from raw text and link it."""
+    def dry_run(self, text: str, *, entity_type: str = "food") -> EntityLink | None:
+        """Convenience for notebooks: build a Mention from raw text and link it.
+
+        `entity_type` defaults to "food" so the result is not gated out by the
+        semantic-type gate; pass another type to exercise the gate.
+        """
         return self.link(
-            Mention(text=text, start=0, end=len(text), score=1.0, ner_model_version="dry-run")
+            Mention(
+                text=text,
+                start=0,
+                end=len(text),
+                score=1.0,
+                ner_model_version="dry-run",
+                entity_type=entity_type,  # type: ignore[arg-type]
+            )
         )
 
     # ------------------------------------------------------------------ helpers
