@@ -1,15 +1,32 @@
 # Design — Agentic NER+NEL annotation (M2 redesign)
 
-**Status:** draft for review · **Author:** design discussion · **Date:** 2026-05-18
+**Status:** approved · **Date:** 2026-05-18 · last updated 2026-05-18
 
-This document proposes replacing the BERT-model-based annotation pipeline
-(SciFoodNER + SapBERT dense tier) with an **agents-first** design: a
-tool-using LLM agent does named-entity recognition *and* entity linking in one
-reasoning loop, using the existing lexical linker tiers and an adapted
+This document replaces the BERT-model-based annotation pipeline (SciFoodNER +
+SapBERT dense tier) with an **agents-first** design: a tool-using LLM agent
+does named-entity recognition *and* entity linking in one reasoning loop,
+using the existing lexical linker tiers and an adapted
 [OntoRAG](https://github.com/jan3657/onto_rag) as **tools**. It supersedes the
 M2 annotate design where it conflicts.
 
-It is a draft. Nothing here is built yet. Open decisions are marked **[DECIDE]**.
+## Decision log (resolved 2026-05-18)
+
+The design owner (who also owns BRIEF.md) signed off on the following; the
+remaining `[DECIDE]` markers below are minor implementation choices left to
+build time.
+
+- **BRIEF §15 deviation — approved.** Making annotation agentic departs from
+  §15 ("deterministic only for v1"). The brief owner approved it; recorded as
+  a deliberate deviation in BRIEF §3.5. Agentic NER already shipped.
+- **`ontorag_resolve` = retrieval-only.** The tool exposes OntoRAG's tri-hybrid
+  retriever (Whoosh + FAISS + RRF) returning ranked candidates; *our* agent
+  selects. OntoRAG's own LLM selector / scorer / synonym-retry loop are NOT
+  nested — that would be an LLM calling an LLM, and the retry loop is the part
+  §15 most directly defers.
+- **Annotation cache = SQLite.** Indexed point lookups + incremental upserts
+  match the cache's access pattern; Parquet (immutable, bulk-scan) does not.
+- **First piece shipped:** agentic NER as a standalone stage (`AgenticNER`,
+  commit a9d4b4b).
 
 ---
 
@@ -114,11 +131,17 @@ retired, or kept with an `AgenticNER` implementation that the agent fulfils —
 contracts (they are the lingua franca per BRIEF §4) but the agent produces both
 in one pass.
 
-Entity types the agent is prompted to find (aligned to BRIEF §1 facets):
-foods, nutrients, health concepts, dietary patterns, allergens. The agent tags
-a span, classifies it, and links it — or explicitly rejects it (e.g. "iron
-deficiency" → recognized as a *condition*, not a food → no FoodOn link, which
-is the correct answer the old lexical linker got wrong).
+Entity types the agent is prompted to find: foods, nutrients, health concepts
+(diseases/conditions), dietary patterns, allergens, population groups,
+biomarkers (measurable outcomes), and processing/preparation qualifiers. The
+first five align to BRIEF §1 facets; population/biomarker/processing were added
+because a nutrition corpus is full of mentions like "children", "glycemic
+control", and "fermentation" that the original taxonomy silently dropped. The
+agent tags a span, classifies it, and links it — or explicitly rejects it
+(e.g. "iron deficiency" → recognized as a *condition*, not a food → no FoodOn
+link, which is the correct answer the old lexical linker got wrong). The linker
+formalizes this: only food-like types (food, nutrient, dietary_pattern) are
+resolved against FoodOn; the rest are kept as `Mention`s but never linked.
 
 ## 4. Reproducibility — the content-addressed cache
 

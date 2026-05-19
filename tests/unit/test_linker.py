@@ -19,9 +19,17 @@ def api() -> FoodOnAPI:
     return FoodOnAPI(load_ontology(FIXTURES / "mini_foodon.obo"), prefix_filter=None)
 
 
-def _mention(text: str) -> Mention:
+def _mention(text: str, *, entity_type: str = "food") -> Mention:
+    # Defaults to "food" so the semantic-type gate (on by default) lets the
+    # mention through — these tests exercise FoodOn linking. Gate-specific
+    # tests pass an explicit non-food type.
     return Mention(
-        text=text, start=0, end=len(text), score=1.0, ner_model_version="test"
+        text=text,
+        start=0,
+        end=len(text),
+        score=1.0,
+        ner_model_version="test",
+        entity_type=entity_type,  # type: ignore[arg-type]
     )
 
 
@@ -85,6 +93,41 @@ def test_dry_run_builds_mention(api: FoodOnAPI) -> None:
     link = ThreeTierLinker(api).dry_run("olive oil")
     assert link is not None
     assert link.method == "lexical_exact"
+
+
+# ------------------------------------------------------------ semantic-type gate
+
+
+def test_gate_skips_non_food_entity_type(api: FoodOnAPI) -> None:
+    # "olive oil" is an exact FoodOn label, but typed `population` it is not a
+    # food-like mention — the gate must skip linking it entirely.
+    linker = ThreeTierLinker(api)  # semantic_type_gate defaults to True
+    assert linker.link(_mention("olive oil", entity_type="population")) is None
+    assert linker.link(_mention("olive oil", entity_type="biomarker")) is None
+    assert linker.link(_mention("olive oil", entity_type="health")) is None
+    assert linker.link(_mention("olive oil", entity_type="other")) is None
+
+
+def test_gate_allows_food_like_entity_types(api: FoodOnAPI) -> None:
+    linker = ThreeTierLinker(api)
+    for et in ("food", "nutrient", "dietary_pattern"):
+        link = linker.link(_mention("olive oil", entity_type=et))
+        assert link is not None, f"{et} should be linkable"
+        assert link.ontology_id == "TEST:0000008"
+
+
+def test_gate_off_attempts_all_entity_types(api: FoodOnAPI) -> None:
+    # With the gate disabled, even a non-food type is resolved as before.
+    linker = ThreeTierLinker(api, semantic_type_gate=False)
+    link = linker.link(_mention("olive oil", entity_type="population"))
+    assert link is not None
+    assert link.ontology_id == "TEST:0000008"
+
+
+def test_dry_run_entity_type_param_exercises_gate(api: FoodOnAPI) -> None:
+    linker = ThreeTierLinker(api)
+    assert linker.dry_run("olive oil") is not None  # defaults to food
+    assert linker.dry_run("olive oil", entity_type="population") is None
 
 
 # ------------------------------------------------------------ dense tier

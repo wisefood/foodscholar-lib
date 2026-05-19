@@ -50,6 +50,10 @@ class KeywordNER:
     Matches are case-insensitive and word-boundary aware. Useful for tests
     and for cheap end-to-end runs against a known vocabulary. Pair with
     `from_ontology` to surface every FoodOn term that appears in a chunk.
+
+    Produced mentions are typed `entity_type="food"`: the keyword vocabulary is
+    food-domain (typically the FoodOn labels themselves), and this keeps the
+    mentions linkable past the linker's semantic-type gate.
     """
 
     model_id = "keyword-ner-v0"
@@ -124,6 +128,10 @@ class KeywordNER:
                     end=m.end(),
                     score=self._score,
                     ner_model_version=self.model_id,
+                    # KeywordNER is built `from_ontology`: every keyword IS a
+                    # FoodOn term, so "food" is correct — and it keeps these
+                    # mentions linkable past the linker's semantic-type gate.
+                    entity_type="food",
                 )
             )
         return mentions

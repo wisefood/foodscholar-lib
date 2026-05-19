@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 _log = get_logger("foodscholar.annotate.agent_ner")
 
-PROMPT_VERSION = "agent-ner-v1"
+PROMPT_VERSION = "agent-ner-v2"
 
 # Valid entity_type values, derived from the io contract so the two never drift.
 _ENTITY_TYPES: tuple[str, ...] = get_args(EntityType)
@@ -50,9 +50,24 @@ _NER_SCHEMA: dict[str, object] = {
 }
 
 _PROMPT = """\
-You are a nutrition-domain entity recognizer. Extract every mention of a \
-food, nutrient, health concept, dietary pattern, or allergen from the text \
-below.
+You are a nutrition-domain entity recognizer. Extract every relevant mention \
+from the text below and classify each one.
+
+Entity types:
+  - "food": a food, ingredient, dish, or beverage (e.g. "olive oil", "quinoa").
+  - "nutrient": a nutrient or food compound (e.g. "polyphenols", "vitamin D").
+  - "health": a disease or clinical condition (e.g. "type 2 diabetes", \
+"coeliac disease", "iron deficiency").
+  - "dietary_pattern": a named diet or eating pattern (e.g. "Mediterranean \
+diet", "vegan diet").
+  - "allergen": a food allergen or allergic condition (e.g. "peanut allergy").
+  - "population": a demographic or life-stage group (e.g. "children", \
+"adults", "paediatric populations", "pregnant women", "the elderly").
+  - "biomarker": a measurable health outcome, marker, or risk (e.g. "glycemic \
+control", "inflammation markers", "cardiovascular risk", "LDL cholesterol").
+  - "processing": a food preparation, processing, or quality qualifier (e.g. \
+"fermentation", "roasting", "extra virgin", "whole grain").
+  - "other": anything relevant that fits none of the above.
 
 For each mention return:
   - "text": the mention exactly as it appears in the source text, verbatim \
@@ -62,8 +77,11 @@ For each mention return:
 Rules:
   - Extract the mention span as written; do not normalize, pluralize, or \
 expand it.
-  - A clinical condition or disease (e.g. "iron deficiency", "coeliac \
-disease") is "health", not "food".
+  - Distinguish "health" (a disease or clinical condition — "type 2 diabetes") \
+from "biomarker" (a measurable outcome or marker — "glycemic control", \
+"cardiovascular risk").
+  - "population" covers demographic, life-stage, and clinical population \
+groups; always extract them — they are easy to miss.
   - If the same surface form appears multiple times, list it multiple times.
   - If nothing relevant appears, return an empty list.
 

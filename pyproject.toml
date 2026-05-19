@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 ontology = ["pronto"]
 annotate = ["torch", "transformers", "sentence-transformers", "rapidfuzz"]
+ontorag = ["whoosh", "faiss-cpu", "sentence-transformers", "torch", "transformers"]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
 elastic = ["elasticsearch>=8"]
@@ -36,6 +37,8 @@ all = [
     "transformers",
     "sentence-transformers",
     "rapidfuzz",
+    "whoosh",
+    "faiss-cpu",
     "leidenalg",
     "python-igraph",
     "hdbscan",

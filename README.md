@@ -82,9 +82,10 @@ fs.annotate()                                            # full phase
   matcher over every FoodOn label + synonym. No LLM, no model download,
   fully offline. The safe default; what `in_memory()` and the tests use.
 - **`agentic`** — `AgenticNER`, an LLM extracts mentions (and classifies
-  each as food / nutrient / health / dietary_pattern / allergen) via the
-  configured `llm:` provider. Character offsets are recomputed locally,
-  not trusted from the model. Needs the `[llm]` extra + a provider.
+  each as food / nutrient / health / dietary_pattern / allergen /
+  population / biomarker / processing) via the configured `llm:` provider.
+  Character offsets are recomputed locally, not trusted from the model.
+  Needs the `[llm]` extra + a provider.
 
 There is no bespoke fine-tuned NER model — the project deliberately uses
 an LLM rather than a proprietary model. See
