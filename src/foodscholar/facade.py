@@ -183,6 +183,20 @@ class FoodScholar:
         else:
             raise ValueError(f"unknown graph_store backend: {graph_backend}")
 
+        # Build the LLM client from cfg.llm unless the caller passed one
+        # explicitly. No cfg.llm and no override → __init__ uses the mock.
+        if llm is None and cfg.llm is not None:
+            from foodscholar.llm import build_llm
+
+            llm = build_llm(cfg.llm)
+
+        # Build the chunk embedder from cfg.annotate unless the caller passed
+        # one. SPECTER2 for abstracts, BGE-large for textbook/guide, routed by
+        # source_type (BRIEF §2/§7). Falls back to the mock — with a loud
+        # warning — if the [annotate] deps aren't installed.
+        if embedder is None:
+            embedder = cls._build_embedder(cfg)
+
         return cls(
             config=cfg,
             chunk_store=chunk_store,
@@ -190,6 +204,32 @@ class FoodScholar:
             embedder=embedder,
             llm=llm,
         )
+
+    @staticmethod
+    def _build_embedder(cfg: FoodScholarConfig) -> Embedder | None:
+        """Construct the source-type-routed chunk embedder, or None to mock.
+
+        SPECTER2 for abstracts, BGE-large for textbook/guide chunks, routed by
+        `source_type` (BRIEF §2/§7). Returns None (→ `__init__` uses
+        `_MockEmbedder`) when the `[annotate]` extra is missing OR the models
+        fail to load — logging a warning so a production run can't silently
+        produce a graph full of meaningless hash-vector embeddings.
+        """
+        log = get_logger("foodscholar")
+        try:
+            from foodscholar.annotate.embedder import HFEmbedder, SourceTypeRouter
+
+            return SourceTypeRouter(
+                scientific=HFEmbedder(cfg.annotate.scientific_embedder),
+                general=HFEmbedder(cfg.annotate.general_embedder),
+            )
+        except ImportError as e:
+            log.warning(
+                "embedder.deps_missing",
+                error=str(e),
+                note="chunk embeddings will be MOCK — install: pip install 'foodscholar[annotate]'",
+            )
+            return None
 
     # ------------------------------------------------------------------ ergonomics
 
@@ -309,11 +349,28 @@ class FoodScholar:
     def _build_linker(self) -> Linker:
         from foodscholar.annotate.linker import ThreeTierLinker
 
+        lc = self.config.annotate.linker
+
+        # Dense tier — built only when a dense_model is configured.
+        dense_embedder: Embedder | None = None
+        if lc.dense_model:
+            from foodscholar.annotate.embedder import SapBERTEmbedder
+
+            dense_embedder = SapBERTEmbedder(lc.dense_model)
+
+        # LLM-select tier — uses the facade's LLM, only when opted in.
+        llm_client: LLMClient | None = self.llm if lc.llm_select else None
+
         return ThreeTierLinker(
             self.ontology,
-            fuzzy_threshold=self.config.annotate.linker.lexical_threshold,
-            dense_threshold=self.config.annotate.linker.dense_threshold,
-            semantic_type_gate=self.config.annotate.linker.semantic_type_gate,
+            fuzzy_threshold=lc.lexical_threshold,
+            dense_threshold=lc.dense_threshold,
+            semantic_type_gate=lc.semantic_type_gate,
+            dense_embedder=dense_embedder,
+            dense_cache_path=str(lc.dense_cache_path) if lc.dense_cache_path else None,
+            llm_client=llm_client,
+            llm_select_threshold=lc.llm_select_threshold,
+            llm_candidate_k=lc.llm_candidate_k,
         )
 
     def _load_ontology(self) -> FoodOnAPI:

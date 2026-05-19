@@ -39,6 +39,23 @@ class LinkerConfig(BaseModel):
     dense_threshold: float = 0.78
     semantic_type_gate: bool = True
 
+    # Dense tier (BRIEF §2). Empty disables it — the linker is then lexical-only.
+    dense_model: str = ""
+    """Embedding model for the dense tier, e.g.
+    'cambridgeltl/SapBERT-from-PubMedBERT-fulltext'. Empty string = dense tier off."""
+    dense_cache_path: Path | None = None
+    """Optional .npz path for the precomputed term-embedding matrix."""
+
+    # LLM-select tier (deviation from BRIEF §2; see BRIEF §3.5). Opt-in.
+    llm_select: bool = False
+    """Enable the 4th tier: when no deterministic tier produces a confident
+    hit, an LLM picks from the top-k candidates (or rejects). Off by default —
+    keeps the linker deterministic unless explicitly opted in."""
+    llm_select_threshold: float = 0.90
+    """Deterministic-tier confidence below which the LLM tier is consulted."""
+    llm_candidate_k: int = 8
+    """Number of candidates shown to the LLM selector."""
+
 
 class AnnotateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -104,6 +121,32 @@ class StorageConfig(BaseModel):
     graph_store: GraphStoreConfig = Field(default_factory=GraphStoreConfig)
 
 
+LLMProvider = Literal["anthropic", "openai", "groq", "gemini", "ollama"]
+
+
+class ProviderConfig(BaseModel):
+    """One LLM provider + model. API keys are read from the environment
+    (ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY) — never
+    placed in config files. Ollama needs no key, just a running daemon."""
+
+    model_config = ConfigDict(extra="forbid")
+    provider: LLMProvider
+    model: str
+    host: str | None = None  # ollama only — daemon URL
+
+
+class LLMConfig(BaseModel):
+    """LLM client configuration: a primary provider plus an ordered fallback
+    chain. The chain is tried in order; each entry is attempted only if all
+    earlier ones errored (timeout, rate limit, auth, service down)."""
+
+    model_config = ConfigDict(extra="forbid")
+    primary: ProviderConfig
+    fallbacks: list[ProviderConfig] = Field(default_factory=list)
+    timeout_s: float = 30.0
+    max_retries: int = 2
+
+
 class FoodScholarConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     corpus: CorpusConfig
@@ -113,6 +156,7 @@ class FoodScholarConfig(BaseModel):
     layer_b: LayerBConfig = Field(default_factory=LayerBConfig)
     layer_c: LayerCConfig = Field(default_factory=LayerCConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    llm: LLMConfig | None = None  # None → facade uses the built-in mock LLM
 
 
 def _substitute_env(value: Any) -> Any:

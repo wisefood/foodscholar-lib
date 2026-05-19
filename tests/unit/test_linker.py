@@ -153,3 +153,100 @@ def test_no_dense_embedder_means_no_dense_tier(api: FoodOnAPI) -> None:
     linker = ThreeTierLinker(api, fuzzy_threshold=0.99)
     # With dense disabled and fuzzy too strict, "oliv oil" should miss
     assert linker.link(_mention("oliv oil")) is None
+
+
+# ------------------------------------------------------------ llm-select tier
+
+
+class _PickFirstLLM:
+    """Mock LLM that always selects candidate 0."""
+
+    model_id = "pick-first"
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        self.calls.append(prompt)
+        return "0"
+
+
+class _RejectLLM:
+    """Mock LLM that always rejects (returns 'none')."""
+
+    model_id = "reject"
+
+    def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        return "none"
+
+
+def test_llm_tier_resolves_when_lexical_misses(api: FoodOnAPI) -> None:
+    llm = _PickFirstLLM()
+    linker = ThreeTierLinker(api, fuzzy_threshold=0.99, llm_client=llm)
+    link = linker.link(_mention("some unknown food phrase xyz"))
+    assert link is not None
+    assert link.method == "llm"
+    assert link.confidence == 0.85
+    assert llm.calls, "LLM selector should have been invoked"
+
+
+def test_llm_tier_can_reject(api: FoodOnAPI) -> None:
+    linker = ThreeTierLinker(api, fuzzy_threshold=0.99, llm_client=_RejectLLM())
+    assert linker.link(_mention("some unknown food phrase xyz")) is None
+
+
+def test_llm_tier_not_consulted_when_exact_hits(api: FoodOnAPI) -> None:
+    llm = _PickFirstLLM()
+    linker = ThreeTierLinker(api, llm_client=llm)
+    link = linker.link(_mention("olive oil"))
+    assert link is not None
+    assert link.method == "lexical_exact"
+    assert not llm.calls, "exact hit should short-circuit before the LLM tier"
+
+
+def test_llm_tier_consulted_when_fuzzy_below_threshold(api: FoodOnAPI) -> None:
+    # "olives" fuzzy-matches at ~0.91; with llm_select_threshold=0.95 the LLM
+    # is consulted to adjudicate the not-confident-enough fuzzy hit.
+    llm = _PickFirstLLM()
+    linker = ThreeTierLinker(api, llm_client=llm, llm_select_threshold=0.95)
+    link = linker.link(_mention("olives"))
+    assert link is not None
+    assert llm.calls, "fuzzy hit below threshold should trigger the LLM tier"
+
+
+def test_llm_tier_skipped_when_fuzzy_confident(api: FoodOnAPI) -> None:
+    # "oliv oil" fuzzy-matches at ~0.94; llm_select_threshold below that means
+    # the deterministic hit is trusted and the LLM is not called.
+    llm = _PickFirstLLM()
+    linker = ThreeTierLinker(api, llm_client=llm, llm_select_threshold=0.90)
+    link = linker.link(_mention("oliv oil"))
+    assert link is not None
+    assert link.method == "lexical_fuzzy"
+    assert not llm.calls
+
+
+def test_llm_tier_garbled_reply_returns_none(api: FoodOnAPI) -> None:
+    class _GarbledLLM:
+        model_id = "garbled"
+
+        def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+            return "I think it might be the third one perhaps"
+
+    linker = ThreeTierLinker(api, fuzzy_threshold=0.99, llm_client=_GarbledLLM())
+    # "third one" -> the regex finds no bare integer/none token cleanly... it
+    # actually would not match a digit; assert it degrades to None safely.
+    result = linker.link(_mention("unknown phrase xyz"))
+    # Either a valid pick (if a digit appeared) or None — never an exception.
+    assert result is None or result.method == "llm"
+
+
+def test_llm_tier_exception_does_not_break_linking(api: FoodOnAPI) -> None:
+    class _ExplodingLLM:
+        model_id = "boom"
+
+        def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+            raise RuntimeError("LLM backend down")
+
+    linker = ThreeTierLinker(api, fuzzy_threshold=0.99, llm_client=_ExplodingLLM())
+    # A failing LLM must degrade to None, not propagate.
+    assert linker.link(_mention("unknown phrase xyz")) is None

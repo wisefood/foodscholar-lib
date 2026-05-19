@@ -21,6 +21,29 @@ from foodscholar.io.chunk import Mention
 if TYPE_CHECKING:
     from foodscholar.ontology import FoodOnAPI
 
+# FoodOn labels carry systematic NLP noise: a leading EFSA/EC numeric code,
+# parenthetical qualifiers like "(raw)" / "(eurofir)" / "(efsa foodex2)", and a
+# trailing " food product" category word. None of these appear in prose, so a
+# verbatim keyword built from the raw label never matches real text. The
+# simplifier strips them so e.g. "red meat (raw)" also yields "red meat".
+_CODE_PREFIX_RE = re.compile(r"^\s*[\d.]+\s*-\s*")
+_PAREN_RE = re.compile(r"\s*\([^)]*\)")
+_TRAILING_CATEGORY_RE = re.compile(
+    r"\s+(food product|animal feed plant|plant)$", re.IGNORECASE
+)
+
+
+def simplify_label(label: str) -> str:
+    """Strip FoodOn label noise (codes, parentheticals, trailing category words).
+
+    Returns the cleaned label; may return the input unchanged. Always safe to
+    call — the caller decides whether the simplified form is worth keeping.
+    """
+    out = _CODE_PREFIX_RE.sub("", label)
+    out = _PAREN_RE.sub("", out)
+    out = _TRAILING_CATEGORY_RE.sub("", out)
+    return out.strip()
+
 
 class KeywordNER:
     """Deterministic NER that finds any provided keyword inside the text.
@@ -54,16 +77,35 @@ class KeywordNER:
         ontology: FoodOnAPI,
         *,
         include_synonyms: bool = True,
+        expand_labels: bool = True,
+        min_keyword_len: int = 3,
         score: float = 1.0,
     ) -> KeywordNER:
-        """Build a keyword NER from every (non-obsolete) ontology term."""
+        """Build a keyword NER from every (non-obsolete) ontology term.
+
+        With ``expand_labels`` (default), each label/synonym also contributes a
+        `simplify_label`-cleaned variant — FoodOn labels like "red meat (raw)"
+        or "legume food product" are over-qualified for prose, so the cleaned
+        forms ("red meat", "legume") are what actually match real text.
+
+        ``min_keyword_len`` drops keywords shorter than N characters after
+        simplification; a 1-2 char keyword (e.g. FoodOn's "an") generates
+        nothing but false positives.
+        """
         keywords: list[str] = []
         for term in ontology:
             if term.obsolete:
                 continue
-            keywords.append(term.label)
+            raw = [term.label]
             if include_synonyms:
-                keywords.extend(term.synonyms)
+                raw.extend(term.synonyms)
+            for name in raw:
+                keywords.append(name)
+                if expand_labels:
+                    simplified = simplify_label(name)
+                    if simplified and simplified.lower() != name.lower():
+                        keywords.append(simplified)
+        keywords = [k for k in keywords if len(k.strip()) >= min_keyword_len]
         return cls(keywords, score=score)
 
     def extract(self, text: str) -> list[Mention]:
