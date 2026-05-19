@@ -141,6 +141,25 @@ def test_linker_llm_select_wires_facade_llm() -> None:
     assert linker._llm is fs.llm
 
 
+def test_ner_defaults_to_keyword() -> None:
+    """cfg.annotate.ner defaults to 'keyword' → fs.ner is a KeywordNER."""
+    from foodscholar.annotate.ner import KeywordNER
+
+    fs = _fs_with_mini_ontology()
+    assert isinstance(fs.ner, KeywordNER)
+
+
+def test_ner_agentic_selector_builds_agentic_ner() -> None:
+    """cfg.annotate.ner='agentic' → fs.ner is an AgenticNER wrapping fs.llm."""
+    from foodscholar.annotate.agent_ner import AgenticNER
+
+    fs = _fs_with_mini_ontology()
+    fs.config.annotate.ner = "agentic"
+    ner = fs.ner
+    assert isinstance(ner, AgenticNER)
+    assert ner._llm is fs.llm
+
+
 def _memory_config():  # type: ignore[no-untyped-def]
     from foodscholar import FoodScholarConfig
 

@@ -74,6 +74,23 @@ fs.linker.dry_run("oliv oil")
 fs.annotate()                                            # full phase
 ```
 
+### NER strategy
+
+`cfg.annotate.ner` selects how mentions are found:
+
+- **`keyword`** (default) — `KeywordNER`, a deterministic word-boundary
+  matcher over every FoodOn label + synonym. No LLM, no model download,
+  fully offline. The safe default; what `in_memory()` and the tests use.
+- **`agentic`** — `AgenticNER`, an LLM extracts mentions (and classifies
+  each as food / nutrient / health / dietary_pattern / allergen) via the
+  configured `llm:` provider. Character offsets are recomputed locally,
+  not trusted from the model. Needs the `[llm]` extra + a provider.
+
+There is no bespoke fine-tuned NER model — the project deliberately uses
+an LLM rather than a proprietary model. See
+[`docs/DESIGN_agentic_annotate.md`](docs/DESIGN_agentic_annotate.md) for
+the agentic-annotation roadmap.
+
 ### The linker tiers
 
 The linker is a 3-or-4 tier cascade — first confident hit wins:

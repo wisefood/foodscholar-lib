@@ -59,7 +59,12 @@ class LinkerConfig(BaseModel):
 
 class AnnotateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    ner_model: str = "sci_food_ner_v1"
+
+    ner: Literal["keyword", "agentic"] = "keyword"
+    """NER strategy. `keyword` = deterministic ontology-keyword matcher (no
+    LLM, the safe default). `agentic` = LLM extracts mentions via the
+    configured `llm:` client (needs the `[llm]` extra + a provider)."""
+
     scientific_embedder: str = "allenai/specter2_base"
     general_embedder: str = "BAAI/bge-large-en-v1.5"
     linker: LinkerConfig = Field(default_factory=LinkerConfig)

@@ -78,10 +78,22 @@ class _MockEmbedder:
 
 
 class _MockLLM:
+    """Built-in mock LLM for `in_memory()` and offline use.
+
+    `generate_json` returns an empty object — enough to satisfy the protocol
+    and let pipelines run without an LLM, but it produces no real annotations.
+    Tests that exercise agentic behavior inject their own scripted client.
+    """
+
     model_id = "mock-llm-v0"
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str:
         return "Mock answer citing [CHUNK]."
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        return {}
 
 
 class FoodScholar:
@@ -246,7 +258,7 @@ class FoodScholar:
             "embedder": self.embedder.model_id,
             "llm": self.llm.model_id,
             "ontology": ontology,
-            "ner_model": self.config.annotate.ner_model,
+            "ner": self.config.annotate.ner,
             "prompt_version": self.config.layer_c.prompt_version,
         }
 
@@ -298,10 +310,11 @@ class FoodScholar:
 
     @property
     def ner(self) -> NER:
-        """Lazily-built NER. Default: `KeywordNER.from_ontology(fs.ontology)`.
+        """Lazily-built NER, selected by `cfg.annotate.ner`.
 
-        Override with `fs.attach_ner(...)` before first access to install
-        SciFoodNER or a custom NER.
+        `keyword` (default) → `KeywordNER.from_ontology(fs.ontology)`;
+        `agentic` → `AgenticNER(fs.llm)`. Override with `fs.attach_ner(...)`
+        before first access to install a custom NER.
         """
         if self._ner is None:
             self._ner = self._build_ner()
@@ -342,6 +355,16 @@ class FoodScholar:
         )
 
     def _build_ner(self) -> NER:
+        """Build the NER chosen by `cfg.annotate.ner`.
+
+        `agentic` uses the facade's LLM (`fs.llm`); with the default mock LLM
+        it will extract nothing, so a real run needs `cfg.llm` configured.
+        """
+        if self.config.annotate.ner == "agentic":
+            from foodscholar.annotate.agent_ner import AgenticNER
+
+            return AgenticNER(self.llm)
+
         from foodscholar.annotate.ner import KeywordNER
 
         return KeywordNER.from_ontology(self.ontology)

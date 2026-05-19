@@ -27,6 +27,10 @@ class _OKClient:
         self.calls += 1
         return self._reply
 
+    def generate_json(self, prompt, schema, max_tokens=1024):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        return {"from": self.model_id}
+
 
 class _FailClient:
     def __init__(self, model_id: str) -> None:
@@ -34,6 +38,10 @@ class _FailClient:
         self.calls = 0
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        self.calls += 1
+        raise RuntimeError(f"{self.model_id} is down")
+
+    def generate_json(self, prompt, schema, max_tokens=1024):  # type: ignore[no-untyped-def]
         self.calls += 1
         raise RuntimeError(f"{self.model_id} is down")
 
@@ -94,6 +102,25 @@ def test_fallback_primary_property() -> None:
     assert fb.primary is primary
 
 
+# ------------------------------------------------- FallbackLLMClient.generate_json
+
+
+def test_fallback_generate_json_uses_primary() -> None:
+    fb = FallbackLLMClient([_OKClient("primary"), _OKClient("secondary")])
+    assert fb.generate_json("p", {}) == {"from": "primary"}
+
+
+def test_fallback_generate_json_falls_through() -> None:
+    fb = FallbackLLMClient([_FailClient("primary"), _OKClient("secondary")])
+    assert fb.generate_json("p", {}) == {"from": "secondary"}
+
+
+def test_fallback_generate_json_raises_when_all_fail() -> None:
+    fb = FallbackLLMClient([_FailClient("a"), _FailClient("b")])
+    with pytest.raises(AllLLMClientsFailedError, match="generate_json"):
+        fb.generate_json("p", {})
+
+
 # --------------------------------------------------------------- build_llm
 
 
@@ -140,3 +167,40 @@ def test_llm_config_defaults() -> None:
     assert cfg.fallbacks == []
     assert cfg.timeout_s == 30.0
     assert cfg.max_retries == 2
+
+
+# ---------------------------------------------------------- _parse_json_object
+
+
+def test_parse_json_object_plain() -> None:
+    from foodscholar.llm.providers import _parse_json_object
+
+    assert _parse_json_object('{"a": 1}') == {"a": 1}
+
+
+def test_parse_json_object_strips_code_fences() -> None:
+    from foodscholar.llm.providers import _parse_json_object
+
+    fenced = '```json\n{"a": 1}\n```'
+    assert _parse_json_object(fenced) == {"a": 1}
+
+
+def test_parse_json_object_extracts_from_prose() -> None:
+    from foodscholar.llm.providers import _parse_json_object
+
+    noisy = 'Here is the result: {"a": 1} — hope that helps!'
+    assert _parse_json_object(noisy) == {"a": 1}
+
+
+def test_parse_json_object_rejects_non_object() -> None:
+    from foodscholar.llm.providers import _parse_json_object
+
+    with pytest.raises(ValueError, match="non-object"):
+        _parse_json_object("[1, 2, 3]")
+
+
+def test_parse_json_object_rejects_garbage() -> None:
+    from foodscholar.llm.providers import _parse_json_object
+
+    with pytest.raises(ValueError, match="did not return JSON"):
+        _parse_json_object("no json here at all")

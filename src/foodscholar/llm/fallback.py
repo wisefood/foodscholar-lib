@@ -40,22 +40,39 @@ class FallbackLLMClient:
         return self._clients[0]
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        return self._try_chain(
+            lambda c: c.generate(prompt, max_tokens=max_tokens), "generate"
+        )
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        return self._try_chain(
+            lambda c: c.generate_json(prompt, schema, max_tokens=max_tokens),
+            "generate_json",
+        )
+
+    def _try_chain(self, call, op):  # type: ignore[no-untyped-def]
+        """Run `call(client)` down the chain, falling through on any error."""
         errors: list[str] = []
         for i, client in enumerate(self._clients):
             try:
-                result = client.generate(prompt, max_tokens=max_tokens)
+                result = call(client)
                 if i > 0:
                     _log.info(
                         "llm.fallback_used",
+                        op=op,
                         used=client.model_id,
                         rank=i,
                         failed=errors,
                     )
                 return result
             except Exception as e:
-                msg = f"{client.model_id}: {type(e).__name__}: {e}"
-                errors.append(msg)
-                _log.warning("llm.client_failed", client=client.model_id, error=str(e))
+                errors.append(f"{client.model_id}: {type(e).__name__}: {e}")
+                _log.warning(
+                    "llm.client_failed", op=op, client=client.model_id, error=str(e)
+                )
         raise AllLLMClientsFailedError(
-            "every LLM client in the fallback chain failed: " + " | ".join(errors)
+            f"every LLM client in the fallback chain failed ({op}): "
+            + " | ".join(errors)
         )

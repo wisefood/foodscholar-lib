@@ -1,17 +1,24 @@
 """Concrete LLMClient adapters, one per provider.
 
-Each class implements the `LLMClient` protocol — a `model_id` attribute and a
-`generate(prompt, max_tokens) -> str` method. SDKs are lazy-imported inside
-`__init__` so the core package never hard-depends on them; install them via
-the `[llm]` extra. API keys come from environment variables, never config.
+Each class implements the `LLMClient` protocol: a `model_id` attribute, a
+`generate(prompt, max_tokens) -> str` method, and a `generate_json(prompt,
+schema, max_tokens) -> dict` method that returns schema-conforming JSON via the
+provider's native structured-output mode where one exists.
 
-All adapters are deliberately thin: a single non-streaming text completion.
-The linker's `llm_select` tier and Layer C card generation only need that.
+SDKs are lazy-imported inside `__init__` so the core package never hard-depends
+on them; install via the `[llm]` extra. API keys come from environment
+variables, never config.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+
+# JSON sometimes arrives wrapped in ```json ... ``` fences or with leading
+# prose. This pulls the first balanced {...} object out as a fallback.
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 def _require_env(var: str, provider: str) -> str:
@@ -21,6 +28,21 @@ def _require_env(var: str, provider: str) -> str:
             f"{provider} requires the {var} environment variable to be set."
         )
     return key
+
+
+def _parse_json_object(text: str) -> dict[str, object]:
+    """Parse `text` as a JSON object, tolerating fences / surrounding prose."""
+    text = text.strip()
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        m = _JSON_OBJECT_RE.search(text)
+        if m is None:
+            raise ValueError(f"LLM did not return JSON: {text[:200]!r}") from None
+        obj = json.loads(m.group(0))
+    if not isinstance(obj, dict):
+        raise ValueError(f"LLM returned non-object JSON: {type(obj).__name__}")
+    return obj
 
 
 class AnthropicClient:
@@ -49,6 +71,17 @@ class AnthropicClient:
         parts = [b.text for b in msg.content if getattr(b, "type", None) == "text"]
         return "".join(parts)
 
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        # Anthropic has no JSON-schema response mode; instruct + parse. The
+        # schema is shown to the model so it knows the expected shape.
+        full = (
+            f"{prompt}\n\nRespond with ONLY a JSON object matching this schema "
+            f"(no prose, no markdown fences):\n{json.dumps(schema)}"
+        )
+        return _parse_json_object(self.generate(full, max_tokens=max_tokens))
+
 
 class OpenAIClient:
     """OpenAI. Needs `OPENAI_API_KEY`; install `foodscholar[llm]`."""
@@ -74,6 +107,20 @@ class OpenAIClient:
             messages=[{"role": "user", "content": prompt}],
         )
         return resp.choices[0].message.content or ""
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        resp = self._client.chat.completions.create(
+            model=self.model_id,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "response", "schema": schema, "strict": False},
+            },
+        )
+        return _parse_json_object(resp.choices[0].message.content or "")
 
 
 class GroqClient:
@@ -103,6 +150,20 @@ class GroqClient:
         )
         return resp.choices[0].message.content or ""
 
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        # Groq's OpenAI-compatible API supports response_format=json_object.
+        # The schema is also embedded in the prompt so the model knows the shape.
+        full = f"{prompt}\n\nRespond with JSON matching this schema:\n{json.dumps(schema)}"
+        resp = self._client.chat.completions.create(
+            model=self.model_id,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": full}],
+            response_format={"type": "json_object"},
+        )
+        return _parse_json_object(resp.choices[0].message.content or "")
+
 
 class GeminiClient:
     """Google Gemini. Needs `GEMINI_API_KEY`; install `foodscholar[llm]`."""
@@ -127,6 +188,22 @@ class GeminiClient:
             config=types.GenerateContentConfig(max_output_tokens=max_tokens),
         )
         return resp.text or ""
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        from google.genai import types
+
+        resp = self._client.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=max_tokens,
+                response_mime_type="application/json",
+                response_schema=schema,
+            ),
+        )
+        return _parse_json_object(resp.text or "")
 
 
 class OllamaClient:
@@ -156,3 +233,15 @@ class OllamaClient:
             options={"num_predict": max_tokens},
         )
         return resp.get("response", "")
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        # Ollama accepts a JSON schema as `format` for constrained decoding.
+        resp = self._client.generate(
+            model=self.model_id,
+            prompt=prompt,
+            format=schema,
+            options={"num_predict": max_tokens},
+        )
+        return _parse_json_object(resp.get("response", ""))

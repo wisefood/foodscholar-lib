@@ -17,6 +17,18 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
+# Coarse class of an extracted mention. `other` is the safe default for NER
+# implementations that don't classify (e.g. KeywordNER). The agentic NER does
+# classify; downstream (Layer A facet routing) can use it.
+EntityType = Literal[
+    "food",
+    "nutrient",
+    "health",
+    "dietary_pattern",
+    "allergen",
+    "other",
+]
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -28,6 +40,7 @@ class Mention(BaseModel):
     end: int
     score: float
     ner_model_version: str
+    entity_type: EntityType = "other"
 
 
 class EntityLink(BaseModel):

@@ -12,7 +12,10 @@ ontology:
   prefix_filter: ["FOODON:"]
 
 annotate:
-  ner_model: sci_food_ner_v1
+  # NER strategy: keyword (deterministic ontology matcher, no LLM) or
+  # agentic (LLM extracts mentions via the llm: client below). agentic is
+  # the recommended setup; needs the [llm] extra + a configured provider.
+  ner: agentic
   scientific_embedder: allenai/specter2_base
   general_embedder: BAAI/bge-large-en-v1.5
   linker:
