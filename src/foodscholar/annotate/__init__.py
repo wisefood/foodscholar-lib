@@ -11,6 +11,7 @@ the FoodScholar facade are the canonical entry points.
 """
 
 from foodscholar.annotate.agent_ner import AgenticNER
+from foodscholar.annotate.cache import AnnotationCache, cache_key
 from foodscholar.annotate.dense_index import DenseIndex
 from foodscholar.annotate.embedder import (
     HashEmbedder,
@@ -24,6 +25,7 @@ from foodscholar.annotate.runner import dry_run, run
 
 __all__ = [
     "AgenticNER",
+    "AnnotationCache",
     "DenseIndex",
     "HFEmbedder",
     "HashEmbedder",
@@ -31,6 +33,7 @@ __all__ = [
     "SapBERTEmbedder",
     "SourceTypeRouter",
     "ThreeTierLinker",
+    "cache_key",
     "dry_run",
     "run",
     "simplify_label",

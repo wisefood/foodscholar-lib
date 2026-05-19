@@ -33,18 +33,22 @@ class LinkerEvalReport:
     n_total: int = 0
     n_correct: int = 0
     n_linked: int = 0  # linker returned an id (regardless of correctness)
+    n_linked_positive: int = 0  # linker returned an id on a gold-positive case
     by_tier_correct: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     by_tier_total: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     misses: list[tuple[str, str | None, str | None]] = field(default_factory=list)
 
     @property
     def coverage(self) -> float:
-        """Fraction of gold-positive cases the linker resolved (correct or not)."""
+        """Fraction of gold-positive cases the linker resolved (correct or not).
+
+        Counts only links produced on positive cases; a false-positive link on
+        a negative case does not inflate coverage. Bounded in [0, 1].
+        """
         positives = sum(self.by_tier_total[t] for t in self.by_tier_total if t != "miss")
         if positives == 0:
             return 0.0
-        linked_positives = self.n_linked - self.by_tier_correct.get("miss-as-link", 0)
-        return linked_positives / positives
+        return self.n_linked_positive / positives
 
     @property
     def accuracy(self) -> float:
@@ -93,18 +97,23 @@ def evaluate(linker: Linker, gold: list[GoldRecord]) -> LinkerEvalReport:
         report.n_total += 1
         report.by_tier_total[rec.tier] += 1
 
+        # The linker eval gold set is food-domain; type the mention "food" so
+        # the linker's semantic-type gate (on by default) does not skip it.
         mention = Mention(
             text=rec.text,
             start=0,
             end=len(rec.text),
             score=1.0,
             ner_model_version="eval",
+            entity_type="food",
         )
         link = linker.link(mention)
 
         got_id = link.ontology_id if link else None
         if got_id is not None:
             report.n_linked += 1
+            if rec.expected_id is not None:
+                report.n_linked_positive += 1
 
         if got_id == rec.expected_id:
             report.n_correct += 1
