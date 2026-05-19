@@ -110,3 +110,70 @@ def test_query_raises_until_retrieval_lands() -> None:
 def test_init_in_memory_is_noop() -> None:
     fs = FoodScholar.in_memory()
     fs.init()  # should not raise
+
+
+def _fs_with_mini_ontology(**linker_overrides) -> FoodScholar:  # type: ignore[no-untyped-def]
+    from pathlib import Path
+
+    from foodscholar import FoodOnAPI
+    from foodscholar.ontology import load_ontology
+
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"
+    fs = FoodScholar.in_memory()
+    fs.attach_ontology(FoodOnAPI(load_ontology(fixture), prefix_filter=None))
+    for k, v in linker_overrides.items():
+        setattr(fs.config.annotate.linker, k, v)
+    return fs
+
+
+def test_linker_defaults_to_lexical_only() -> None:
+    """No dense_model, llm_select off → linker has no dense index, no LLM."""
+    fs = _fs_with_mini_ontology()
+    linker = fs.linker
+    assert linker._dense_index is None
+    assert linker._llm is None
+
+
+def test_linker_llm_select_wires_facade_llm() -> None:
+    """cfg.annotate.linker.llm_select=True → linker uses the facade's LLM."""
+    fs = _fs_with_mini_ontology(llm_select=True)
+    linker = fs.linker
+    assert linker._llm is fs.llm
+
+
+def _memory_config():  # type: ignore[no-untyped-def]
+    from foodscholar import FoodScholarConfig
+
+    return FoodScholarConfig.model_validate(
+        {
+            "corpus": {"chunks_path": "data/chunks.parquet"},
+            "storage": {
+                "chunk_store": {"backend": "memory"},
+                "graph_store": {"backend": "memory"},
+            },
+        }
+    )
+
+
+def test_from_config_explicit_embedder_is_respected() -> None:
+    """An embedder passed to from_config wins over the config-built one."""
+    from foodscholar.annotate.embedder import HashEmbedder
+
+    custom = HashEmbedder(dim=12)
+    fs = FoodScholar.from_config(_memory_config(), embedder=custom)
+    assert fs.embedder is custom
+
+
+def test_from_config_embedder_degrades_to_mock_without_deps() -> None:
+    """When the [annotate] embedder deps are absent, from_config falls back to
+    the mock embedder rather than crashing — `_build_embedder` returns None and
+    __init__ supplies _MockEmbedder."""
+    import importlib.util
+
+    fs = FoodScholar.from_config(_memory_config())
+    if importlib.util.find_spec("sentence_transformers") is None:
+        # No sentence-transformers in this env → SourceTypeRouter can't build.
+        assert fs.embedder.model_id == "mock-embedder-v0"
+    else:
+        # Deps present → a real source-type router was built.
+        assert fs.embedder.model_id.startswith("router(")

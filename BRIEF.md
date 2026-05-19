@@ -30,7 +30,7 @@ Chunks attach to multiple Layer A shelves (multi-label, propagated through ontol
 | Entity linking | Lexical (exact + fuzzy against FoodOn names + synonyms) then dense fallback (**SapBERT**), with semantic-type gate |
 | Embeddings | **SPECTER2** for scientific abstract chunks, **BGE-large** (`BAAI/bge-large-en-v1.5`) for textbook / guide chunks |
 | Clustering | **Leiden / hierarchical Leiden** primary, **HDBSCAN** fallback. BERTopic acceptable for fast prototyping. |
-| LLM (Layer C) | Pluggable. Default: Claude Sonnet class. Tests use a mock client. |
+| LLM (Layer C + linker `llm` tier) | Provider-agnostic — `anthropic`, `openai`, `groq`, `gemini`, `ollama`, configured via `cfg.llm` with an ordered fallback chain. `config.example.yaml` default: Groq `llama-3.3-70b-versatile`, fallback local Ollama. Tests use a mock client. |
 | Package mgmt | `pyproject.toml` with `hatch`. Optional extras for stage-specific deps. |
 | Data contracts | **Pydantic v2** models throughout. |
 | Backend abstraction | `typing.Protocol` classes for `ChunkStore`, `GraphStore`, `Embedder`, `LLMClient`, etc. Concrete adapters slot in. |
@@ -219,11 +219,33 @@ fs.annotate()                                            # full phase, returns A
 
 Defaults:
 
-- **NER** — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym in the ontology (obsolete terms excluded). Real `SciFoodNERAdapter` is gated by the `[annotate]` extra and runs behind `@pytest.mark.slow`.
-- **Linker** — `ThreeTierLinker(fs.ontology, ...)`. Tries in order: `lexical_exact` (exact case-insensitive match) → `lexical_fuzzy` (rapidfuzz `token_set_ratio`, threshold from `cfg.annotate.linker.lexical_threshold`) → `dense` (cosine over precomputed term embeddings, opt-in via the dense embedder). Each link records `method` and `confidence` so the post-hoc audit in §17 is mechanical.
-- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")` or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
+- **NER** — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym in the ontology (obsolete excluded). `expand_labels=True` also registers a noise-stripped variant of each label (`simplify_label` removes EFSA/EC code prefixes, parenthetical qualifiers, and trailing category words) so `"red meat (raw)"` also matches the bare `"red meat"`. Real `SciFoodNERAdapter` is gated by the `[annotate]` extra and `@pytest.mark.slow`.
+- **Linker** — `ThreeTierLinker(fs.ontology, ...)`. A 3-or-4 tier cascade, first confident hit wins:
+  1. `lexical_exact` — case- and punctuation-insensitive match against a label or exact synonym.
+  2. `lexical_fuzzy` — rapidfuzz `WRatio` (length-aware; replaced `token_set_ratio` after it routinely preferred generic short labels on real FoodOn). Short queries (≤4 chars) require a stricter 0.95 threshold; a length-ratio gate and a label-over-synonym tie-break further constrain it.
+  3. `dense` — cosine kNN over precomputed term embeddings via `DenseIndex` (a cached numpy matrix; ~29k FoodOn terms scored per query in <2ms). Opt-in: enabled when `cfg.annotate.linker.dense_model` is set (e.g. SapBERT). **Measured behavior:** SapBERT links *lexically-distinct synonyms and morphological variants* well (`whole grains`/`whole grain` ≈0.96; `ascorbate`/`vitamin C` ≈0.76; `vitamin C`/`ascorbic acid` ≈0.90) but does **not** reliably link opaque abbreviations (`EVOO`/`olive oil` ≈0.46 — barely above the unrelated baseline). Abbreviations are the `llm` tier's job, not the dense tier's.
+  4. `llm` — *opt-in, deviation from §2; see "Deviations" below.* When no deterministic tier clears `llm_select_threshold`, an LLM is shown the top-k candidates plus the mention and picks one or rejects. Gated so it fires only on the hard residue, not every mention.
+
+  Each link records `method` ∈ `{lexical_exact, lexical_fuzzy, dense, llm}` and `confidence`, so the §17 audit is mechanical.
+- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")`, `SapBERTEmbedder` (entity-linking; the dense tier's model), or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
 
 Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by passing `embedder=...` to either factory.
+
+**Deviation from §2 — the `llm` tier.** BRIEF §2 specifies the linker as "lexical then dense (SapBERT)". The `llm` tier is an addition: on real FoodOn the lexical/dense tiers cannot *reject* a query that isn't semantically a food (e.g. `"iron deficiency"` orthographically matches `"flat iron steak"`). An LLM shown the candidates with context can. The tier is **off by default in the Pydantic config defaults** (so `FoodScholar.in_memory()` and tests stay deterministic and offline), but **on in `config.example.yaml`** (the recommended production setup). Even when on it fires only below a confidence threshold — not per mention. This honors §13's instruction to "treat [retrieval] as a v1 — measure, iterate, and document deviations". §15's "no agentic/multi-step retrieval" still holds: there is no retry loop, just one gated selection call.
+
+### LLM client (`fs.llm`)
+
+The LLM used by the `llm` linker tier and by Layer C card generation is provider-agnostic. `cfg.llm` declares a `primary` provider plus an ordered `fallbacks` list:
+
+```yaml
+llm:
+  primary:   { provider: groq, model: llama-3.3-70b-versatile }
+  fallbacks:
+    - { provider: ollama, model: llama3.1, host: http://localhost:11434 }
+  timeout_s: 30
+```
+
+Supported providers: `anthropic`, `openai`, `groq`, `gemini`, `ollama` — one thin adapter each in `foodscholar.llm.providers`, all implementing the `LLMClient` protocol. `build_llm(cfg.llm)` constructs the chain: a single client if there are no fallbacks, otherwise a `FallbackLLMClient` that tries primary → fallbacks in order, falling through on any error (timeout, rate limit, auth, service down). API keys are read from the environment (`GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) — never from config files; Ollama needs no key. SDKs are lazy-imported and gated behind the `[llm]` extra. When `cfg.llm` is absent the facade uses a built-in mock client (used by `in_memory()` and tests).
 
 ### Evaluation gates
 
@@ -269,7 +291,7 @@ class EntityLink(BaseModel):
     mention: Mention
     ontology_id: str          # e.g. "FOODON:03309927"
     confidence: float
-    method: Literal["lexical_exact", "lexical_fuzzy", "dense"]
+    method: Literal["lexical_exact", "lexical_fuzzy", "dense", "llm"]
     linker_version: str
 
 class Chunk(BaseModel):

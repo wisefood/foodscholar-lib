@@ -15,6 +15,7 @@ from foodscholar.io import (
     Shelf,
     Theme,
 )
+from foodscholar.llm import FallbackLLMClient, build_llm
 from foodscholar.ontology import FoodOnAPI, load_ontology
 from foodscholar.storage import (
     ChunkStore,
@@ -34,6 +35,7 @@ __all__ = [
     "ChunkStore",
     "Embedder",
     "EntityLink",
+    "FallbackLLMClient",
     "FoodOnAPI",
     "FoodScholar",
     "FoodScholarConfig",
@@ -49,6 +51,7 @@ __all__ = [
     "Theme",
     "ThemeHandle",
     "__version__",
+    "build_llm",
     "config_hash",
     "load_config",
     "load_ontology",

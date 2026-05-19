@@ -62,25 +62,71 @@ answer = fs.query("Is olive oil heart-healthy?")
 
 ## Annotating chunks
 
-Once the ontology is in place, `fs.annotate()` runs NER + the three-tier
+Once the ontology is in place, `fs.annotate()` runs NER + the tiered
 linker + embeddings over every chunk in the store and writes the enriched
 copies back. The two pieces are independently probeable:
 
 ```python
 fs.ner.extract("Mediterranean diet rich in olive oil.")  # list[Mention]
-fs.linker.dry_run("evo")
-# EntityLink(ontology_id="FOODON:...", method="lexical_fuzzy", confidence=0.86)
+fs.linker.dry_run("oliv oil")
+# EntityLink(ontology_id="FOODON:...", method="lexical_fuzzy", confidence=0.94)
 
 fs.annotate()                                            # full phase
 ```
 
-The linker tries `lexical_exact` → `lexical_fuzzy` (rapidfuzz) → `dense`
-(cosine over precomputed term embeddings, opt-in). Each `EntityLink`
-records the `method` and `confidence` so it's easy to audit which tier
-resolved a mention.
+### The linker tiers
+
+The linker is a 3-or-4 tier cascade — first confident hit wins:
+
+| Tier | `method` | What it does | Enabled |
+|---|---|---|---|
+| 1 | `lexical_exact` | exact, case/punctuation-insensitive label or synonym match | always |
+| 2 | `lexical_fuzzy` | rapidfuzz `WRatio` over labels + synonyms | always |
+| 3 | `dense` | cosine kNN over SapBERT term embeddings (`DenseIndex`) | when `cfg.annotate.linker.dense_model` is set |
+| 4 | `llm` | LLM picks from top-k candidates, or rejects | when `cfg.annotate.linker.llm_select: true` |
+
+Tiers 1–2 are pure-lexical and need no models. Tier 3 (dense, SapBERT)
+catches lexically-distinct synonyms — `ascorbate` → vitamin C, `whole
+grains` → whole grain — but **not** opaque abbreviations (`EVOO` and
+`olive oil` are far apart in SapBERT space). Tier 4 (LLM) adjudicates the
+hard residue, including abbreviations and queries lexical matching can't
+tell apart from a food ("iron deficiency" vs "flat iron steak"). Tier 4
+only fires below a confidence threshold. Each `EntityLink` records
+`method` + `confidence` so it's easy to audit which tier resolved a mention.
+
+`config.example.yaml` enables all four tiers. The Pydantic config defaults
+keep tiers 3–4 off, so `FoodScholar.in_memory()` and the test suite stay
+deterministic and offline.
 
 The §17 gate (entity-linking coverage ≥ 70% on a held-out gold set) is a
 unit test that fails CI if the linker regresses below threshold.
+
+## Configuring the LLM
+
+The `llm` linker tier and Layer C card generation use a provider-agnostic
+client. Declare a primary provider and an ordered fallback chain in the
+`llm:` config section:
+
+```yaml
+llm:
+  primary:   { provider: groq, model: llama-3.3-70b-versatile }
+  fallbacks:
+    - { provider: ollama, model: llama3.1 }
+  timeout_s: 30
+```
+
+Providers: `anthropic`, `openai`, `groq`, `gemini`, `ollama`. The primary
+is tried first; fallbacks are tried in order if it errors (timeout, rate
+limit, auth, service down). API keys come from the environment
+(`GROQ_API_KEY`, `ANTHROPIC_API_KEY`, …) — never the config file. Install
+the providers with the `[llm]` extra:
+
+```bash
+pip install -e '.[llm]'
+```
+
+`FoodScholar.in_memory()` and configs with no `llm:` section use a built-in
+mock client.
 
 ## Loading the ontology
 
@@ -166,11 +212,12 @@ foodscholar/
     ├── corpus/                     # chunk loading
     ├── annotate/                   # NER + linking + embeddings   (M2 ✓)
     ├── ontology/                   # FoodOn loader + lookup       (M1 ✓)
+    ├── llm/                        # provider-agnostic LLM clients + fallback
     ├── layer_a/                    # backbone builder             (stub)
     ├── layer_b/                    # theme discovery              (stub)
     ├── layer_c/                    # write-up cards               (stub)
     ├── retrieval/                  # public query API             (stub)
     ├── storage/                    # protocols + adapters
     ├── cli/                        # typer entry point (one-line per command)
-    └── evaluation/                 # gates + scorers              (stub)
+    └── evaluation/                 # gates + scorers              (linker eval ✓)
 ```

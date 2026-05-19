@@ -34,7 +34,7 @@ class EntityLink(BaseModel):
     mention: Mention
     ontology_id: str
     confidence: float
-    method: Literal["lexical_exact", "lexical_fuzzy", "dense"]
+    method: Literal["lexical_exact", "lexical_fuzzy", "dense", "llm"]
     linker_version: str
 
 

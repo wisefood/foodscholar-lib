@@ -19,6 +19,19 @@ annotate:
     lexical_threshold: 0.85
     dense_threshold: 0.78
     semantic_type_gate: true
+    # All four linker tiers are enabled here for highest linking quality.
+    # Dense tier — SapBERT embedding kNN. Catches lexically-distinct synonyms
+    # (e.g. "ascorbate" -> vitamin C). Empty string disables it.
+    dense_model: cambridgeltl/SapBERT-from-PubMedBERT-fulltext
+    dense_cache_path: data/sapbert_terms.npz
+    # LLM-select tier (4th tier — deviation from BRIEF §2, see BRIEF §3.5).
+    # When no deterministic tier is confident, the LLM (see the `llm:` section
+    # below) picks from the top-k candidates or rejects. Uses the configured
+    # provider chain. Fires only below llm_select_threshold, so deterministic
+    # tiers still handle the bulk of mentions.
+    llm_select: true
+    llm_select_threshold: 0.90
+    llm_candidate_k: 8
 
 layer_a:
   min_support: 20
@@ -53,3 +66,20 @@ storage:
     url: bolt://localhost:7687
     user: neo4j
     password: ${NEO4J_PASSWORD}
+
+# LLM client — used by the linker's llm_select tier and Layer C card
+# generation. Provider-agnostic: anthropic | openai | groq | gemini | ollama.
+# API keys come from the environment (GROQ_API_KEY, ANTHROPIC_API_KEY,
+# OPENAI_API_KEY, GEMINI_API_KEY), never from this file. Ollama needs no key,
+# just a local daemon. The primary is tried first; fallbacks are tried in
+# order if it errors (timeout, rate limit, auth, service down).
+llm:
+  primary:
+    provider: groq
+    model: llama-3.3-70b-versatile
+  fallbacks:
+    - provider: ollama
+      model: llama3.1
+      host: http://localhost:11434
+  timeout_s: 30
+  max_retries: 2
