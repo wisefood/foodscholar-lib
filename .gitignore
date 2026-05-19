@@ -10,6 +10,7 @@ pytest-of-dpetrou/
 data/
 .vscode/
 *.local.yaml
+config.gate.yaml
 
 # Distribution / packaging
 .Python

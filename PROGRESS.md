@@ -6,6 +6,107 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-19 — Iteration 5.2 (M2→agentic): §17 annotate gate + content-addressed cache
+
+**What:** two things — (1) ran the BRIEF §17 annotate sanity gate against real
+FoodOn for the first time, which surfaced a real linker-quality finding and
+confirmed the direction of the agentic redesign; (2) landed the next
+design-doc step — the content-addressed annotation cache.
+
+### §17 annotate gate — first real-data run
+
+The unit suite is green on the 11-term mini fixture, but that does not tell us
+the pipeline produces *good annotations on real FoodOn + real models*. BRIEF
+§17 is the gate that does. New artifacts:
+
+- **`tests/fixtures/linker_gold_foodon.jsonl`** — 35-record gold set with
+  *real* `FOODON:` ids (the existing `linker_gold.jsonl` is mini-fixture
+  `TEST:` ids). Includes negative cases (`iron deficiency`, `heart disease`)
+  whose correct answer is *no* link.
+- **`tests/fixtures/sample_chunks.jsonl`** — 16 hand-written realistic
+  nutrition chunks across abstract / textbook / guide (no `data/chunks.parquet`
+  exists yet).
+- **`scripts/annotate_gate.py`** — runs the three §17 checks: linking coverage
+  (gate ≥ 70%), top-N most-linked-term frequency list, and a 50-link random
+  sample for hand-checking.
+- **`config.local.yaml`** rewritten — it was stale (`annotate.ner_model:
+  sci_food_ner_v1`, a field removed in iteration 5.0); now carries the `ner`
+  selector, `prefix_filter`, and the dense + llm linker tiers.
+
+**Bug fixed — `evaluate_linker` coverage could exceed 100%.** A false-positive
+link on a negative gold case inflated the numerator (it counted *all* links,
+divided by *positive* cases only). Added `n_linked_positive` so coverage counts
+only links produced on positive cases — now correctly bounded in [0, 1].
+
+**Gate result — Check 1 PASS, Check 3 FAIL.** Coverage 100%, gold-set accuracy
+94.3%. But the 50-link hand-check found **~10–14 wrong links**: the lexical
+fuzzy tier substring-matches into qualified labels (`saturated fat` →
+`saturated fat free food`, `water` → `watermelon plant`, `Mediterranean diet`
+→ `diet soft drink`), and nutrient/abstract mentions get forced onto spurious
+food terms because the semantic-type gate is not catching them. This is
+exactly the failure mode the agentic redesign exists to fix. **Decision
+(design owner): proceed with the redesign rather than keep patching the old
+`ThreeTierLinker`.** The gate stays in the repo as the measurement that
+re-validates the agentic pipeline once it lands.
+
+**Note:** the gate runs the linker against real FoodOn but uses `HashEmbedder`
+for chunk embeddings — chunk embeddings are not one of the three §17 checks,
+and mocking them avoids a ~1.3GB SPECTER2/BGE load that the gate does not need.
+
+### Content-addressed annotation cache — design-doc step 2
+
+**New module — `foodscholar.annotate.cache`** (docs/DESIGN_agentic_annotate.md
+§4, §10 step 2):
+
+- `cache_key(chunk_text, *, agent_model_id, prompt_version, ontology_hash)` —
+  the content-addressed key. The four parts are **length-prefixed** before
+  hashing so no concatenation collision is possible.
+- `AnnotationCache` — SQLite-backed (decision log: indexed point lookups +
+  incremental upserts fit the access pattern; Parquet does not). Stores each
+  chunk's full `list[EntityLink]` as JSON. `get` / `put` / `__contains__` /
+  `__len__`, context-manager lifecycle, `:memory:` default for tests. A
+  `SCHEMA_VERSION` column means an entry from an older schema is treated as a
+  miss (recomputed) rather than mis-deserialized.
+- This is what makes agentic annotation idempotent (BRIEF §13) *and* affordable
+  at BRIEF §16 scale: a rerun over an unchanged corpus/model/prompt/ontology is
+  a pure cache replay — deterministic, free.
+
+**Tests:** `tests/unit/test_cache.py` — 11 tests (key determinism, per-input
+sensitivity, no-collision, get/put round-trip, empty-links-is-a-hit,
+idempotent put, persistence across reopen, stale-schema-as-miss, replay).
+
+**Verification:** ruff clean; `test_cache.py` 11/11; full unit suite green.
+
+**Status:** design doc §10 — steps 1 (ontorag) + 2 (cache) done. Next: step 3
+(`tools.py` — wrap the lexical tiers + OntoRAG retriever as agent tools) and
+step 4 (`agent.py` — the tool-using NER+NEL agent).
+
+---
+
+## 2026-05-19 — Iteration 5.1 (M2→agentic): OntoRAG tri-hybrid retriever
+
+**What:** the second piece of the agentic-annotation redesign (docs/DESIGN_agentic_annotate.md, §10 step 1) — an OntoRAG-derived tri-hybrid ontology retriever.
+
+**Decisions locked this iteration** (design doc decision log): the brief owner approved the BRIEF §15 deviation (agentic annotation); `ontorag_resolve` is **retrieval-only** (no nested LLM selector / synonym-retry loop); the future annotation cache will be **SQLite**.
+
+**New module — `foodscholar.annotate.ontorag`:**
+- `index.py` — `build_index(ontology, minilm, sapbert, index_dir)` builds three on-disk indexes over the FoodOn term set: a Whoosh BM25 index (label + synonyms text) and two FAISS `IndexFlatIP` indexes (MiniLM + SapBERT embeddings, cosine via L2-normalized inner product). Persisted under one dir; a fingerprint of the term set + embedder model ids guards the cache so an unchanged ontology/model reloads instead of rebuilding.
+- `retriever.py` — `OntoRagRetriever.retrieve(query, k)` queries all three arms and merges by **Reciprocal Rank Fusion** (`1/(60+rank)`, the RRF-paper / OntoRAG constant) into a ranked `RetrievedCandidate` list. Deterministic tie-break by contributing-arm priority (lexical > sapbert > minilm). Retrieval only — the agent/linker selects.
+- `RetrievedCandidate` — Pydantic: `id`, `label`, `fusion_score`, `source`, `sources` (every arm that surfaced the term).
+
+**Design choices:**
+- Stayed faithful to upstream OntoRAG: FAISS (not our numpy `DenseIndex`) and the full tri-hybrid (Whoosh + MiniLM + SapBERT, not a bi-hybrid). Keeps us aligned with the source repo and easier to track its changes.
+- New `[ontorag]` extra (`whoosh`, `faiss-cpu`, `sentence-transformers`, `torch`, `transformers`); folded into `[all]`.
+- OntoRAG's own LLM selector / confidence scorer / synonym-retry loop deliberately **not** adopted — our agent is the selector, and the retry loop is the part BRIEF §15 most directly defers.
+
+**Tests:** `tests/unit/test_ontorag.py` — 12 unit tests over the mini fixture with `HashEmbedder` standing in for the two real embedders (index build, obsolete exclusion, cache reload, fingerprint-driven rebuild, retrieval, RRF ranking order, source provenance, empty-query). A slow integration test exercises real MiniLM + SapBERT.
+
+**Verification:** ruff clean; full unit suite green.
+
+**Status:** design doc §10 — step 1 done. Next: step 2 (`cache.py`, the SQLite content-addressed annotation cache) and step 3 (`tools.py`, wrapping the lexical tiers + retriever as agent tools).
+
+---
+
 ## 2026-05-18 — Iteration 5.0 (M2→agentic): agentic NER, drop SciFoodNER, notebook rebuild
 
 **Goal:** start the agentic-annotation redesign (see `docs/DESIGN_agentic_annotate.md`). This iteration lands the first piece — an LLM-driven NER — drops the proprietary SciFoodNER model, and rebuilds the notebook around self-contained sections.

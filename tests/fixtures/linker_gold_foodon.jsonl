@@ -1,0 +1,35 @@
+{"text": "olive oil", "expected_id": "FOODON:03301826", "tier": "exact"}
+{"text": "apple", "expected_id": "FOODON:00002473", "tier": "exact"}
+{"text": "apples", "expected_id": "FOODON:00002473", "tier": "fuzzy"}
+{"text": "peanut", "expected_id": "FOODON:00003206", "tier": "exact"}
+{"text": "peanuts", "expected_id": "FOODON:00003206", "tier": "fuzzy"}
+{"text": "salmon", "expected_id": "FOODON:00003473", "tier": "exact"}
+{"text": "spinach", "expected_id": "FOODON:00001273", "tier": "exact"}
+{"text": "quinoa", "expected_id": "FOODON:03310193", "tier": "exact"}
+{"text": "kale", "expected_id": "FOODON:03000235", "tier": "exact"}
+{"text": "tofu", "expected_id": "FOODON:00004697", "tier": "exact"}
+{"text": "broccoli", "expected_id": "FOODON:00003405", "tier": "exact"}
+{"text": "almond", "expected_id": "FOODON:00003523", "tier": "exact"}
+{"text": "almonds", "expected_id": "FOODON:00003523", "tier": "fuzzy"}
+{"text": "lentil", "expected_id": "FOODON:03310641", "tier": "exact"}
+{"text": "lentils", "expected_id": "FOODON:03310641", "tier": "fuzzy"}
+{"text": "whole grain", "expected_id": "FOODON:00003950", "tier": "exact"}
+{"text": "whole grains", "expected_id": "FOODON:00003950", "tier": "fuzzy"}
+{"text": "cheese", "expected_id": "FOODON:00001013", "tier": "exact"}
+{"text": "tomato", "expected_id": "FOODON:00002318", "tier": "exact"}
+{"text": "carrot", "expected_id": "FOODON:00003408", "tier": "exact"}
+{"text": "banana", "expected_id": "FOODON:00004183", "tier": "exact"}
+{"text": "strawberry", "expected_id": "FOODON:00003443", "tier": "exact"}
+{"text": "blueberry", "expected_id": "FOODON:00003541", "tier": "exact"}
+{"text": "chickpea", "expected_id": "FOODON:03306811", "tier": "exact"}
+{"text": "oat", "expected_id": "FOODON:00003429", "tier": "exact"}
+{"text": "soybean", "expected_id": "FOODON:03301415", "tier": "exact"}
+{"text": "walnut", "expected_id": "FOODON:03301364", "tier": "exact"}
+{"text": "avocado", "expected_id": "FOODON:00003600", "tier": "exact"}
+{"text": "garlic", "expected_id": "FOODON:00003582", "tier": "exact"}
+{"text": "running shoes", "expected_id": null, "tier": "miss"}
+{"text": "iron deficiency", "expected_id": null, "tier": "miss"}
+{"text": "heart disease", "expected_id": null, "tier": "miss"}
+{"text": "obesity", "expected_id": null, "tier": "miss"}
+{"text": "cardiovascular disease", "expected_id": null, "tier": "miss"}
+{"text": "x", "expected_id": null, "tier": "miss"}
