@@ -61,6 +61,22 @@ class LLMClient(Protocol):
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str: ...
 
+    def generate_json(
+        self,
+        prompt: str,
+        schema: dict[str, object],
+        max_tokens: int = 1024,
+    ) -> dict[str, object]:
+        """Return a JSON object conforming to `schema` (a JSON-schema dict).
+
+        Uses the provider's native structured-output mode where available.
+        Guarantees the result *parses* and matches the schema's shape — it does
+        NOT guarantee the values are semantically correct (e.g. an LLM-reported
+        character offset may be a valid integer yet wrong). Callers that need
+        correct positions must verify them against the source themselves.
+        """
+        ...
+
 
 @runtime_checkable
 class NER(Protocol):

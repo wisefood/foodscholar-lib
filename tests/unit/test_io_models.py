@@ -29,6 +29,39 @@ def test_entity_link_validates_method() -> None:
     assert link.method == "lexical_exact"
 
 
+def test_mention_entity_type_defaults_to_other() -> None:
+    # Backward compat: NER impls that don't classify (KeywordNER) omit it.
+    m = Mention(text="olive oil", start=0, end=9, score=1.0, ner_model_version="v0")
+    assert m.entity_type == "other"
+
+
+def test_mention_entity_type_accepts_valid_value() -> None:
+    m = Mention(
+        text="olive oil",
+        start=0,
+        end=9,
+        score=1.0,
+        ner_model_version="v0",
+        entity_type="food",
+    )
+    assert m.entity_type == "food"
+
+
+def test_mention_entity_type_rejects_unknown() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        Mention(
+            text="x",
+            start=0,
+            end=1,
+            score=1.0,
+            ner_model_version="v0",
+            entity_type="condiment",  # not a valid EntityType
+        )
+
+
 def test_shelf_theme_card_basic() -> None:
     s = Shelf(shelf_id="s-1", label="Mediterranean Diet", facet="dietary_patterns", depth=1)
     t = Theme(

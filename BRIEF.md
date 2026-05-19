@@ -26,7 +26,7 @@ Chunks attach to multiple Layer A shelves (multi-label, propagated through ontol
 | Graph store | **Neo4j** (hierarchy, edges, card nodes, chunk stub nodes) |
 | Bridge key | `chunk_id` exists in both stores; full chunk body lives only in Elastic |
 | Ontology v1 | **FoodOn only**, loaded with `pronto` and `import_depth=0`. MONDO and ChEBI deferred to v2. |
-| Food NER | **SciFoodNER** (already chosen by the project) |
+| Food NER | **Agentic NER** — an LLM extracts mentions via `cfg.llm` (`cfg.annotate.ner: agentic`). Deterministic `KeywordNER` is the offline default. *(Deviation: the brief originally specified SciFoodNER; the project moved off bespoke fine-tuned models — see §3.5.)* |
 | Entity linking | Lexical (exact + fuzzy against FoodOn names + synonyms) then dense fallback (**SapBERT**), with semantic-type gate |
 | Embeddings | **SPECTER2** for scientific abstract chunks, **BGE-large** (`BAAI/bge-large-en-v1.5`) for textbook / guide chunks |
 | Clustering | **Leiden / hierarchical Leiden** primary, **HDBSCAN** fallback. BERTopic acceptable for fast prototyping. |
@@ -70,7 +70,8 @@ foodscholar/
         │   └── sources.py   # adapters per source_type
         ├── annotate/
         │   ├── __init__.py
-        │   ├── ner.py       # SciFoodNER wrapper → list[Mention]
+        │   ├── ner.py       # KeywordNER → list[Mention]
+        │   ├── agent_ner.py # AgenticNER — LLM-driven → list[Mention]
         │   ├── linker.py    # mention → ontology_id (lexical + dense)
         │   └── embedder.py  # SPECTER2 / BGE wrappers
         ├── ontology/
@@ -219,7 +220,10 @@ fs.annotate()                                            # full phase, returns A
 
 Defaults:
 
-- **NER** — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym in the ontology (obsolete excluded). `expand_labels=True` also registers a noise-stripped variant of each label (`simplify_label` removes EFSA/EC code prefixes, parenthetical qualifiers, and trailing category words) so `"red meat (raw)"` also matches the bare `"red meat"`. Real `SciFoodNERAdapter` is gated by the `[annotate]` extra and `@pytest.mark.slow`.
+- **NER** — selected by `cfg.annotate.ner`:
+  - `keyword` (default) — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym (obsolete excluded). `expand_labels=True` also registers a noise-stripped variant of each label (`simplify_label` removes EFSA/EC code prefixes, parenthetical qualifiers, trailing category words) so `"red meat (raw)"` also matches the bare `"red meat"`. Deterministic, no LLM, no model download.
+  - `agentic` — `AgenticNER`. One `LLMClient.generate_json` call per chunk: the model returns mention strings + `entity_type`; spans are reconciled *locally* (`str.find`, cursor-advanced for repeats) because LLM character offsets are unreliable. A returned string not found verbatim in the source is dropped. LLM failure degrades to "no mentions", never crashes the phase. Each `Mention` carries `entity_type ∈ {food, nutrient, health, dietary_pattern, allergen, other}`. This is the first piece of the agentic-annotation redesign — see `docs/DESIGN_agentic_annotate.md`.
+  - **Deviation from §2:** the brief specified SciFoodNER (a bespoke fine-tuned model). It has been removed — the project moved off proprietary ML models. `keyword` (offline default) and `agentic` are the two NER strategies; agentic is the recommended setup.
 - **Linker** — `ThreeTierLinker(fs.ontology, ...)`. A 3-or-4 tier cascade, first confident hit wins:
   1. `lexical_exact` — case- and punctuation-insensitive match against a label or exact synonym.
   2. `lexical_fuzzy` — rapidfuzz `WRatio` (length-aware; replaced `token_set_ratio` after it routinely preferred generic short labels on real FoodOn). Short queries (≤4 chars) require a stricter 0.95 threshold; a length-ratio gate and a label-over-synonym tie-break further constrain it.
@@ -246,6 +250,8 @@ llm:
 ```
 
 Supported providers: `anthropic`, `openai`, `groq`, `gemini`, `ollama` — one thin adapter each in `foodscholar.llm.providers`, all implementing the `LLMClient` protocol. `build_llm(cfg.llm)` constructs the chain: a single client if there are no fallbacks, otherwise a `FallbackLLMClient` that tries primary → fallbacks in order, falling through on any error (timeout, rate limit, auth, service down). API keys are read from the environment (`GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) — never from config files; Ollama needs no key. SDKs are lazy-imported and gated behind the `[llm]` extra. When `cfg.llm` is absent the facade uses a built-in mock client (used by `in_memory()` and tests).
+
+The `LLMClient` protocol has two methods: `generate(prompt) -> str` and `generate_json(prompt, schema) -> dict`. `generate_json` uses each provider's native structured-output mode (OpenAI/Groq `response_format`, Gemini `response_schema`, Ollama `format`; Anthropic falls back to instructed-JSON + tolerant parse). It guarantees the result *parses* and matches the schema's shape — **not** that the values are semantically correct (an LLM-reported character offset can be a valid integer yet wrong; callers needing exact positions verify them against the source themselves, as `AgenticNER` does).
 
 ### Evaluation gates
 
@@ -280,12 +286,15 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
+EntityType = Literal["food", "nutrient", "health", "dietary_pattern", "allergen", "other"]
+
 class Mention(BaseModel):
     text: str
     start: int
     end: int
     score: float
     ner_model_version: str
+    entity_type: EntityType = "other"   # classified by AgenticNER; "other" otherwise
 
 class EntityLink(BaseModel):
     mention: Mention
@@ -439,6 +448,7 @@ class Embedder(Protocol):
 class LLMClient(Protocol):
     model_id: str
     def generate(self, prompt: str, max_tokens: int = 1024) -> str: ...
+    def generate_json(self, prompt: str, schema: dict, max_tokens: int = 1024) -> dict: ...
 ```
 
 `InMemoryChunkStore` and `InMemoryGraphStore` must be implemented from day one — every unit test runs against them.
@@ -520,7 +530,7 @@ ontology:
   include_imports: false           # import_depth=0 in pronto
 
 annotate:
-  ner_model: sci_food_ner_v1
+  ner: agentic                     # keyword | agentic
   scientific_embedder: allenai/specter2_base
   general_embedder: BAAI/bge-large-en-v1.5
   linker:

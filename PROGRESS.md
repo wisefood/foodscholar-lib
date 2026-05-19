@@ -6,6 +6,53 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-18 — Iteration 5.0 (M2→agentic): agentic NER, drop SciFoodNER, notebook rebuild
+
+**Goal:** start the agentic-annotation redesign (see `docs/DESIGN_agentic_annotate.md`). This iteration lands the first piece — an LLM-driven NER — drops the proprietary SciFoodNER model, and rebuilds the notebook around self-contained sections.
+
+### What changed
+
+**`generate_json` on the LLM layer**
+- The `LLMClient` protocol gains `generate_json(prompt, schema) -> dict`. Each provider adapter implements it via its native structured-output mode: OpenAI/Groq `response_format`, Gemini `response_schema`, Ollama `format`; Anthropic falls back to instructed-JSON + a tolerant parser (`_parse_json_object`, which strips code fences / surrounding prose).
+- `FallbackLLMClient` chains `generate_json` with the same fail-through logic — extracted into a shared `_try_chain` helper so `generate` and `generate_json` don't duplicate it.
+- Honest scoping note carried into the protocol docstring + BRIEF: `generate_json` guarantees the result *parses and matches the schema shape*, NOT that values are semantically correct. An LLM offset can be a valid integer yet wrong.
+
+**`AgenticNER`** (`src/foodscholar/annotate/agent_ner.py`)
+- Implements the `NER` protocol — a drop-in alternative to `KeywordNER`. One `generate_json` call per chunk.
+- The model returns mention *strings* + `entity_type`; **offsets are reconciled locally** (`str.find`, cursor-advanced so repeated mentions map to successive occurrences). A returned string not found verbatim is dropped — catches the model paraphrasing instead of quoting. This is deliberate: no structured-output library fixes LLM offset unreliability; only local string-location does.
+- LLM failure / malformed shape degrades to "no mentions" — never crashes the phase.
+- Versioned prompt (`PROMPT_VERSION = "agent-ner-v1"`).
+
+**`Mention.entity_type`** — new field on the core `io` contract. `EntityType = food | nutrient | health | dietary_pattern | allergen | other`. Optional, defaults to `other`, so NER impls that don't classify (KeywordNER) and all existing `Mention(...)` constructions stay valid.
+
+**SciFoodNER removed.** Per the project decision to drop bespoke ML models: `SciFoodNERAdapter` class, its export, its slow test, the vestigial `cfg.annotate.ner_model` field, and all BRIEF/docstring references are gone. `ner.py` keeps `KeywordNER` + `simplify_label`. Recorded as a documented deviation in BRIEF §2 (Food NER row) and §3.5.
+
+**Config + facade**
+- `cfg.annotate.ner: keyword | agentic` selector (default `keyword`). `config.example.yaml` sets `agentic`.
+- Facade `_build_ner` dispatches; `agentic` builds `AgenticNER(fs.llm)`. `fs.info()` reports `ner` instead of the removed `ner_model`.
+
+**Notebook rebuilt** — 37 → 19 cells. Root cause of the "congested / can't showcase steps independently" feedback: it was one linear chain where §6 depended on §3-5 running first. Fix: a `bootstrap()` helper defined once in Setup builds a ready `FoodScholar` (optionally with ontology + chunks); **every section opens with its own `bootstrap()` call**, so any section runs standalone. Verified: §2 Ontology and §4 Annotate each execute correctly from Setup alone, no intervening cells. The four scattered linker/dense/LLM demo cells collapsed into one compact "Annotation internals" cell.
+
+### Design decisions worth remembering
+
+- **No structured-output library (LangChain / instructor).** Provider-native JSON modes via our own `generate_json` keep `foodscholar.llm` the single LLM abstraction — adding LangChain would duplicate the provider layer we just built. And no library fixes offset correctness regardless.
+- **Offsets computed locally, always.** The model is never trusted for character positions. Schema-constrained output guarantees parseability, not semantic accuracy.
+- **`bootstrap()` for notebook independence.** One helper, called per section — independence with almost no repeated setup code.
+- **SciFoodNER removal is a documented BRIEF deviation**, not a silent cut. Pre-1.0, nothing external depends on it.
+
+### Verification
+
+- `ruff check src tests` — clean
+- `pytest` — full suite green (2 expected skips: no sentence-transformers / groq-ImportError-path). New: `test_agent_ner.py` (12), `generate_json` + `_parse_json_object` coverage in `test_llm.py`, `Mention.entity_type` tests, facade NER-selector tests.
+- Notebook: full run + two independent-section runs all verified.
+
+### Status at end of iteration
+
+- M2 + the first agentic piece. `AgenticNER` is usable now (`cfg.annotate.ner: agentic`); it is a standalone NER stage feeding the existing linker — the fused NER+NEL agent is a later step per the design doc.
+- Next per `docs/DESIGN_agentic_annotate.md`: the `[ontorag]` retriever and the content-addressed annotation cache.
+
+---
+
 ## 2026-05-18 — Iteration 4.6 (M2): wire the real chunk embedder into from_config
 
 **Goal:** `fs.info()` reported `embedder: mock-embedder-v0` even with a full config — the chunk embedder was never wired through `from_config`. Fix the gap.

@@ -1,14 +1,13 @@
-"""NER adapters.
+"""Keyword NER.
 
-Two implementations:
-  - `KeywordNER` — deterministic, dependency-free. Surfaces any term in a
-    provided dictionary that appears in the text. Used by tests and as a
-    sensible default for the in-memory facade.
-  - `SciFoodNERAdapter` — wraps a HuggingFace token-classification pipeline
-    (SciFoodNER per BRIEF §2). Lazy-imports transformers so the core
-    package stays slim. Gated by the `[annotate]` extra.
+`KeywordNER` — deterministic, dependency-free. Surfaces any term in a provided
+dictionary that appears in the text. Used by tests and as the safe offline
+default for the in-memory facade. Implements the `NER` protocol from
+`foodscholar.storage.protocols`.
 
-Both implement the `NER` protocol from `foodscholar.storage.protocols`.
+The LLM-driven NER (`AgenticNER`) lives in `agent_ner.py`. A bespoke
+fine-tuned model adapter (SciFoodNER) was removed — the project moved to
+agentic NER and away from proprietary ML models.
 """
 
 from __future__ import annotations
@@ -128,48 +127,3 @@ class KeywordNER:
                 )
             )
         return mentions
-
-
-class SciFoodNERAdapter:
-    """HuggingFace SciFoodNER pipeline adapter (BRIEF §2).
-
-    Lazy-imports `transformers`. Construction loads the model and tokenizer.
-    For unit tests use `KeywordNER` instead — this class is gated by
-    `pytest -m slow` because it downloads ~500MB on first run.
-    """
-
-    def __init__(self, model_name: str = "Maouriyan/Sci_food_NER") -> None:
-        try:
-            from transformers import (  # type: ignore[import-not-found]
-                AutoModelForTokenClassification,
-                AutoTokenizer,
-                pipeline,
-            )
-        except ImportError as e:
-            raise ImportError(
-                "the 'transformers' package is required for SciFoodNERAdapter. "
-                "Install with: pip install 'foodscholar[annotate]'"
-            ) from e
-
-        self.model_id = model_name
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForTokenClassification.from_pretrained(model_name)
-        self._pipeline = pipeline(
-            "ner",
-            model=model,
-            tokenizer=tokenizer,
-            aggregation_strategy="simple",
-        )
-
-    def extract(self, text: str) -> list[Mention]:
-        results = self._pipeline(text)
-        return [
-            Mention(
-                text=str(r["word"]),
-                start=int(r["start"]),
-                end=int(r["end"]),
-                score=float(r["score"]),
-                ner_model_version=self.model_id,
-            )
-            for r in results
-        ]

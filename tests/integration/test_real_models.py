@@ -1,8 +1,8 @@
 """End-to-end tests against real ML models.
 
 Marked @pytest.mark.slow — opt-in via `pytest -m slow`. First run downloads
-SciFoodNER (~500MB), SPECTER2 (~440MB) and SapBERT (~440MB) into
-~/.cache/huggingface; subsequent runs use the cache.
+SPECTER2 (~440MB) and SapBERT (~440MB) into ~/.cache/huggingface; subsequent
+runs use the cache. Real-provider tests (Groq) also need the relevant API key.
 
 Only runs if `transformers` and `sentence-transformers` are importable.
 """
@@ -21,15 +21,6 @@ sentence_transformers = pytest.importorskip("sentence_transformers")
 
 
 @pytest.mark.slow
-def test_scifood_ner_extracts_olive_oil() -> None:
-    from foodscholar.annotate.ner import SciFoodNERAdapter
-
-    ner = SciFoodNERAdapter()
-    out = ner.extract("Mediterranean diet rich in olive oil reduces cardiovascular risk.")
-    assert any("olive" in m.text.lower() for m in out)
-
-
-@pytest.mark.slow
 def test_hf_embedder_specter2_round_trip() -> None:
     from foodscholar.annotate.embedder import HFEmbedder
 
@@ -39,20 +30,52 @@ def test_hf_embedder_specter2_round_trip() -> None:
     assert len(vec) == 768
 
 
-@pytest.mark.slow
-def test_groq_llm_client_round_trip() -> None:
-    """Real Groq call — needs GROQ_API_KEY and the `groq` SDK ([llm] extra)."""
+def _groq_or_skip():  # type: ignore[no-untyped-def]
     import os
 
     pytest.importorskip("groq")
     if not os.environ.get("GROQ_API_KEY"):
         pytest.skip("GROQ_API_KEY not set")
-
     from foodscholar.llm.providers import GroqClient
 
-    client = GroqClient("llama-3.3-70b-versatile")
+    return GroqClient("llama-3.3-70b-versatile")
+
+
+@pytest.mark.slow
+def test_groq_llm_client_round_trip() -> None:
+    """Real Groq call — needs GROQ_API_KEY and the `groq` SDK ([llm] extra)."""
+    client = _groq_or_skip()
     reply = client.generate("Reply with exactly the word: ok", max_tokens=8)
     assert "ok" in reply.lower()
+
+
+@pytest.mark.slow
+def test_groq_generate_json_returns_schema_object() -> None:
+    """Real Groq structured-output call via generate_json."""
+    client = _groq_or_skip()
+    schema = {
+        "type": "object",
+        "properties": {"color": {"type": "string"}},
+        "required": ["color"],
+    }
+    obj = client.generate_json("What color is a ripe banana? Answer in JSON.", schema)
+    assert isinstance(obj, dict)
+    assert "color" in obj
+
+
+@pytest.mark.slow
+def test_agentic_ner_with_real_groq() -> None:
+    """End-to-end AgenticNER against a real Groq model."""
+    client = _groq_or_skip()
+    from foodscholar.annotate.agent_ner import AgenticNER
+
+    ner = AgenticNER(client)
+    text = "The Mediterranean diet is rich in olive oil and whole grains."
+    out = ner.extract(text)
+    # The model should find at least one food mention; offsets must be exact.
+    assert out, "expected at least one mention"
+    for m in out:
+        assert text[m.start : m.end] == m.text
 
 
 @pytest.mark.slow
