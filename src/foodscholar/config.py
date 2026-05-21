@@ -115,6 +115,28 @@ class AnnotateConfig(BaseModel):
     """Chunks processed per NER batch in the annotate runner."""
 
 
+class LinkBlocklistEntry(BaseModel):
+    """A (surface form, ontology id) pair filtered before support collection.
+
+    Catches NEL drift on polysemous surface forms — e.g. the prototype linker
+    pairs "fish" with FOODON:00002281 (fish food = aquarium feed) when the
+    text is about fish as human food. The pair is matched case-insensitively
+    on surface; the ontology_id must match exactly.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    surface: str
+    ontology_id: str
+
+
+_DEFAULT_LINK_BLOCKLIST: list[LinkBlocklistEntry] = [
+    # The classic NEL-drift example: "fish" in food prose almost always means
+    # fish-as-human-food, but the upstream linker pairs it with FOODON:00002281
+    # (fish food = aquarium feed). Verified on the audit sample.
+    LinkBlocklistEntry(surface="fish", ontology_id="FOODON:00002281"),
+]
+
+
 class FacetConfig(BaseModel):
     """Per-facet override on top of `LayerAConfig` globals.
 
@@ -133,6 +155,7 @@ class FacetConfig(BaseModel):
     umbrella_direct_share_max: float | None = None
     umbrella_lifted_share_min: float | None = None
     umbrella_min_count: int | None = None
+    link_blocklist: list[LinkBlocklistEntry] | None = None
 
 
 class _ResolvedFacetConfig(BaseModel):
@@ -150,6 +173,7 @@ class _ResolvedFacetConfig(BaseModel):
     umbrella_direct_share_max: float
     umbrella_lifted_share_min: float
     umbrella_min_count: int
+    link_blocklist: list[LinkBlocklistEntry]
 
 
 _DEFAULT_BLACKLIST: list[str] = [
@@ -205,6 +229,14 @@ class LayerAConfig(BaseModel):
     threshold-survivor is also umbrella-eligible) — that's the default
     configuration. Raise this above min_support only if a corpus has small
     legitimate niche shelves you want spared from umbrella detection."""
+    link_blocklist: list[LinkBlocklistEntry] = Field(
+        default_factory=lambda: list(_DEFAULT_LINK_BLOCKLIST)
+    )
+    """Pre-filter EntityLinks before support collection. Each entry pairs a
+    lowercased surface form with a specific ontology_id; matching pairs are
+    dropped. Catches NEL drift on polysemous surface forms (e.g. "fish" being
+    linked to FOODON:00002281 'fish food' = aquarium feed) without
+    re-annotating the corpus."""
     """Discard EntityLinks below this cosine before counting support. Defaults
     to the linker's `nel_min_sim` so projection is no stricter than ingestion
     unless the user explicitly tightens it."""
@@ -236,6 +268,7 @@ class LayerAConfig(BaseModel):
                 umbrella_direct_share_max=self.umbrella_direct_share_max,
                 umbrella_lifted_share_min=self.umbrella_lifted_share_min,
                 umbrella_min_count=self.umbrella_min_count,
+                link_blocklist=list(self.link_blocklist),
             )
         return _ResolvedFacetConfig(
             min_support=override.min_support
@@ -263,6 +296,9 @@ class LayerAConfig(BaseModel):
             umbrella_min_count=override.umbrella_min_count
             if override.umbrella_min_count is not None
             else self.umbrella_min_count,
+            link_blocklist=list(override.link_blocklist)
+            if override.link_blocklist is not None
+            else list(self.link_blocklist),
         )
 
 

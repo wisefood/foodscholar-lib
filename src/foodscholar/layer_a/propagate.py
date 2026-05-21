@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from foodscholar.layer_a.facet import route_link_to_facet
 
 if TYPE_CHECKING:
+    from foodscholar.config import LinkBlocklistEntry
     from foodscholar.io.chunk import Chunk, ChunkId
     from foodscholar.io.graph import Facet
     from foodscholar.ontology import FoodOnAPI
@@ -101,6 +102,7 @@ def collect_support(
     *,
     min_link_confidence: float,
     facet: Facet,
+    link_blocklist: list[LinkBlocklistEntry] | None = None,
 ) -> SupportTable:
     """Build the per-facet support table from a chunk iterator.
 
@@ -108,12 +110,20 @@ def collect_support(
       - `confidence >= min_link_confidence`
       - `route_link_to_facet(link) == facet`
       - its `ontology_id` is in the loaded ontology
+      - `(mention.text.lower(), ontology_id)` is NOT in `link_blocklist`
+        (NEL-drift filter for known polysemous surface forms)
 
     A chunk's `foodon_ids` denormalization is honored for the foods facet only:
     if `chunk.foodon_ids` is populated and `facet == 'foods'`, those ids count
     too (this is the cheap path the prototype's nel_loader produces).
     """
     table = SupportTable()
+    # Indexed for O(1) lookup; case-insensitive on the surface side.
+    blocklist_set = (
+        {(e.surface.lower(), e.ontology_id) for e in link_blocklist}
+        if link_blocklist
+        else set()
+    )
 
     for chunk in chunks:
         # Per-chunk dedupe set: each term contributes at most one direct count.
@@ -126,6 +136,8 @@ def collect_support(
                 continue
             term_id = link.ontology_id
             if term_id not in ontology:
+                continue
+            if (link.mention.text.lower(), term_id) in blocklist_set:
                 continue
             seen_direct.add(term_id)
 
