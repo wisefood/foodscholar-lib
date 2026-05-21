@@ -16,62 +16,98 @@ from foodscholar.viz.model import VizGraph
 from foodscholar.viz.renderers.base import Renderer, color_for
 
 _CYTOSCAPE_CDN = "https://unpkg.com/cytoscape@3.30.0/dist/cytoscape.min.js"
-_LAYOUT_CDN = "https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"
 
 
+# The previous version pulled cytoscape-cose-bilkent as an external layout
+# extension. It's a UMD bundle that requires `cose-base` to be loaded first
+# AND an explicit `cytoscape.use(...)` call — when either is missing the
+# layout silently fails and the canvas stays blank (header still shows the
+# count because it's plain HTML). The fix: use the built-in `cose` layout,
+# which ships with cytoscape core. No extension, no registration step, works
+# everywhere cytoscape loads.
 _HTML_TEMPLATE = """<!doctype html>
 <html><head>
 <meta charset="utf-8">
 <title>{title}</title>
 <style>
   html, body {{ margin: 0; padding: 0; height: 100%; font-family: system-ui; }}
-  #cy {{ width: 100%; height: 92vh; background: #FAFAFA; }}
+  #cy {{ width: 100%; height: calc(100vh - 40px); background: #FAFAFA; }}
   header {{ padding: 8px 16px; background: #F3F4F6; border-bottom: 1px solid #E5E7EB; }}
   header h3 {{ margin: 0; font-size: 14px; color: #111827; }}
   header span {{ font-size: 12px; color: #6B7280; margin-left: 8px; }}
+  #cy-error {{ padding: 24px; font-family: system-ui; color: #B91C1C; display: none; }}
 </style>
 <script src="{cyto_js}"></script>
-<script src="{layout_js}"></script>
 </head><body>
 <header><h3>{title}</h3><span>{n_nodes} nodes · {n_edges} edges · level {level}</span></header>
 <div id="cy"></div>
+<div id="cy-error"></div>
 <script>
 const elements = {elements_json};
-const cy = cytoscape({{
-  container: document.getElementById('cy'),
-  elements: elements,
-  style: [
-    {{ selector: 'node', style: {{
-        'background-color': 'data(color)',
-        'label': 'data(label)',
-        'color': '#111827',
-        'font-size': 10,
-        'text-valign': 'bottom',
-        'text-margin-y': 6,
-        'text-wrap': 'wrap',
-        'text-max-width': 100,
-        'width': 'data(size)',
-        'height': 'data(size)',
-        'border-color': '#1F2937',
-        'border-width': 1,
-    }}}},
-    {{ selector: 'node[?anchor]', style: {{ 'border-width': 3, 'border-color': '#DC2626' }} }},
-    {{ selector: 'edge', style: {{
-        'curve-style': 'bezier',
-        'target-arrow-shape': 'triangle',
-        'line-color': 'data(color)',
-        'target-arrow-color': 'data(color)',
-        'width': 'data(width)',
-        'opacity': 0.7,
-    }}}},
-  ],
-  layout: {{ name: 'cose-bilkent', animate: false, randomize: true, nodeRepulsion: 7000, idealEdgeLength: 90 }},
-}});
-cy.on('tap', 'node', evt => {{
-  const d = evt.target.data();
-  console.log(d.tooltip);
-  alert(d.tooltip || d.label);
-}});
+
+function initCy() {{
+  if (typeof cytoscape === 'undefined') {{
+    document.getElementById('cy-error').style.display = 'block';
+    document.getElementById('cy-error').textContent =
+      'cytoscape.js failed to load — check the network or your iframe sandbox.';
+    return;
+  }}
+  const cy = cytoscape({{
+    container: document.getElementById('cy'),
+    elements: elements,
+    style: [
+      {{ selector: 'node', style: {{
+          'background-color': 'data(color)',
+          'label': 'data(label)',
+          'color': '#111827',
+          'font-size': 10,
+          'text-valign': 'bottom',
+          'text-margin-y': 6,
+          'text-wrap': 'wrap',
+          'text-max-width': 100,
+          'width': 'data(size)',
+          'height': 'data(size)',
+          'border-color': '#1F2937',
+          'border-width': 1,
+      }}}},
+      {{ selector: 'node[?anchor]', style: {{ 'border-width': 3, 'border-color': '#DC2626' }} }},
+      {{ selector: 'edge', style: {{
+          'curve-style': 'bezier',
+          'target-arrow-shape': 'triangle',
+          'line-color': 'data(color)',
+          'target-arrow-color': 'data(color)',
+          'width': 'data(width)',
+          'opacity': 0.7,
+      }}}},
+    ],
+    // `cose` is built into cytoscape core — no extension registration needed.
+    layout: {{
+      name: 'cose',
+      animate: false,
+      randomize: true,
+      nodeOverlap: 12,
+      idealEdgeLength: 90,
+      padding: 30,
+      fit: true,
+    }},
+  }});
+  // After the layout settles, fit the viewport to all nodes — without this
+  // a long-running layout can leave the camera pointing at empty canvas.
+  cy.on('layoutstop', () => cy.fit(undefined, 30));
+  cy.on('tap', 'node', evt => {{
+    const d = evt.target.data();
+    alert(d.tooltip || d.label);
+  }});
+}}
+
+// Wait for cytoscape.min.js to finish executing. In an iframe srcdoc the
+// external <script src> usually serializes before this inline block, but
+// DOMContentLoaded gives us the strongest guarantee.
+if (document.readyState === 'loading') {{
+  document.addEventListener('DOMContentLoaded', initCy);
+}} else {{
+  initCy();
+}}
 </script>
 </body></html>
 """
@@ -87,7 +123,6 @@ class CytoscapeRenderer(Renderer):
         html = _HTML_TEMPLATE.format(
             title=_html_escape(graph.title),
             cyto_js=_CYTOSCAPE_CDN,
-            layout_js=_LAYOUT_CDN,
             elements_json=json.dumps(elements),
             n_nodes=len(graph.nodes),
             n_edges=len(graph.edges),
