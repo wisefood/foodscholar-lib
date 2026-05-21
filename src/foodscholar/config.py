@@ -179,12 +179,19 @@ class LayerAConfig(BaseModel):
     )
     min_link_confidence: float = 0.70
     umbrella_direct_share_max: float = 0.10
-    """Drop a shelf when `direct/chunk_count` is below this AND `lifted_share`
-    is above `umbrella_lifted_share_min` AND `chunk_count >= umbrella_min_count`.
-    The first two conditions identify FoodOn organizational classes (almost
-    nobody mentions them directly, almost all support is from descendants);
-    the third guards against catching small niche shelves where direct_share
-    is unstable due to low denominators. Set to 0.0 to disable."""
+    """The umbrella rule drops a shelf iff **all three** conditions hold
+    simultaneously (AND-chained, not OR):
+
+      1. `chunk_count >= umbrella_min_count`            (size guard fires first)
+      2. `direct / chunk_count < umbrella_direct_share_max`
+      3. `lifted / chunk_count > umbrella_lifted_share_min`
+
+    The size guard prevents small niche shelves (where direct_share has high
+    variance) from being mistaken for umbrellas. Conditions 2+3 identify
+    FoodOn organizational classes — almost nobody mentions them directly,
+    almost all their support is from descendants. Set
+    `umbrella_direct_share_max=0.0` to disable the rule entirely (condition 2
+    becomes unsatisfiable)."""
     umbrella_lifted_share_min: float = 0.85
     """Companion threshold for the umbrella rule (above)."""
     umbrella_min_count: int = 25
