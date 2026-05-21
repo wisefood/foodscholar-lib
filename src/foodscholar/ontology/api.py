@@ -55,6 +55,7 @@ class FoodOnAPI:
 
         self._name_to_ids: dict[str, list[OntologyId]] = {}
         self._descendants: dict[OntologyId, set[OntologyId]] = {tid: set() for tid in self._by_id}
+        self._children: dict[OntologyId, set[OntologyId]] = {tid: set() for tid in self._by_id}
 
         for t in terms:
             if t.obsolete:
@@ -65,6 +66,9 @@ class FoodOnAPI:
             for parent in t.ancestor_ids:
                 if parent in self._descendants:
                     self._descendants[parent].add(t.id)
+            for parent in t.parent_ids:
+                if parent in self._children:
+                    self._children[parent].add(t.id)
 
     def _index_name(self, name: str, term_id: OntologyId) -> None:
         key = _normalize(name)
@@ -134,6 +138,10 @@ class FoodOnAPI:
     def id_to_descendants(self, term_id: OntologyId) -> list[OntologyId]:
         """Closed transitive set of descendants. Empty if the term doesn't exist."""
         return sorted(self._descendants.get(term_id, ()))
+
+    def id_to_children(self, term_id: OntologyId) -> list[OntologyId]:
+        """Direct children only. Empty if the term doesn't exist or has no children."""
+        return sorted(self._children.get(term_id, ()))
 
     def is_subclass_of(self, child_id: OntologyId, ancestor_id: OntologyId) -> bool:
         if child_id == ancestor_id:

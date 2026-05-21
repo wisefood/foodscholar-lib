@@ -1,33 +1,35 @@
-"""Minimal Layer A construction from stored chunk annotations.
+"""Layer A backbone orchestrator.
 
-This first implementation intentionally uses the current corpus/storage
-contract only: chunks already have `foodon_ids`, and Layer A turns supported
-FoodOn terms plus their ancestors into graph shelves. Chunk-to-shelf attachment
-is still a separate phase.
+Multi-facet projection of the loaded ontology onto the corpus. For each facet
+in `cfg.layer_a.facets`:
+
+  1. `collect_support(...)` walks chunks, filters by confidence + facet route.
+  2. `prune(...)` applies blacklist -> threshold -> depth-cap lift -> collapse.
+  3. Empty support tables emit a single stub root via `facet.stub_root(...)`.
+
+The merged shelf list is upserted via `graph_store.upsert_shelves`. No chunk
+attachments here — that's `fs.attach()`, the next phase.
 """
 
 from __future__ import annotations
 
-from collections import Counter
 from typing import TYPE_CHECKING
 
-from foodscholar.config import LayerAConfig
 from foodscholar.io.artifacts import ArtifactMeta
-from foodscholar.io.graph import Shelf, ShelfId
+from foodscholar.io.graph import Shelf
+from foodscholar.layer_a.facet import stub_root
+from foodscholar.layer_a.propagate import collect_support
+from foodscholar.layer_a.prune import prune, shelf_id_for_foodon
 from foodscholar.logging import get_logger
 from foodscholar.versioning import make_artifact_meta
 
 if TYPE_CHECKING:
-    from foodscholar.config import FoodScholarConfig
+    from foodscholar.config import FoodScholarConfig, LayerAConfig
+    from foodscholar.io.graph import Facet
     from foodscholar.ontology import FoodOnAPI
     from foodscholar.storage.protocols import ChunkStore, GraphStore
 
 _log = get_logger("foodscholar.layer_a")
-
-
-def shelf_id_for_foodon(term_id: str) -> ShelfId:
-    """Return the stable shelf id used for a FoodOn term."""
-    return f"foodon:{term_id}"
 
 
 def build_shelves(
@@ -35,41 +37,18 @@ def build_shelves(
     ontology: FoodOnAPI,
     config: LayerAConfig,
 ) -> list[Shelf]:
-    """Build Layer A shelves from chunk-level `foodon_ids`.
+    """Build Layer A shelves across every configured facet.
 
-    Each chunk contributes at most one support count to a given FoodOn term.
-    Support is propagated upward to all known ancestors so broader shelves can
-    exist even when chunks mention only leaf-level foods.
+    Returns a single merged, sorted list — shelves carry their own `facet`
+    field, so the graph store keeps them distinct.
     """
-    if "foods" not in config.facets:
-        return []
-
-    support = _collect_support(chunk_store, ontology)
-    if not support:
-        return []
-
-    depths = {term_id: _depth(ontology, term_id) for term_id in support}
-    included = {
-        term_id
-        for term_id, count in support.items()
-        if count >= config.min_support
-        and depths[term_id] <= config.max_depth
-        and _is_allowed(term_id, ontology.id_to_label(term_id), config)
-    }
-
-    shelves = [
-        Shelf(
-            shelf_id=shelf_id_for_foodon(term_id),
-            label=ontology.id_to_label(term_id) or term_id,
-            facet="foods",
-            depth=depths[term_id],
-            foodon_id=term_id,
-            parent_shelf_id=_nearest_included_parent(ontology, term_id, included),
-            chunk_count=support[term_id],
-        )
-        for term_id in included
-    ]
-    return sorted(shelves, key=lambda s: (s.depth, s.label.lower(), s.shelf_id))
+    all_shelves: list[Shelf] = []
+    for facet in config.facets:
+        all_shelves.extend(_build_facet(chunk_store, ontology, config, facet))
+    return sorted(
+        all_shelves,
+        key=lambda s: (s.facet, s.depth, s.label.lower(), s.shelf_id),
+    )
 
 
 def build_layer_a(
@@ -80,9 +59,21 @@ def build_layer_a(
     config: LayerAConfig,
     full_config: FoodScholarConfig,
 ) -> ArtifactMeta:
-    """Build and store Layer A shelves, returning phase metadata."""
+    """Build and store Layer A shelves, returning phase metadata.
+
+    Always starts by clearing any prior projection (`graph_store.clear_layer_a`)
+    so re-runs with different thresholds / blacklists don't leave ghost
+    shelves from the previous build. `upsert_shelves` uses MERGE on
+    `shelf_id`, which never deletes — clearing first is the only way to make
+    re-runs idempotent against the *result*, not the *cumulative history*.
+    """
     shelves = build_shelves(chunk_store, ontology, config)
+    graph_store.clear_layer_a()
     graph_store.upsert_shelves(shelves)
+
+    by_facet: dict[str, int] = {}
+    for shelf in shelves:
+        by_facet[shelf.facet] = by_facet.get(shelf.facet, 0) + 1
 
     meta = make_artifact_meta(
         phase="build-layer-a",
@@ -92,6 +83,7 @@ def build_layer_a(
     _log.info(
         "layer_a.done",
         n_shelves=len(shelves),
+        by_facet=by_facet,
         min_support=config.min_support,
         max_depth=config.max_depth,
         artifact_id=meta.artifact_id,
@@ -100,67 +92,36 @@ def build_layer_a(
     return meta
 
 
-def _collect_support(chunk_store: ChunkStore, ontology: FoodOnAPI) -> Counter[str]:
-    support: Counter[str] = Counter()
-    for batch in chunk_store.iter_chunks():
-        for chunk in batch:
-            for term_id in sorted(set(chunk.foodon_ids)):
-                if term_id not in ontology:
-                    continue
-                support[term_id] += 1
-                for ancestor_id in ontology.id_to_ancestors(term_id):
-                    if ancestor_id in ontology:
-                        support[ancestor_id] += 1
-    return support
+# ---------------------------------------------------------------- internals
 
 
-def _depth(
+def _build_facet(
+    chunk_store: ChunkStore,
     ontology: FoodOnAPI,
-    term_id: str,
-    seen: frozenset[str] = frozenset(),
-) -> int:
-    if term_id in seen:
-        return 0
-
-    parents = [p for p in ontology.id_to_parents(term_id) if p in ontology]
-    if not parents:
-        return 0
-
-    next_seen = seen | {term_id}
-    return 1 + min(_depth(ontology, parent_id, next_seen) for parent_id in parents)
-
-
-def _nearest_included_parent(
-    ontology: FoodOnAPI,
-    term_id: str,
-    included: set[str],
-) -> ShelfId | None:
-    frontier = sorted(parent_id for parent_id in ontology.id_to_parents(term_id) if parent_id in ontology)
-    seen: set[str] = set()
-
-    while frontier:
-        parent_id = frontier.pop(0)
-        if parent_id in seen:
-            continue
-        if parent_id in included:
-            return shelf_id_for_foodon(parent_id)
-        seen.add(parent_id)
-        frontier.extend(
-            sorted(
-                grandparent_id
-                for grandparent_id in ontology.id_to_parents(parent_id)
-                if grandparent_id in ontology and grandparent_id not in seen
-            )
-        )
-    return None
-
-
-def _is_allowed(
-    term_id: str,
-    label: str | None,
     config: LayerAConfig,
-) -> bool:
-    blocked = {term.lower().strip() for term in config.blacklist_terms}
-    if term_id.lower() in blocked:
-        return False
-    return label is None or label.lower().strip() not in blocked
+    facet: Facet,
+) -> list[Shelf]:
+    facet_config = config.resolve_facet(facet)
+
+    # iter_chunks yields batches; pruner consumes a flat chunk iterator.
+    def chunk_iter():
+        for batch in chunk_store.iter_chunks():
+            yield from batch
+
+    support = collect_support(
+        chunk_iter(),
+        ontology,
+        min_link_confidence=facet_config.min_link_confidence,
+        facet=facet,
+    )
+
+    if not support:
+        return [stub_root(facet)]
+
+    shelves = prune(support, ontology, facet_config, facet)
+    if not shelves:
+        return [stub_root(facet)]
+    return shelves
+
+
+__all__ = ["build_layer_a", "build_shelves", "shelf_id_for_foodon"]

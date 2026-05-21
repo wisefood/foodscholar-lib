@@ -30,6 +30,9 @@ class Shelf(BaseModel):
     foodon_id: str | None = None
     parent_shelf_id: ShelfId | None = None
     chunk_count: int = 0
+    support_direct: int = 0
+    support_lifted: int = 0
+    see_also: list[str] = Field(default_factory=list)
 
 
 class Theme(BaseModel):

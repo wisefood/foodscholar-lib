@@ -6,6 +6,69 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-21 — Iteration 7.0 (M4): Layer A backbone — full projection
+
+**Goal:** the previous M3 builder at [src/foodscholar/layer_a/builder.py](src/foodscholar/layer_a/builder.py) was a foods-only stub — raw chunk counts, no single-child collapse (the flag existed in config but the logic was absent), no facet routing. This iteration implements the full projection per BRIEF §12 step 10 and the user's pruning spec: ordered passes (blacklist → whitelist → threshold → depth cap → single-child collapse), per-facet config, lifting on depth cap (not dropping), confidence-floored support, and provenance diagnostics (`support_direct`/`support_lifted`/`see_also`).
+
+### What changed
+
+**`src/foodscholar/layer_a/` split into four modules**
+- `facet.py` (new) — canonical home for `ENTITY_TYPE_TO_FACET` (moved from facade.py — `build_entities` now imports from here). `route_link_to_facet(link)` adds a FOODON fallback so the prototype's `entity_type="other"` NEL CSVs still populate the foods facet. `stub_root(facet)` produces the empty-corpus shelf for facets with no support.
+- `propagate.py` (new) — `collect_support(chunks, ontology, *, min_link_confidence, facet) -> SupportTable` tracks `direct` and `with_descendants` side-by-side. The threshold metric is `with_descendants` per spec. `foodon_ids` denormalization is honored for the foods facet — cheap path for prototype-NEL chunks that have no per-mention entity_type.
+- `prune.py` (new) — order of operations locked in code (1. blacklist → 2. whitelist exception → 3. threshold → 4. depth cap → 5. single-child collapse). Depth cap **lifts** rather than drops: a term at depth 8 with cap 5 gets its `parent_shelf_id` re-pointed to the nearest surviving ancestor at depth ≤ 5, and its reported `depth` is clamped to the cap. Single-child collapse iterates to fixed point; when shelf B collapses into its only surviving child C, B's `foodon_id` is recorded on C's `see_also` for provenance.
+- `builder.py` (rewritten) — orchestrator only. Multi-facet loop. Empty support tables emit a stub root via `facet.stub_root(...)`.
+
+**`Shelf` Pydantic gained three fields** ([src/foodscholar/io/graph.py](src/foodscholar/io/graph.py))
+- `support_direct: int = 0` — chunks mentioning this exact term.
+- `support_lifted: int = 0` — chunks lifted in from pruned descendants.
+- `see_also: list[str] = []` — foodon_ids of shelves collapsed into this one.
+
+The invariant `chunk_count == support_direct + support_lifted` holds for non-stub shelves. Neo4j adapter's `upsert_shelves` Cypher SET clause and `_shelf_from_record` reader were updated in lockstep.
+
+**`LayerAConfig` reshaped for per-facet overrides** ([src/foodscholar/config.py](src/foodscholar/config.py))
+- New `FacetConfig` Pydantic — every field optional, None means "fall back to globals."
+- `LayerAConfig.facet_overrides: dict[Facet, FacetConfig]` — facets absent from the dict use globals.
+- `LayerAConfig.resolve_facet(facet) -> _ResolvedFacetConfig` returns a fully-resolved (no-None) config the pruner consumes. Keeps the prune logic free of `None`-handling.
+- New `min_link_confidence: float = 0.70` (global), overridable per facet. Defaults to the linker's `nel_min_sim` so projection is no stricter than ingestion unless the user explicitly tightens it.
+- Globals (`min_support`, `max_depth`, `collapse_single_child_chains`, `blacklist_terms`, `facets`) kept verbatim for backward compat.
+
+**`FoodOnAPI` gained `id_to_children`** ([src/foodscholar/ontology/api.py](src/foodscholar/ontology/api.py))
+- `_children: dict[id, set[id]]` precomputed in `__init__` by inverting `parent_ids`, same pattern as the existing `_descendants` precompute. Public `id_to_children()` returns sorted list. O(1) lookup, deterministic order.
+
+**`config.example.yaml`** documents the per-facet override structure with the user's spec values (foods threshold=25, depth_cap=6, foods-specific blacklist of FoodOn organizational classes, whitelist placeholder, health depth_cap=7 for deeper disease taxonomies). All commented out so the default is the safe globals.
+
+**Notebook** gained §5 "Build Layer A" between Entities and Inspect — three cells: an explanation of projection vs. attachment + the prototype-NEL caveat that non-foods facets stay stub-rooted on this corpus, a tunable `build_layer_a()` call, and a diagnostics cell printing shelves-per-facet / top-10 foods shelves / depth distribution / inflation flag (`support_lifted/chunk_count > 0.9`).
+
+### Design decisions worth remembering
+
+- **Op order is locked, not configurable.** Reversing blacklist↔threshold leaks chunks under blacklisted intermediates and inflates their parents (the threshold sees the inflated count, makes the wrong keep/drop decision). Reversing depth-cap↔collapse creates collapses the cap would have prevented. The order is documented in `prune.py`'s docstring referencing the plan file.
+- **Depth cap lifts, doesn't drop.** A term too deep in the ontology hasn't done anything wrong — only the *display position* is too deep. Lifting preserves the term as a shelf at a shallower position; its chunks remain reachable via the lifted shelf. Dropping would lose coverage.
+- **`route_link_to_facet` has a FOODON fallback** for prototype-NEL data with `entity_type="other"`. Without it, the entire foods projection would be dead code on the current corpus (`entity_type="other"` doesn't map to any facet, so no link would be counted). The fallback is honest about what the chunk-store data actually contains.
+- **Two embedders → two facets too:** sustainability has no entity_type that maps to it AND no OBO ontology we project — always a stub root regardless of corpus. Allergies / health / dietary_patterns / nutrients **could** populate, but only after re-annotation with GLiNER (prototype-NEL is `entity_type="other"` for all loaded mentions per [nel_loader.py:116-123](src/foodscholar/corpus/nel_loader.py#L116-L123)).
+- **Raw count + confidence floor, not weighted sum.** Cosines aren't probabilities — summing them isn't meaningful. A floor (default 0.70, matching the linker's `nel_min_sim`) is a quality gate; counts are then a chunk vote. Threshold semantics stay legible ("min_support: 20" means "≥ 20 chunks", not "≥ 20.0 cosine-units").
+- **Per-facet overrides, not per-facet config blocks.** Globals stay the load-bearing knobs; an override fills in only the field that differs. Keeps `config.example.yaml` short and the override surface easy to reason about.
+
+### Verification
+
+- `ruff check src tests` — clean (one SIM103 + one SIM108 fixed during the iteration).
+- `pytest` — **264 passed, 1 skipped** (baseline was 254 before this iteration; 10 new tests added). Existing 4 layer_a tests passed after explicitly setting `collapse_single_child_chains=False` and `facets=["foods"]` — they exercise propagation/blacklist in isolation, where the new defaults (collapse on, all 6 facets) would have changed observed output unrelated to what those tests assert.
+- New unit tests cover: single-child collapse fires on a pure chain, single-child collapse does **not** fire when siblings survive, depth-cap lifting (`max_depth=2` clamps reported depth + repoints parent edge), whitelist override, see_also is populated with all collapsed ancestor ids, confidence floor filters low-confidence links, per-facet override resolves over globals correctly, sustainability emits a single stub root, blacklist-before-threshold lets chunks lift through blacklisted intermediates.
+- New ontology test: `id_to_children` returns direct children only, sorted, empty for leaf or unknown id.
+
+### Caveats — what this iteration does NOT do
+
+- **Does not run `fs.attach()`.** Layer A is projection only. Chunk-to-shelf edges and the `shelf_ids` denormalization on chunks are still `NotImplementedError`. The `lifted_from` field on attachment edges (user's spec) belongs there.
+- **Does not implement sibling merging.** Marked optional in the user's spec; defer until first sanity audit shows it's needed.
+- **Non-foods facets are stub roots on the current real corpus.** Re-annotating with GLiNER (which populates `entity_type` correctly) is a prerequisite for nutrients/health/dietary_patterns to project meaningful shelves. Sustainability stays a stub forever — no OBO we link to covers it.
+- **§17 sanity gate** (50-chunk hand audit) is documentation, not a unit test. To be performed against the real corpus once the notebook diagnostics cell is run.
+
+### Status at end of iteration
+
+- M4 Layer A projection landed. `fs.build_layer_a()` produces multi-facet, pruned shelves with provenance diagnostics. Per-facet config tuning available via `cfg.layer_a.facet_overrides`.
+- Next per BRIEF §12: `fs.attach()` — read shelves + chunks, walk ancestors per `entity_links`, write `(:Shelf)-[:HAS_CHUNK]->(:Chunk)` edges + denormalize `shelf_ids` onto chunks (the single drift-prone step the GraphView's `attach_chunks` already centralizes for tests). Then Layer B theme discovery.
+
+---
+
 ## 2026-05-21 — Iteration 6.0 (M3): GLiNER + HNSW pivot, ES/Neo4j adapters, ingest/embed/entities
 
 **Goal:** the M2 agentic-NER + 3-tier-linker stack was not converging — the fuzzy tier was the source of the §17 audit wrong-links, agentic NER was non-deterministic and required local span reconciliation. A standalone `gliner.py` prototype validated GLiNER bio + HNSW-over-BioLORD on real FoodOn. M3 makes that pipeline the only NER+NEL path, finalizes the storage backends end-to-end, makes the configuration in-code-friendly, and promotes linked entities to first-class citizens.

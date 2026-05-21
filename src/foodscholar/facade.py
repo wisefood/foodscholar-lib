@@ -968,27 +968,11 @@ def _minimal_memory_config() -> FoodScholarConfig:
 
 # ---------------------------------------------------------------- entity helpers
 
-
-# Maps GLiNER label vocabulary → Layer A facet. Best-effort: entries left out
-# (Country, Measurement, Population, Time expression, …) carry no facet hint.
-_ENTITY_TYPE_TO_FACET: dict[str, str] = {
-    "food": "foods",
-    "food component": "foods",
-    "nutrient": "nutrients",
-    "micronutrient": "nutrients",
-    "macronutrient": "nutrients",
-    "dietary supplement": "nutrients",
-    "dietary pattern": "dietary_patterns",
-    "medical condition": "health",
-    "biomarker": "health",
-    "allergen": "allergies",
-}
-
-
-def _facet_hint_for_entity_type(entity_type: str | None) -> str | None:
-    if not entity_type:
-        return None
-    return _ENTITY_TYPE_TO_FACET.get(entity_type)
+# Canonical mapping lives in foodscholar.layer_a.facet — `build_entities` calls
+# `_facet_hint_for_entity_type` below.
+from foodscholar.layer_a.facet import (  # noqa: E402
+    facet_for_entity_type as _facet_hint_for_entity_type,
+)
 
 
 def _enrich_from_ontology(
