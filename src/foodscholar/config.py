@@ -10,6 +10,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from foodscholar.io.chunk import SourceType
 from foodscholar.io.graph import Facet
 
 _ENV_RE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
@@ -41,6 +42,12 @@ class CorpusConfig(BaseModel):
     """Optional parquet path. When set, `FoodScholar.load_and_annotate` writes
     a snapshot of annotated chunks here after upsert, and skips processing if
     the file already exists and is non-empty (idempotent reruns)."""
+    ignore_source_types: list[SourceType] = Field(default_factory=list)
+    """Source types to skip at ingest time (`abstract`, `textbook`, `guide`).
+    Chunks whose `source_type` is in this set are dropped before upsert — their
+    NEL annotations and embeddings are skipped too. The `ignore_source_types=`
+    kwarg on `FoodScholar.ingest` / `FoodScholar.load_and_annotate` overrides
+    this default per call."""
 
 
 class OntologyConfig(BaseModel):

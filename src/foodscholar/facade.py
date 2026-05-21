@@ -354,6 +354,7 @@ class FoodScholar:
         path: str | Path,
         *,
         snapshot_path: str | Path | None = None,
+        ignore_source_types: set[str] | None = None,
     ) -> ArtifactMeta | None:
         """Single-pass: load chunks → run GLiNER+HNSW annotate → optional snapshot.
 
@@ -362,8 +363,13 @@ class FoodScholar:
         is configured (via `snapshot_path` here or `cfg.corpus.annotated_snapshot_path`)
         and already exists with non-zero size, the call short-circuits and
         returns None — matching the prototype's skip-if-output-exists idempotency.
+
+        ``ignore_source_types`` (defaults to ``cfg.corpus.ignore_source_types``)
+        drops chunks whose ``source_type`` is in the set before annotation —
+        useful to skip e.g. all ``abstract`` chunks when ingesting a
+        guideline-only knowledge base.
         """
-        from foodscholar.corpus import write_chunks_parquet
+        from foodscholar.corpus import iter_chunks, write_chunks_parquet
 
         target = Path(snapshot_path) if snapshot_path is not None else (
             self.config.corpus.annotated_snapshot_path
@@ -372,7 +378,19 @@ class FoodScholar:
             self._log.info("load_and_annotate.skip_existing", snapshot=str(target))
             return None
 
-        self.load_chunks(path)
+        skip = self._resolve_ignored_source_types(ignore_source_types)
+        if skip:
+            kept = [c for c in iter_chunks(path) if c.source_type not in skip]
+            n_skipped = self._count_skipped_chunks(path, skip)
+            self.chunk_store.upsert(kept)
+            self._log.info(
+                "load_and_annotate.filtered",
+                n_loaded=len(kept),
+                n_skipped=n_skipped,
+                ignore_source_types=sorted(skip),
+            )
+        else:
+            self.load_chunks(path)
         meta = self.annotate()
 
         if target is not None:
@@ -391,6 +409,7 @@ class FoodScholar:
         *,
         nel_dir: str | Path | None = None,
         snapshot_path: str | Path | None = None,
+        ignore_source_types: set[str] | None = None,
     ) -> ArtifactMeta | None:
         """Ingest corpus + annotations into `fs.chunk_store`. Two modes:
 
@@ -410,6 +429,12 @@ class FoodScholar:
         parquet snapshot of the annotated chunks after ingest. If the snapshot
         already exists and is non-empty the whole call short-circuits — the
         same idempotency guarantee as `load_and_annotate`.
+
+        ``ignore_source_types`` (defaults to ``cfg.corpus.ignore_source_types``)
+        drops chunks whose ``source_type`` is in the set before upsert. Their
+        NEL rows are skipped too — nothing about them reaches the chunk store
+        or shows up in ``fs.entities`` later. Pass e.g. ``{"abstract"}`` to
+        ingest only textbook + guide chunks.
         """
         from foodscholar.corpus import (
             iter_chunks,
@@ -425,9 +450,14 @@ class FoodScholar:
             return None
 
         if nel_dir is None:
-            return self.load_and_annotate(corpus_dir, snapshot_path=snapshot_path)
+            return self.load_and_annotate(
+                corpus_dir,
+                snapshot_path=snapshot_path,
+                ignore_source_types=ignore_source_types,
+            )
 
         nel_map = load_nel_dir(nel_dir)
+        skip = self._resolve_ignored_source_types(ignore_source_types)
 
         # Stream chunks, attach annotations, upsert in batches.
         #
@@ -451,6 +481,7 @@ class FoodScholar:
         n_chunks = 0
         n_links = 0
         n_attached = 0
+        n_skipped = 0
 
         def _flush(batch: list) -> None:
             nonlocal n_chunks, n_links, n_attached
@@ -479,6 +510,9 @@ class FoodScholar:
             n_chunks += len(enriched)
 
         for chunk in iter_chunks(corpus_dir):
+            if chunk.source_type in skip:
+                n_skipped += 1
+                continue
             batch.append(chunk)
             if len(batch) >= batch_size:
                 _flush(batch)
@@ -495,6 +529,8 @@ class FoodScholar:
             n_chunks=n_chunks,
             n_attached=n_attached,
             n_links=n_links,
+            n_skipped=n_skipped,
+            ignore_source_types=sorted(skip),
             artifact_id=meta.artifact_id,
             config_hash=meta.config_hash,
         )
@@ -885,6 +921,28 @@ class FoodScholar:
 
     def query(self, text: str) -> Answer:
         raise _deferred("query")
+
+    # ------------------------------------------------------------------ helpers
+
+    def _resolve_ignored_source_types(
+        self, override: set[str] | None
+    ) -> frozenset[str]:
+        """Per-call override wins; otherwise read `cfg.corpus.ignore_source_types`."""
+        if override is not None:
+            return frozenset(override)
+        return frozenset(self.config.corpus.ignore_source_types)
+
+    @staticmethod
+    def _count_skipped_chunks(path: str | Path, skip: frozenset[str]) -> int:
+        """Count chunks at `path` whose `source_type` is in `skip`. One extra
+        scan over the corpus — cheap for CSV/JSONL and only used to log the
+        skip count when `ignore_source_types` is active.
+        """
+        if not skip:
+            return 0
+        from foodscholar.corpus import iter_chunks
+
+        return sum(1 for c in iter_chunks(path) if c.source_type in skip)
 
 
 def _minimal_memory_config() -> FoodScholarConfig:
