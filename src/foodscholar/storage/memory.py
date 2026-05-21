@@ -48,6 +48,10 @@ class InMemoryChunkStore:
     def __init__(self) -> None:
         self._chunks: dict[ChunkId, Chunk] = {}
 
+    def init(self) -> None:
+        """No-op — there is nothing to provision for an in-memory store."""
+        return
+
     def upsert(self, chunks: Iterable[Chunk]) -> None:
         for c in chunks:
             self._chunks[c.chunk_id] = c
@@ -160,6 +164,10 @@ class InMemoryGraphStore:
         self._cards: dict[tuple[str, str], Card] = {}
         self._shelf_chunks: dict[ShelfId, set[ChunkId]] = defaultdict(set)
         self._theme_chunks: dict[ThemeId, set[ChunkId]] = defaultdict(set)
+
+    def init(self) -> None:
+        """No-op — there is nothing to provision for an in-memory store."""
+        return
 
     def upsert_shelves(self, shelves: list[Shelf]) -> None:
         for s in shelves:

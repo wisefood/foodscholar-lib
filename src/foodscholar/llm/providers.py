@@ -6,8 +6,10 @@ schema, max_tokens) -> dict` method that returns schema-conforming JSON via the
 provider's native structured-output mode where one exists.
 
 SDKs are lazy-imported inside `__init__` so the core package never hard-depends
-on them; install via the `[llm]` extra. API keys come from environment
-variables, never config.
+on them; install via the `[llm]` extra. API keys can be supplied either via
+the explicit `api_key=` constructor argument (typically forwarded from
+`cfg.llm.primary.api_key`) or via the provider's standard environment
+variable. The explicit value wins when both are set.
 """
 
 from __future__ import annotations
@@ -21,13 +23,17 @@ import re
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def _require_env(var: str, provider: str) -> str:
-    key = os.environ.get(var)
-    if not key:
+def _resolve_secret(explicit: str | None, env_var: str, provider: str) -> str:
+    """Return the secret, preferring `explicit` then `os.environ[env_var]`."""
+    if explicit:
+        return explicit
+    value = os.environ.get(env_var)
+    if not value:
         raise RuntimeError(
-            f"{provider} requires the {var} environment variable to be set."
+            f"{provider} requires an API key. Provide it via cfg.llm.primary.api_key "
+            f"(or .fallbacks[*].api_key) or set the {env_var} environment variable."
         )
-    return key
+    return value
 
 
 def _parse_json_object(text: str) -> dict[str, object]:
@@ -46,9 +52,15 @@ def _parse_json_object(text: str) -> dict[str, object]:
 
 
 class AnthropicClient:
-    """Anthropic Claude. Needs `ANTHROPIC_API_KEY`; install `foodscholar[llm]`."""
+    """Anthropic Claude. Needs `ANTHROPIC_API_KEY` or an explicit `api_key`."""
 
-    def __init__(self, model: str = "claude-sonnet-4-6", *, timeout_s: float = 30.0) -> None:
+    def __init__(
+        self,
+        model: str = "claude-sonnet-4-6",
+        *,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
+    ) -> None:
         try:
             import anthropic
         except ImportError as e:
@@ -58,7 +70,7 @@ class AnthropicClient:
             ) from e
         self.model_id = model
         self._client = anthropic.Anthropic(
-            api_key=_require_env("ANTHROPIC_API_KEY", "Anthropic"),
+            api_key=_resolve_secret(api_key, "ANTHROPIC_API_KEY", "Anthropic"),
             timeout=timeout_s,
         )
 
@@ -74,8 +86,7 @@ class AnthropicClient:
     def generate_json(
         self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
     ) -> dict[str, object]:
-        # Anthropic has no JSON-schema response mode; instruct + parse. The
-        # schema is shown to the model so it knows the expected shape.
+        # Anthropic has no JSON-schema response mode; instruct + parse.
         full = (
             f"{prompt}\n\nRespond with ONLY a JSON object matching this schema "
             f"(no prose, no markdown fences):\n{json.dumps(schema)}"
@@ -84,9 +95,15 @@ class AnthropicClient:
 
 
 class OpenAIClient:
-    """OpenAI. Needs `OPENAI_API_KEY`; install `foodscholar[llm]`."""
+    """OpenAI. Needs `OPENAI_API_KEY` or an explicit `api_key`."""
 
-    def __init__(self, model: str = "gpt-4.1", *, timeout_s: float = 30.0) -> None:
+    def __init__(
+        self,
+        model: str = "gpt-4.1",
+        *,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
+    ) -> None:
         try:
             import openai
         except ImportError as e:
@@ -96,7 +113,7 @@ class OpenAIClient:
             ) from e
         self.model_id = model
         self._client = openai.OpenAI(
-            api_key=_require_env("OPENAI_API_KEY", "OpenAI"),
+            api_key=_resolve_secret(api_key, "OPENAI_API_KEY", "OpenAI"),
             timeout=timeout_s,
         )
 
@@ -124,10 +141,14 @@ class OpenAIClient:
 
 
 class GroqClient:
-    """Groq (fast Llama/Mixtral inference). Needs `GROQ_API_KEY`; install `foodscholar[llm]`."""
+    """Groq (fast Llama/Mixtral inference). Needs `GROQ_API_KEY` or `api_key`."""
 
     def __init__(
-        self, model: str = "llama-3.3-70b-versatile", *, timeout_s: float = 30.0
+        self,
+        model: str = "llama-3.3-70b-versatile",
+        *,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
     ) -> None:
         try:
             import groq
@@ -138,7 +159,7 @@ class GroqClient:
             ) from e
         self.model_id = model
         self._client = groq.Groq(
-            api_key=_require_env("GROQ_API_KEY", "Groq"),
+            api_key=_resolve_secret(api_key, "GROQ_API_KEY", "Groq"),
             timeout=timeout_s,
         )
 
@@ -153,8 +174,6 @@ class GroqClient:
     def generate_json(
         self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
     ) -> dict[str, object]:
-        # Groq's OpenAI-compatible API supports response_format=json_object.
-        # The schema is also embedded in the prompt so the model knows the shape.
         full = f"{prompt}\n\nRespond with JSON matching this schema:\n{json.dumps(schema)}"
         resp = self._client.chat.completions.create(
             model=self.model_id,
@@ -166,9 +185,15 @@ class GroqClient:
 
 
 class GeminiClient:
-    """Google Gemini. Needs `GEMINI_API_KEY`; install `foodscholar[llm]`."""
+    """Google Gemini. Needs `GEMINI_API_KEY` or an explicit `api_key`."""
 
-    def __init__(self, model: str = "gemini-2.0-flash", *, timeout_s: float = 30.0) -> None:
+    def __init__(
+        self,
+        model: str = "gemini-2.0-flash",
+        *,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
+    ) -> None:
         try:
             from google import genai
         except ImportError as e:
@@ -177,7 +202,9 @@ class GeminiClient:
                 "Install with: pip install 'foodscholar[llm]'"
             ) from e
         self.model_id = model
-        self._client = genai.Client(api_key=_require_env("GEMINI_API_KEY", "Gemini"))
+        self._client = genai.Client(
+            api_key=_resolve_secret(api_key, "GEMINI_API_KEY", "Gemini")
+        )
 
     def generate(self, prompt: str, max_tokens: int = 1024) -> str:
         from google.genai import types
@@ -215,6 +242,7 @@ class OllamaClient:
         *,
         host: str = "http://localhost:11434",
         timeout_s: float = 60.0,
+        api_key: str | None = None,  # accepted but ignored — daemon has no auth
     ) -> None:
         try:
             import ollama
@@ -223,6 +251,7 @@ class OllamaClient:
                 "the 'ollama' package is required for OllamaClient. "
                 "Install with: pip install 'foodscholar[llm]'"
             ) from e
+        _ = api_key  # accepted for uniform constructor signature; ollama has no auth
         self.model_id = model
         self._client = ollama.Client(host=host, timeout=timeout_s)
 
@@ -237,7 +266,6 @@ class OllamaClient:
     def generate_json(
         self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
     ) -> dict[str, object]:
-        # Ollama accepts a JSON schema as `format` for constrained decoding.
         resp = self._client.generate(
             model=self.model_id,
             prompt=prompt,
