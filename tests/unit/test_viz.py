@@ -224,9 +224,7 @@ def test_cytoscape_renders_self_contained_html(fs_with_entities: FoodScholar) ->
     assert isinstance(html, str)
     assert "<html" in html.lower()
     assert "cytoscape" in html.lower()
-    # The page uses the built-in `cose` layout (no external cose-bilkent
-    # dependency, which previously left the canvas blank).
-    assert "name: 'cose'" in html
+    # No external cose-bilkent dependency (that was the blank-canvas bug).
     assert "cose-bilkent" not in html
     # Embedded elements should be valid JSON inside the page.
     start = html.find("const elements = ") + len("const elements = ")
@@ -234,6 +232,56 @@ def test_cytoscape_renders_self_contained_html(fs_with_entities: FoodScholar) ->
     payload = html[start:end]
     elements = json.loads(payload)
     assert any(el["data"].get("source") for el in elements)  # at least one edge
+
+
+def test_cytoscape_layout_is_concentric_for_l1(fs_with_entities: FoodScholar) -> None:
+    """L1 entity neighborhood → concentric layout, with ranks stamped on nodes."""
+    html = fs_with_entities.viz.entity_neighborhood("FOODON:03309927").render("cytoscape")
+    layout = _extract_layout(html)
+    assert layout["name"] == "concentric"
+    # Anchor entity, chunks, co-entities → ranks 3, 2, 1.
+    elements = _extract_elements(html)
+    ranks_by_kind: dict[str, set[int]] = {}
+    for el in elements:
+        d = el["data"]
+        if "concentric_rank" in d:
+            ranks_by_kind.setdefault(d["kind"], set()).add(d["concentric_rank"])
+    # Anchor entity (is_anchor=True) → 3; non-anchor entities → 1; chunks → 2.
+    anchor_ranks = {d["concentric_rank"] for el in elements
+                    if el["data"].get("anchor") for d in [el["data"]]}
+    assert anchor_ranks == {3}
+    assert ranks_by_kind.get("chunk") == {2}
+
+
+def test_cytoscape_layout_per_level() -> None:
+    """Each level picks the right layout family."""
+    from foodscholar.viz.renderers.cytoscape_renderer import _layout_for_level
+
+    assert _layout_for_level("L0")["name"] == "grid"
+    assert _layout_for_level("L1")["name"] == "concentric"
+    assert _layout_for_level("L2")["name"] == "cose"
+    assert _layout_for_level("L3")["name"] == "breadthfirst"
+    assert _layout_for_level("L4")["name"] == "breadthfirst"
+    # `avoidOverlap` is true everywhere it's supported.
+    for level in ("L0", "L1", "L3", "L4"):
+        assert _layout_for_level(level).get("avoidOverlap") is True
+
+
+def _extract_layout(html: str) -> dict:
+    """Pull `const layoutConfig = {...};` from the page."""
+    import re
+
+    m = re.search(r"const layoutConfig = (\{.*?\});", html, re.DOTALL)
+    assert m, "couldn't find layoutConfig in the rendered HTML"
+    return json.loads(m.group(1))
+
+
+def _extract_elements(html: str) -> list:
+    import re
+
+    m = re.search(r"const elements = (\[.*?\]);\nconst layoutConfig", html, re.DOTALL)
+    assert m, "couldn't find elements in the rendered HTML"
+    return json.loads(m.group(1))
 
 
 def test_cytoscape_writes_html_to_disk(

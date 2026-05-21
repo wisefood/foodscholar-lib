@@ -56,7 +56,25 @@ class PyvisRenderer(Renderer):
             bgcolor="#FAFAFA",
             font_color="#111827",
         )
-        net.toggle_physics(self._physics)
+        # Per-level physics / layout. vis-network has a hierarchical layout
+        # built in that's the right tool for L4 (ontology is_a) and L3
+        # (shelf/theme backbone) — top-down, no overlap. For L1 / L2 the
+        # default force-directed solver with stronger repulsion gives a
+        # decent spread without nodes stacking.
+        if graph.level in ("L3", "L4"):
+            net.set_options('{'
+                '"layout": {"hierarchical": {"enabled": true, '
+                '   "direction": "UD", "sortMethod": "directed", '
+                '   "levelSeparation": 120, "nodeSpacing": 140}},'
+                '"physics": {"enabled": false},'
+                '"edges": {"smooth": {"type": "cubicBezier"}}}')
+        else:
+            net.set_options('{'
+                '"physics": {"barnesHut": {'
+                '   "gravitationalConstant": -8000, '
+                '   "springLength": 140, '
+                '   "avoidOverlap": 0.5}, "minVelocity": 0.5},'
+                '"interaction": {"tooltipDelay": 100}}')
 
         for node in graph.nodes:
             net.add_node(

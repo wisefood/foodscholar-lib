@@ -18,13 +18,12 @@ from foodscholar.viz.renderers.base import Renderer, color_for
 _CYTOSCAPE_CDN = "https://unpkg.com/cytoscape@3.30.0/dist/cytoscape.min.js"
 
 
-# The previous version pulled cytoscape-cose-bilkent as an external layout
-# extension. It's a UMD bundle that requires `cose-base` to be loaded first
-# AND an explicit `cytoscape.use(...)` call — when either is missing the
-# layout silently fails and the canvas stays blank (header still shows the
-# count because it's plain HTML). The fix: use the built-in `cose` layout,
-# which ships with cytoscape core. No extension, no registration step, works
-# everywhere cytoscape loads.
+# Two-stage layout: every page first runs the level-specific layout, then a
+# noOverlap-like pass via cytoscape's `boundingBox`-aware `preset` re-layout
+# is unnecessary — cose / concentric / breadthfirst all accept overlap
+# parameters and respect them. We additionally call `cy.nodes().forEach` to
+# nudge any pair that's still on top of one another by half a node size after
+# layoutstop. All cytoscape-core layouts, no extensions.
 _HTML_TEMPLATE = """<!doctype html>
 <html><head>
 <meta charset="utf-8">
@@ -44,6 +43,18 @@ _HTML_TEMPLATE = """<!doctype html>
 <div id="cy-error"></div>
 <script>
 const elements = {elements_json};
+const layoutConfig = {layout_json};
+
+// concentric() takes a node and returns a numeric "rank" — higher = closer
+// to center. Cytoscape's `concentric` layout doesn't accept a string here,
+// only a function, so we ship one that reads from the data the Python side
+// stamps on each node.
+if (layoutConfig.name === 'concentric') {{
+  layoutConfig.concentric = function(node) {{
+    return node.data('concentric_rank') || 0;
+  }};
+  layoutConfig.levelWidth = function() {{ return 1; }};
+}}
 
 function initCy() {{
   if (typeof cytoscape === 'undefined') {{
@@ -80,29 +91,50 @@ function initCy() {{
           'opacity': 0.7,
       }}}},
     ],
-    // `cose` is built into cytoscape core — no extension registration needed.
-    layout: {{
-      name: 'cose',
-      animate: false,
-      randomize: true,
-      nodeOverlap: 12,
-      idealEdgeLength: 90,
-      padding: 30,
-      fit: true,
-    }},
+    layout: layoutConfig,
   }});
-  // After the layout settles, fit the viewport to all nodes — without this
-  // a long-running layout can leave the camera pointing at empty canvas.
-  cy.on('layoutstop', () => cy.fit(undefined, 30));
+
+  // Post-layout: fit viewport to all nodes, then do one O(n^2) overlap-nudge
+  // sweep so concentric / breadthfirst rings with tied ranks don't stack.
+  cy.on('layoutstop', () => {{
+    nudgeOverlaps(cy);
+    cy.fit(undefined, 30);
+  }});
+
   cy.on('tap', 'node', evt => {{
     const d = evt.target.data();
     alert(d.tooltip || d.label);
   }});
 }}
 
-// Wait for cytoscape.min.js to finish executing. In an iframe srcdoc the
-// external <script src> usually serializes before this inline block, but
-// DOMContentLoaded gives us the strongest guarantee.
+function nudgeOverlaps(cy) {{
+  // Push pairs of nodes that share the same position. Cheap O(n^2) sweep
+  // — fine for graphs up to a few hundred nodes which is all our builder
+  // produces.
+  const nodes = cy.nodes();
+  const minGap = 12;
+  for (let i = 0; i < nodes.length; i++) {{
+    for (let j = i + 1; j < nodes.length; j++) {{
+      const a = nodes[i].position();
+      const b = nodes[j].position();
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const wanted = (nodes[i].width() + nodes[j].width()) / 2 + minGap;
+      if (dist < wanted && dist > 0) {{
+        const push = (wanted - dist) / 2;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        nodes[i].position({{ x: a.x - ux * push, y: a.y - uy * push }});
+        nodes[j].position({{ x: b.x + ux * push, y: b.y + uy * push }});
+      }} else if (dist === 0) {{
+        // Two nodes exactly co-located — separate horizontally by `wanted`.
+        nodes[j].position({{ x: a.x + wanted, y: a.y }});
+      }}
+    }}
+  }}
+}}
+
 if (document.readyState === 'loading') {{
   document.addEventListener('DOMContentLoaded', initCy);
 }} else {{
@@ -111,6 +143,57 @@ if (document.readyState === 'loading') {{
 </script>
 </body></html>
 """
+
+
+# How to translate a `VizGraph.level` into a cytoscape-core layout config.
+# Each level picks the layout that best surfaces its structure:
+#   L0  grid          — disconnected nodes, no need for force-directed
+#   L1  concentric    — anchor centered, then chunks ring, then co-entity ring
+#   L2  cose (tuned)  — small mixed-shape graph, force-directed
+#   L3  breadthfirst  — Layer A/B/C hierarchy, roots at top
+#   L4  breadthfirst  — ontology is_a tree, root at top
+def _layout_for_level(level: str) -> dict[str, Any]:
+    base_cose = {
+        "name": "cose",
+        "animate": False,
+        "randomize": True,
+        "nodeOverlap": 25,            # was 12 — push nodes apart harder
+        "nodeRepulsion": 20000,       # the actual force; default 2048
+        "idealEdgeLength": 110,
+        "padding": 40,
+        "componentSpacing": 80,
+        "fit": True,
+    }
+    if level == "L0":
+        return {
+            "name": "grid",
+            "rows": 0,                # auto rows
+            "padding": 30,
+            "fit": True,
+            "avoidOverlap": True,
+            "avoidOverlapPadding": 20,
+        }
+    if level == "L1":
+        return {
+            "name": "concentric",
+            "padding": 40,
+            "fit": True,
+            "minNodeSpacing": 40,
+            "spacingFactor": 1.5,
+            "avoidOverlap": True,
+        }
+    if level == "L4" or level == "L3":
+        return {
+            "name": "breadthfirst",
+            "directed": True,
+            "padding": 40,
+            "fit": True,
+            "spacingFactor": 1.4,
+            "avoidOverlap": True,
+            "grid": False,
+        }
+    # L2 (or anything unrecognized) → tuned cose
+    return base_cose
 
 
 class CytoscapeRenderer(Renderer):
@@ -124,6 +207,7 @@ class CytoscapeRenderer(Renderer):
             title=_html_escape(graph.title),
             cyto_js=_CYTOSCAPE_CDN,
             elements_json=json.dumps(elements),
+            layout_json=json.dumps(_layout_for_level(graph.level)),
             n_nodes=len(graph.nodes),
             n_edges=len(graph.edges),
             level=graph.level,
@@ -150,6 +234,11 @@ class CytoscapeRenderer(Renderer):
                     "color": color_for(n),
                     "size": size,
                     "anchor": bool(n.attrs.get("is_anchor")),
+                    # `concentric` layout (L1) reads this — higher = closer to
+                    # the center. Anchor entity at the heart, chunks in the
+                    # first ring, co-entities outermost. Layouts that don't
+                    # use it ignore the field.
+                    "concentric_rank": _concentric_rank(n),
                     "tooltip": _tooltip(n),
                 },
             })
@@ -173,6 +262,23 @@ class CytoscapeRenderer(Renderer):
 
 def _html_escape(text: str) -> str:
     return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _concentric_rank(node) -> int:  # type: ignore[no-untyped-def]
+    """Numeric rank used by L1's `concentric` layout. Higher = inner ring.
+
+    - Anchor entity (is_anchor=True)  → 3 (center)
+    - Chunks                          → 2 (middle ring)
+    - Other entities (co-mentioned)   → 1 (outer ring)
+    - Anything else                   → 0
+    """
+    if node.kind == "entity" and node.attrs.get("is_anchor"):
+        return 3
+    if node.kind == "chunk":
+        return 2
+    if node.kind == "entity":
+        return 1
+    return 0
 
 
 def _tooltip(node) -> str:  # type: ignore[no-untyped-def]
