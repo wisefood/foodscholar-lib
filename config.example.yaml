@@ -1,5 +1,9 @@
 corpus:
   chunks_path: data/chunks.parquet
+  # Where to drop a parquet snapshot of annotated chunks after each run.
+  # `fs.load_and_annotate(...)` short-circuits if this file already exists
+  # and is non-empty (idempotent reruns).
+  annotated_snapshot_path: data/annotated.parquet
 
 ontology:
   foodon_path: data/foodon.owl
@@ -7,34 +11,50 @@ ontology:
   include_imports: false           # import_depth=0 in pronto
   # FoodOn .owl files embed NCBITaxon/CHEBI/BFO/ENVO terms inline. Default
   # filter keeps only FOODON: ids so the linker doesn't match food queries
-  # against unrelated ontologies. Add prefixes (e.g. ["FOODON:", "CHEBI:"])
-  # to broaden, or set to null to disable filtering entirely.
+  # against unrelated ontologies.
   prefix_filter: ["FOODON:"]
 
 annotate:
-  # NER strategy: keyword (deterministic ontology matcher, no LLM) or
-  # agentic (LLM extracts mentions via the llm: client below). agentic is
-  # the recommended setup; needs the [llm] extra + a configured provider.
-  ner: agentic
+  # NER: GLiNER bio (the validated prototype model). The configured labels
+  # are the EntityType vocabulary — keep this in lock-step with
+  # `foodscholar.io.chunk.EntityType`.
+  ner: gliner
+  gliner:
+    model_id: urchade/gliner_large_bio-v0.1
+    threshold: 0.4
+    flat_ner: true
+    max_length: 2048
+    batch_size: 16
+    # Default labels are shipped in code; uncomment to override.
+    # labels:
+    #   - food
+    #   - nutrient
+    #   - micronutrient
+    #   - macronutrient
+    #   - food component
+    #   - dietary supplement
+    #   - dietary pattern
+    #   - medical condition
+    #   - biomarker
+    #   - Country
+    #   - Measurement
+    #   - Population
+    #   - Time expression
   scientific_embedder: allenai/specter2_base
   general_embedder: BAAI/bge-large-en-v1.5
+  batch_size: 16
   linker:
-    lexical_threshold: 0.85
-    dense_threshold: 0.78
-    semantic_type_gate: true
-    # All four linker tiers are enabled here for highest linking quality.
-    # Dense tier — SapBERT embedding kNN. Catches lexically-distinct synonyms
-    # (e.g. "ascorbate" -> vitamin C). Empty string disables it.
-    dense_model: cambridgeltl/SapBERT-from-PubMedBERT-fulltext
-    dense_cache_path: data/sapbert_terms.npz
-    # LLM-select tier (4th tier — deviation from BRIEF §2, see BRIEF §3.5).
-    # When no deterministic tier is confident, the LLM (see the `llm:` section
-    # below) picks from the top-k candidates or rejects. Uses the configured
-    # provider chain. Fires only below llm_select_threshold, so deterministic
-    # tiers still handle the bulk of mentions.
-    llm_select: true
-    llm_select_threshold: 0.90
-    llm_candidate_k: 8
+    # Vector NEL backend. `hnsw` (default) builds a local hnswlib index from
+    # the loaded FoodOn ontology on first use and caches it to disk.
+    # `elastic` uses an ES dense_vector index (set chunk_store.url + es_index).
+    nel_backend: hnsw
+    nel_encoder: biolord            # biolord | sapbert | minilm | mpnet
+    nel_top_k: 1
+    nel_min_sim: 0.70
+    # Leave these unset to let the linker derive content-addressed cache paths
+    # under data/. Set them to pin specific files for reproducibility.
+    # nel_index_path: data/foodon_hnsw_biolord.bin
+    # nel_metadata_path: data/foodon_hnsw_biolord.meta.json
 
 layer_a:
   min_support: 20
@@ -64,22 +84,30 @@ storage:
     backend: elastic
     url: http://localhost:9200
     index: foodscholar_chunks
+    # Authentication is optional; for an unauthenticated local cluster, leave
+    # all auth fields unset. For production prefer api_key over basic-auth.
+    # api_key: ${ELASTICSEARCH_API_KEY}
+    # username: elastic
+    # password: ${ELASTICSEARCH_PASSWORD}
   graph_store:
     backend: neo4j
     url: bolt://localhost:7687
     user: neo4j
+    # Use ${VAR} to inject the password from the environment, OR put it inline
+    # (e.g. `password: change-me` for local dev). When omitted, the driver
+    # falls back to the NEO4J_PASSWORD environment variable.
     password: ${NEO4J_PASSWORD}
 
-# LLM client — used by the linker's llm_select tier and Layer C card
-# generation. Provider-agnostic: anthropic | openai | groq | gemini | ollama.
-# API keys come from the environment (GROQ_API_KEY, ANTHROPIC_API_KEY,
-# OPENAI_API_KEY, GEMINI_API_KEY), never from this file. Ollama needs no key,
-# just a local daemon. The primary is tried first; fallbacks are tried in
-# order if it errors (timeout, rate limit, auth, service down).
+# LLM client — used only by Layer C card generation now that NER is GLiNER
+# and the linker is purely dense. Provider-agnostic: anthropic | openai |
+# groq | gemini | ollama. API keys may be supplied via `api_key:` here (use
+# ${VAR} to read from the environment) or via the provider's standard env
+# var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY).
 llm:
   primary:
     provider: groq
     model: llama-3.3-70b-versatile
+    # api_key: ${GROQ_API_KEY}
   fallbacks:
     - provider: ollama
       model: llama3.1

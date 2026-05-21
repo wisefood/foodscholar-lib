@@ -1,4 +1,4 @@
-"""Pydantic config model + YAML loader with ${ENV} substitution."""
+"""Pydantic config model + YAML / dict loader with ${ENV} substitution."""
 
 from __future__ import annotations
 
@@ -15,9 +15,32 @@ from foodscholar.io.graph import Facet
 _ENV_RE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 
 
+# Default GLiNER label vocabulary — kept here so it ships with the package and
+# does not require a sister YAML file. Matches gliner.py's production list.
+_GLINER_DEFAULT_LABELS: list[str] = [
+    "food",
+    "nutrient",
+    "micronutrient",
+    "macronutrient",
+    "food component",
+    "dietary supplement",
+    "dietary pattern",
+    "medical condition",
+    "biomarker",
+    "Country",
+    "Measurement",
+    "Population",
+    "Time expression",
+]
+
+
 class CorpusConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     chunks_path: Path
+    annotated_snapshot_path: Path | None = None
+    """Optional parquet path. When set, `FoodScholar.load_and_annotate` writes
+    a snapshot of annotated chunks here after upsert, and skips processing if
+    the file already exists and is non-empty (idempotent reruns)."""
 
 
 class OntologyConfig(BaseModel):
@@ -33,41 +56,56 @@ class OntologyConfig(BaseModel):
     custom prefixes like ``TEST:``)."""
 
 
-class LinkerConfig(BaseModel):
+class GLinerConfig(BaseModel):
+    """GLiNER-bio NER configuration. Defaults match the validated prototype."""
+
     model_config = ConfigDict(extra="forbid")
-    lexical_threshold: float = 0.85
-    dense_threshold: float = 0.78
-    semantic_type_gate: bool = True
+    model_id: str = "urchade/gliner_large_bio-v0.1"
+    threshold: float = 0.4
+    flat_ner: bool = True
+    max_length: int = 2048
+    batch_size: int = 16
+    labels: list[str] = Field(default_factory=lambda: list(_GLINER_DEFAULT_LABELS))
 
-    # Dense tier (BRIEF §2). Empty disables it — the linker is then lexical-only.
-    dense_model: str = ""
-    """Embedding model for the dense tier, e.g.
-    'cambridgeltl/SapBERT-from-PubMedBERT-fulltext'. Empty string = dense tier off."""
-    dense_cache_path: Path | None = None
-    """Optional .npz path for the precomputed term-embedding matrix."""
 
-    # LLM-select tier (deviation from BRIEF §2; see BRIEF §3.5). Opt-in.
-    llm_select: bool = False
-    """Enable the 4th tier: when no deterministic tier produces a confident
-    hit, an LLM picks from the top-k candidates (or rejects). Off by default —
-    keeps the linker deterministic unless explicitly opted in."""
-    llm_select_threshold: float = 0.90
-    """Deterministic-tier confidence below which the LLM tier is consulted."""
-    llm_candidate_k: int = 8
-    """Number of candidates shown to the LLM selector."""
+class LinkerConfig(BaseModel):
+    """Entity-linking configuration.
+
+    Backend = `hnsw` (local hnswlib index, default) or `elastic` (ES dense_vector,
+    opt-in). The HNSW index is built on first use from the loaded FoodOn
+    ontology and cached to `nel_index_path` / `nel_metadata_path` (auto-derived
+    when those are left unset).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    nel_backend: Literal["hnsw", "elastic"] = "hnsw"
+    nel_encoder: Literal["sapbert", "biolord", "minilm", "mpnet"] = "biolord"
+    nel_top_k: int = 1
+    nel_min_sim: float = 0.70
+    nel_index_path: Path | None = None
+    """Path for the cached hnswlib index file. Auto-derived from the encoder
+    and ontology when unset (e.g. data/foodon_hnsw_biolord.bin)."""
+    nel_metadata_path: Path | None = None
+    """Sister JSON file holding the ordered ontology metadata for the index."""
+
+    # Elastic-only knobs (ignored when nel_backend != "elastic")
+    es_index: str | None = None
 
 
 class AnnotateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    ner: Literal["keyword", "agentic"] = "keyword"
-    """NER strategy. `keyword` = deterministic ontology-keyword matcher (no
-    LLM, the safe default). `agentic` = LLM extracts mentions via the
-    configured `llm:` client (needs the `[llm]` extra + a provider)."""
+    ner: Literal["gliner"] = "gliner"
+    """NER strategy. Only `gliner` is supported in v0.1 — `keyword` (deterministic
+    ontology keyword match) and `agentic` (LLM-extracted) were removed when the
+    library switched to GLiNER + HNSW + BioLORD."""
 
+    gliner: GLinerConfig = Field(default_factory=GLinerConfig)
     scientific_embedder: str = "allenai/specter2_base"
     general_embedder: str = "BAAI/bge-large-en-v1.5"
     linker: LinkerConfig = Field(default_factory=LinkerConfig)
+    batch_size: int = 16
+    """Chunks processed per NER batch in the annotate runner."""
 
 
 class LayerAConfig(BaseModel):
@@ -110,6 +148,13 @@ class ChunkStoreConfig(BaseModel):
     backend: Literal["elastic", "memory"] = "elastic"
     url: str | None = None
     index: str | None = None
+    api_key: str | None = None
+    """Optional Elasticsearch API key. If unset, the ES client falls back to
+    the `ELASTICSEARCH_API_KEY` environment variable. Anonymous access is used
+    if neither is provided (suitable for an unauthenticated local cluster)."""
+    username: str | None = None
+    password: str | None = None
+    """Optional HTTP-basic credentials for ES. Take precedence over `api_key`."""
 
 
 class GraphStoreConfig(BaseModel):
@@ -118,6 +163,9 @@ class GraphStoreConfig(BaseModel):
     url: str | None = None
     user: str | None = None
     password: str | None = None
+    """Plaintext Neo4j password. If unset, the driver falls back to the
+    `NEO4J_PASSWORD` environment variable. Use `${VAR}` in YAML to inject env
+    values without committing secrets to the file."""
 
 
 class StorageConfig(BaseModel):
@@ -130,14 +178,20 @@ LLMProvider = Literal["anthropic", "openai", "groq", "gemini", "ollama"]
 
 
 class ProviderConfig(BaseModel):
-    """One LLM provider + model. API keys are read from the environment
-    (ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY) — never
-    placed in config files. Ollama needs no key, just a running daemon."""
+    """One LLM provider + model.
+
+    API keys can be supplied either in this section (`api_key:` — useful for
+    in-code configs and Docker secrets) or via the provider's standard
+    environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+    `GROQ_API_KEY`, `GEMINI_API_KEY`). The config value wins when both are
+    set. Ollama needs no key — just a running daemon at `host`.
+    """
 
     model_config = ConfigDict(extra="forbid")
     provider: LLMProvider
     model: str
-    host: str | None = None  # ollama only — daemon URL
+    api_key: str | None = None
+    host: str | None = None  # ollama daemon URL; ignored for other providers
 
 
 class LLMConfig(BaseModel):
@@ -184,3 +238,24 @@ def load_config(path: str | Path) -> FoodScholarConfig:
         raise ValueError(f"Config at {path} must be a YAML mapping")
     resolved = _substitute_env(raw)
     return FoodScholarConfig.model_validate(resolved)
+
+
+def resolve_config(
+    config: str | Path | dict[str, Any] | FoodScholarConfig,
+) -> FoodScholarConfig:
+    """Normalize any supported config source into a `FoodScholarConfig`.
+
+    Accepts a YAML file path, a Python dict, or an already-validated config
+    object. ${ENV} substitution runs over dicts and strings too, so in-code
+    configs can carry env placeholders the same way YAML can.
+    """
+    if isinstance(config, FoodScholarConfig):
+        return config
+    if isinstance(config, dict):
+        return FoodScholarConfig.model_validate(_substitute_env(config))
+    if isinstance(config, (str, Path)):
+        return load_config(config)
+    raise TypeError(
+        f"unsupported config type: {type(config).__name__} "
+        "(want str | Path | dict | FoodScholarConfig)"
+    )
