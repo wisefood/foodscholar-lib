@@ -224,9 +224,13 @@ def test_cytoscape_renders_self_contained_html(fs_with_entities: FoodScholar) ->
     assert isinstance(html, str)
     assert "<html" in html.lower()
     assert "cytoscape" in html.lower()
+    # The page uses the built-in `cose` layout (no external cose-bilkent
+    # dependency, which previously left the canvas blank).
+    assert "name: 'cose'" in html
+    assert "cose-bilkent" not in html
     # Embedded elements should be valid JSON inside the page.
     start = html.find("const elements = ") + len("const elements = ")
-    end = html.find(";\nconst cy", start)
+    end = html.find(";\n", start)
     payload = html[start:end]
     elements = json.loads(payload)
     assert any(el["data"].get("source") for el in elements)  # at least one edge
