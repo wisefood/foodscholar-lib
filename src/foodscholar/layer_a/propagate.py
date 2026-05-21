@@ -7,11 +7,17 @@ Pure function — no I/O. Takes a chunk iterator and the ontology, returns a
 - `with_descendants[id]`   — direct support summed across the term and every
                              descendant (the threshold metric per the spec).
 
-Each (chunk, term) pair contributes at most one count to `direct`; the
+Implemented as `dict[str, set[ChunkId]]` under the hood so any cross-shelf
+union (e.g. the synthetic facet root's "chunks reachable through this facet")
+can dedupe at chunk-level rather than summing already-deduped per-shelf
+counts. The `.direct` / `.with_descendants` properties expose
+`dict[str, int]` views (via `len(s)`) — pruner code that reads
+`support.direct.get(term_id, 0)` keeps working unchanged.
+
+Each (chunk, term) pair contributes at most one chunk-id to `direct`; the
 ancestor walk dedupes per chunk so a chunk mentioning the same term twice
 counts once, and a chunk mentioning a term + an ancestor of that term counts
-once for each. The threshold-metric `with_descendants` is then a roll-up of
-`direct` across the closed-descendants set.
+once for each.
 """
 
 from __future__ import annotations
@@ -23,18 +29,70 @@ from typing import TYPE_CHECKING
 from foodscholar.layer_a.facet import route_link_to_facet
 
 if TYPE_CHECKING:
-    from foodscholar.io.chunk import Chunk
+    from foodscholar.io.chunk import Chunk, ChunkId
     from foodscholar.io.graph import Facet
     from foodscholar.ontology import FoodOnAPI
 
 
 @dataclass
 class SupportTable:
-    direct: dict[str, int] = field(default_factory=dict)
-    with_descendants: dict[str, int] = field(default_factory=dict)
+    """Per-term chunk-id sets, deduped per chunk.
+
+    The integer-view properties (`direct`, `with_descendants`) are dict
+    facades: `support.direct[term_id]` returns the chunk count (len of the
+    underlying set) rather than the set itself. This preserves the existing
+    pruner API (`support.direct.get(term_id, 0) -> int`) while letting
+    higher-level code (e.g. `_ensure_single_root` in builder.py) reach the
+    chunk-id sets for honest cross-shelf unioning.
+    """
+
+    direct_chunk_ids: dict[str, set[ChunkId]] = field(default_factory=dict)
+    with_descendants_chunk_ids: dict[str, set[ChunkId]] = field(default_factory=dict)
+
+    @property
+    def direct(self) -> _IntCountView:
+        return _IntCountView(self.direct_chunk_ids)
+
+    @property
+    def with_descendants(self) -> _IntCountView:
+        return _IntCountView(self.with_descendants_chunk_ids)
 
     def __bool__(self) -> bool:
-        return bool(self.with_descendants)
+        return bool(self.with_descendants_chunk_ids)
+
+
+class _IntCountView:
+    """Read-only dict-like view: keys = term ids, values = chunk counts."""
+
+    __slots__ = ("_d",)
+
+    def __init__(self, d: dict[str, set]) -> None:
+        self._d = d
+
+    def get(self, term_id: str, default: int = 0) -> int:
+        s = self._d.get(term_id)
+        return len(s) if s is not None else default
+
+    def __getitem__(self, term_id: str) -> int:
+        return len(self._d[term_id])
+
+    def __contains__(self, term_id: object) -> bool:
+        return term_id in self._d
+
+    def __iter__(self):
+        return iter(self._d)
+
+    def __len__(self) -> int:
+        return len(self._d)
+
+    def items(self):
+        return ((tid, len(s)) for tid, s in self._d.items())
+
+    def values(self):
+        return (len(s) for s in self._d.values())
+
+    def keys(self):
+        return self._d.keys()
 
 
 def collect_support(
@@ -92,8 +150,8 @@ def collect_support(
                     propagation_set.add(ancestor)
 
         for term_id in seen_direct:
-            table.direct[term_id] = table.direct.get(term_id, 0) + 1
+            table.direct_chunk_ids.setdefault(term_id, set()).add(chunk.chunk_id)
         for term_id in propagation_set:
-            table.with_descendants[term_id] = table.with_descendants.get(term_id, 0) + 1
+            table.with_descendants_chunk_ids.setdefault(term_id, set()).add(chunk.chunk_id)
 
     return table
