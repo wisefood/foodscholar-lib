@@ -20,6 +20,11 @@ from foodscholar.io.chunk import Chunk, SectionType, SourceType
 
 REQUIRED_COLUMNS = {"chunk_id", "chunk_text", "type", "chunk_metadata"}
 
+# Allow up to 10MB per CSV field. Large abstracts and full-document
+# chunks routinely exceed the stdlib default and would otherwise raise
+# `_csv.Error: field larger than field limit`.
+csv.field_size_limit(10 * 1024 * 1024)
+
 
 def iter_csv_chunks(path: str | Path, *, strict: bool = True) -> Iterator[Chunk]:
     """Yield normalized `Chunk` objects from one legacy corpus CSV file."""

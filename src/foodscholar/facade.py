@@ -1,15 +1,22 @@
 """The `FoodScholar` facade — single entry point for the entire library.
 
-Most users should not construct stores, embedders, or phase modules by hand:
+Three equivalent ways to construct, all release-ready:
 
-    from foodscholar import FoodScholar
+    # Pure in-code config — no YAML on disk.
+    fs = FoodScholar.from_config({
+        "corpus": {"chunks_path": "data/chunks.csv"},
+        "ontology": {"foodon_path": "data/foodon.owl"},
+        "storage": {"chunk_store": {"backend": "memory"},
+                    "graph_store": {"backend": "memory"}},
+    })
 
+    # YAML file.
     fs = FoodScholar.from_config("config.yaml")
-    fs.load_chunks("data/chunks.parquet")
-    fs.build()
-    answer = fs.query("Is olive oil heart-healthy?")
 
-For notebooks and tests, the zero-config form skips backends entirely:
+    # An already-validated config object.
+    fs = FoodScholar.from_config(FoodScholarConfig(...))
+
+For notebooks and tests the zero-config form skips backends entirely:
 
     fs = FoodScholar.in_memory()
 
@@ -19,10 +26,10 @@ The facade owns the wiring; phase modules stay pure (no I/O, no global state).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from foodscholar import __version__
-from foodscholar.config import FoodScholarConfig, load_config
+from foodscholar.config import FoodScholarConfig, resolve_config
 from foodscholar.graph_view import GraphView
 from foodscholar.logging import configure_logging, get_logger
 from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
@@ -42,6 +49,8 @@ if TYPE_CHECKING:
     from foodscholar.ontology import FoodOnAPI
     from foodscholar.retrieval import Answer
 
+ConfigSource = str | Path | dict[str, Any] | FoodScholarConfig
+
 _DEFERRED_TEMPLATE = (
     "phase '{phase}' is not implemented yet in foodscholar v{version}. "
     "See BRIEF.md §12 for the implementation order."
@@ -53,10 +62,7 @@ def _deferred(phase: str) -> NotImplementedError:
 
 
 class _MockEmbedder:
-    """Deterministic toy embedder for the in-memory facade.
-
-    Mirrors the test-suite MockEmbedder so notebooks behave like the unit tests.
-    """
+    """Deterministic toy embedder for the in-memory facade."""
 
     model_id = "mock-embedder-v0"
 
@@ -80,9 +86,10 @@ class _MockEmbedder:
 class _MockLLM:
     """Built-in mock LLM for `in_memory()` and offline use.
 
-    `generate_json` returns an empty object — enough to satisfy the protocol
-    and let pipelines run without an LLM, but it produces no real annotations.
-    Tests that exercise agentic behavior inject their own scripted client.
+    Only used for Layer C card generation now that NER is GLiNER and the
+    linker is purely dense. Returns an empty JSON object — enough to satisfy
+    the protocol and let pipelines run without an LLM, but it produces no
+    real card text. Tests that exercise LLM behavior inject their own client.
     """
 
     model_id = "mock-llm-v0"
@@ -97,28 +104,24 @@ class _MockLLM:
 
 
 class FoodScholar:
-    """User-facing facade for the library.
-
-    Holds the four pluggable backends (`chunk_store`, `graph_store`, `embedder`,
-    `llm`) plus the validated config. Every public method is also exposed via
-    the `foodscholar` CLI so the two surfaces stay in lockstep.
-    """
+    """User-facing facade for the library."""
 
     def __init__(
         self,
-        config: FoodScholarConfig,
+        config: ConfigSource,
         *,
         chunk_store: ChunkStore,
         graph_store: GraphStore,
         embedder: Embedder | None = None,
         llm: LLMClient | None = None,
     ) -> None:
-        self.config = config
+        cfg = resolve_config(config)
+        self.config = cfg
         self.chunk_store = chunk_store
         self.graph_store = graph_store
         self.embedder: Embedder = embedder or _MockEmbedder()
         self.llm: LLMClient = llm or _MockLLM()
-        self.config_hash = config_hash(config)
+        self.config_hash = config_hash(cfg)
         self.graph = GraphView(chunk_store, graph_store)
         self._ontology: FoodOnAPI | None = None
         self._ner: NER | None = None
@@ -131,20 +134,19 @@ class FoodScholar:
     def in_memory(
         cls,
         *,
-        config: FoodScholarConfig | None = None,
+        config: ConfigSource | None = None,
         embedder: Embedder | None = None,
         llm: LLMClient | None = None,
     ) -> FoodScholar:
         """Zero-config facade backed by `InMemoryChunkStore` + `InMemoryGraphStore`.
 
-        Intended for notebooks, tests, and quick experiments. Pass a `config` to
-        override defaults; otherwise a minimal in-memory config is used.
+        Intended for notebooks, tests, and quick experiments. Pass a `config`
+        (dict, YAML path, or `FoodScholarConfig`) to override defaults.
         """
         configure_logging()
-        if config is None:
-            config = _minimal_memory_config()
+        cfg = resolve_config(config) if config is not None else _minimal_memory_config()
         return cls(
-            config=config,
+            config=cfg,
             chunk_store=InMemoryChunkStore(),
             graph_store=InMemoryGraphStore(),
             embedder=embedder,
@@ -154,19 +156,18 @@ class FoodScholar:
     @classmethod
     def from_config(
         cls,
-        config: str | Path | FoodScholarConfig,
+        config: ConfigSource,
         *,
         embedder: Embedder | None = None,
         llm: LLMClient | None = None,
     ) -> FoodScholar:
-        """Construct from a YAML path or an already-validated config object.
+        """Construct from a YAML path, a Python dict, or a validated config.
 
-        Constructs whichever stores the config declares. `memory` works today;
-        `elastic` and `neo4j` raise `NotImplementedError` until those adapters
-        land.
+        Builds whichever stores the config declares. `memory` works today;
+        `elastic` and `neo4j` adapters lift the same constructor.
         """
         configure_logging()
-        cfg = config if isinstance(config, FoodScholarConfig) else load_config(config)
+        cfg = resolve_config(config)
 
         chunk_backend = cfg.storage.chunk_store.backend
         if chunk_backend == "memory":
@@ -174,9 +175,13 @@ class FoodScholar:
         elif chunk_backend == "elastic":
             from foodscholar.storage.elastic import ElasticChunkStore
 
+            cs = cfg.storage.chunk_store
             chunk_store = ElasticChunkStore(
-                url=cfg.storage.chunk_store.url or "",
-                index=cfg.storage.chunk_store.index or "",
+                url=cs.url or "http://localhost:9200",
+                index=cs.index or "foodscholar_chunks",
+                api_key=cs.api_key,
+                username=cs.username,
+                password=cs.password,
             )
         else:
             raise ValueError(f"unknown chunk_store backend: {chunk_backend}")
@@ -187,16 +192,15 @@ class FoodScholar:
         elif graph_backend == "neo4j":
             from foodscholar.storage.neo4j import Neo4jGraphStore
 
+            gs = cfg.storage.graph_store
             graph_store = Neo4jGraphStore(
-                url=cfg.storage.graph_store.url or "",
-                user=cfg.storage.graph_store.user or "",
-                password=cfg.storage.graph_store.password or "",
+                url=gs.url or "bolt://localhost:7687",
+                user=gs.user or "neo4j",
+                password=gs.password,  # None → driver looks up NEO4J_PASSWORD
             )
         else:
             raise ValueError(f"unknown graph_store backend: {graph_backend}")
 
-        # Build the LLM client from cfg.llm unless the caller passed one
-        # explicitly. No cfg.llm and no override → __init__ uses the mock.
         if llm is None and cfg.llm is not None:
             from foodscholar.llm import build_llm
 
@@ -205,7 +209,7 @@ class FoodScholar:
         # Build the chunk embedder from cfg.annotate unless the caller passed
         # one. SPECTER2 for abstracts, BGE-large for textbook/guide, routed by
         # source_type (BRIEF §2/§7). Falls back to the mock — with a loud
-        # warning — if the [annotate] deps aren't installed.
+        # warning — when the [annotate] deps are missing.
         if embedder is None and chunk_backend != "memory":
             embedder = cls._build_embedder(cfg)
 
@@ -219,14 +223,6 @@ class FoodScholar:
 
     @staticmethod
     def _build_embedder(cfg: FoodScholarConfig) -> Embedder | None:
-        """Construct the source-type-routed chunk embedder, or None to mock.
-
-        SPECTER2 for abstracts, BGE-large for textbook/guide chunks, routed by
-        `source_type` (BRIEF §2/§7). Returns None (→ `__init__` uses
-        `_MockEmbedder`) when the `[annotate]` extra is missing OR the models
-        fail to load — logging a warning so a production run can't silently
-        produce a graph full of meaningless hash-vector embeddings.
-        """
         log = get_logger("foodscholar")
         try:
             from foodscholar.annotate.embedder import HFEmbedder, SourceTypeRouter
@@ -246,7 +242,6 @@ class FoodScholar:
     # ------------------------------------------------------------------ ergonomics
 
     def info(self) -> dict[str, str]:
-        """Return a small dict describing version, backends, and active models."""
         ontology = "loaded" if self._ontology else (
             "configured" if self.config.ontology else "none"
         )
@@ -259,14 +254,12 @@ class FoodScholar:
             "llm": self.llm.model_id,
             "ontology": ontology,
             "ner": self.config.annotate.ner,
+            "nel_backend": self.config.annotate.linker.nel_backend,
             "prompt_version": self.config.layer_c.prompt_version,
         }
 
     def load_chunks(self, path: str | Path) -> int:
-        """Read chunks from a parquet/jsonl path and upsert into the chunk store.
-
-        Returns the number of chunks loaded.
-        """
+        """Read chunks from a parquet/jsonl/csv path and upsert into the chunk store."""
         from foodscholar.corpus import load_chunks
 
         chunks = load_chunks(path)
@@ -278,43 +271,65 @@ class FoodScholar:
         """Upsert an explicit list of chunks (useful in tests and notebooks)."""
         self.chunk_store.upsert(chunks)
 
+    def load_and_annotate(
+        self,
+        path: str | Path,
+        *,
+        snapshot_path: str | Path | None = None,
+    ) -> ArtifactMeta | None:
+        """Single-pass: load chunks → run GLiNER+HNSW annotate → optional snapshot.
+
+        This is the release-ready entry point that mirrors the validated
+        prototype's `main()` — one call per corpus file. If a parquet snapshot
+        is configured (via `snapshot_path` here or `cfg.corpus.annotated_snapshot_path`)
+        and already exists with non-zero size, the call short-circuits and
+        returns None — matching the prototype's skip-if-output-exists idempotency.
+        """
+        from foodscholar.corpus import write_chunks_parquet
+
+        target = Path(snapshot_path) if snapshot_path is not None else (
+            self.config.corpus.annotated_snapshot_path
+        )
+        if target is not None and target.exists() and target.stat().st_size > 0:
+            self._log.info("load_and_annotate.skip_existing", snapshot=str(target))
+            return None
+
+        self.load_chunks(path)
+        meta = self.annotate()
+
+        if target is not None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            n = write_chunks_parquet(self.chunk_store.scan(), target)
+            self._log.info(
+                "load_and_annotate.snapshot_written",
+                snapshot=str(target),
+                n=n,
+            )
+        return meta
+
     # ------------------------------------------------------------------ ontology
 
     @property
     def ontology(self) -> FoodOnAPI:
-        """Lazily-loaded read-only FoodOn API.
-
-        On first access, reads `cfg.ontology.foodon_path` (cached at
-        `cfg.ontology.cache_path` if set). Raises a clear error if the config
-        has no ontology section or the file is missing.
-        """
         if self._ontology is None:
             self._ontology = self._load_ontology()
         return self._ontology
 
     def load_ontology(self, *, refresh: bool = False) -> FoodOnAPI:
-        """Eagerly load (or reload) the ontology declared in the config."""
         if refresh:
             self._ontology = None
         return self.ontology
 
     def attach_ontology(self, api: FoodOnAPI) -> None:
-        """Attach a pre-built FoodOnAPI (notebooks/tests).
-
-        Skips the loader entirely. Useful for unit tests that build an API
-        from a small in-memory term list.
-        """
         self._ontology = api
 
     # ------------------------------------------------------------------ annotate
 
     @property
     def ner(self) -> NER:
-        """Lazily-built NER, selected by `cfg.annotate.ner`.
+        """Lazily-built NER. `cfg.annotate.ner = 'gliner'` (the only choice in v0.1).
 
-        `keyword` (default) → `KeywordNER.from_ontology(fs.ontology)`;
-        `agentic` → `AgenticNER(fs.llm)`. Override with `fs.attach_ner(...)`
-        before first access to install a custom NER.
+        Override with `fs.attach_ner(...)` before first access to install a custom NER.
         """
         if self._ner is None:
             self._ner = self._build_ner()
@@ -322,10 +337,10 @@ class FoodScholar:
 
     @property
     def linker(self) -> Linker:
-        """Lazily-built linker. Default: `ThreeTierLinker(fs.ontology)`.
+        """Lazily-built linker. Default: `HNSWLinker` over `HNSWNELIndex`.
 
-        Override with `fs.attach_linker(...)` to inject a custom linker or
-        plug a dense embedder for tier 3.
+        First access builds the FoodOn term index (or loads it from the cache
+        path) — that's the expensive call; subsequent accesses are free.
         """
         if self._linker is None:
             self._linker = self._build_linker()
@@ -338,12 +353,7 @@ class FoodScholar:
         self._linker = linker
 
     def annotate(self) -> ArtifactMeta:
-        """Run NER + linking + embedding over every chunk in `chunk_store`.
-
-        Writes mentions, entity_links, foodon_ids, embedding, embedding_model,
-        and enrichment_version back onto each chunk. Returns the artifact
-        metadata so callers can persist it.
-        """
+        """Run NER + linking + embedding over every chunk in `chunk_store`."""
         from foodscholar.annotate.runner import run
 
         return run(
@@ -355,46 +365,45 @@ class FoodScholar:
         )
 
     def _build_ner(self) -> NER:
-        """Build the NER chosen by `cfg.annotate.ner`.
+        from foodscholar.annotate.gliner_ner import GLinerNER
 
-        `agentic` uses the facade's LLM (`fs.llm`); with the default mock LLM
-        it will extract nothing, so a real run needs `cfg.llm` configured.
-        """
-        if self.config.annotate.ner == "agentic":
-            from foodscholar.annotate.agent_ner import AgenticNER
-
-            return AgenticNER(self.llm)
-
-        from foodscholar.annotate.ner import KeywordNER
-
-        return KeywordNER.from_ontology(self.ontology)
+        gc = self.config.annotate.gliner
+        return GLinerNER(
+            model_id=gc.model_id,
+            threshold=gc.threshold,
+            flat_ner=gc.flat_ner,
+            labels=gc.labels,
+            batch_size=gc.batch_size,
+            max_length=gc.max_length,
+        )
 
     def _build_linker(self) -> Linker:
-        from foodscholar.annotate.linker import ThreeTierLinker
+        from foodscholar.annotate.linker import HNSWLinker
+        from foodscholar.annotate.nel_index import (
+            ElasticNELIndex,
+            HNSWNELIndex,
+            NELIndex,
+        )
 
         lc = self.config.annotate.linker
-
-        # Dense tier — built only when a dense_model is configured.
-        dense_embedder: Embedder | None = None
-        if lc.dense_model:
-            from foodscholar.annotate.embedder import SapBERTEmbedder
-
-            dense_embedder = SapBERTEmbedder(lc.dense_model)
-
-        # LLM-select tier — uses the facade's LLM, only when opted in.
-        llm_client: LLMClient | None = self.llm if lc.llm_select else None
-
-        return ThreeTierLinker(
-            self.ontology,
-            fuzzy_threshold=lc.lexical_threshold,
-            dense_threshold=lc.dense_threshold,
-            semantic_type_gate=lc.semantic_type_gate,
-            dense_embedder=dense_embedder,
-            dense_cache_path=str(lc.dense_cache_path) if lc.dense_cache_path else None,
-            llm_client=llm_client,
-            llm_select_threshold=lc.llm_select_threshold,
-            llm_candidate_k=lc.llm_candidate_k,
-        )
+        nel_index: NELIndex
+        if lc.nel_backend == "hnsw":
+            nel_index = HNSWNELIndex(
+                self.ontology,
+                encoder=lc.nel_encoder,
+                top_k=lc.nel_top_k,
+                min_sim=lc.nel_min_sim,
+                index_path=lc.nel_index_path,
+                metadata_path=lc.nel_metadata_path,
+            )
+        elif lc.nel_backend == "elastic":
+            nel_index = ElasticNELIndex(
+                url=self.config.storage.chunk_store.url or "",
+                index=lc.es_index or "",
+            )
+        else:
+            raise ValueError(f"unknown nel_backend: {lc.nel_backend}")
+        return HNSWLinker(nel_index, min_sim=lc.nel_min_sim)
 
     def _load_ontology(self) -> FoodOnAPI:
         from foodscholar.ontology import FoodOnAPI, load_ontology
@@ -402,7 +411,7 @@ class FoodScholar:
         if self.config.ontology is None:
             raise RuntimeError(
                 "no ontology section in config — set `ontology.foodon_path` "
-                "in your YAML, or call fs.attach_ontology(api) directly."
+                "in your config, or call fs.attach_ontology(api) directly."
             )
         cfg = self.config.ontology
         terms = load_ontology(
@@ -422,23 +431,22 @@ class FoodScholar:
     # ------------------------------------------------------------------ phases (stubs)
 
     def init(self) -> None:
-        """Provision backing stores declared by the config (ES index, Neo4j constraints).
+        """Provision both backing stores declared by the config.
 
-        No-op for in-memory backends.
+        Calls `chunk_store.init()` and `graph_store.init()` — both methods are
+        in the storage protocols and are no-ops for the in-memory backends, so
+        this works uniformly regardless of where the stores live.
         """
-        chunk_backend = self.config.storage.chunk_store.backend
-        graph_backend = self.config.storage.graph_store.backend
-        if chunk_backend == "memory" and graph_backend == "memory":
-            self._log.info("init.in_memory_noop", config_hash=self.config_hash)
-            return
-        self._log.warning(
-            "init.backend_not_implemented",
-            chunk_backend=chunk_backend,
-            graph_backend=graph_backend,
+        self.chunk_store.init()
+        self.graph_store.init()
+        self._log.info(
+            "init.done",
+            chunk_store=self.config.storage.chunk_store.backend,
+            graph_store=self.config.storage.graph_store.backend,
+            config_hash=self.config_hash,
         )
 
     def build_layer_a(self) -> ArtifactMeta:
-        """Build Layer A — the curated, multi-facet backbone from FoodOn."""
         from foodscholar.layer_a import build_layer_a
 
         return build_layer_a(
@@ -450,19 +458,15 @@ class FoodScholar:
         )
 
     def attach(self) -> None:
-        """Write chunk→shelf attachments and denormalize shelf_ids onto chunks."""
         raise _deferred("attach")
 
     def build_layer_b(self) -> None:
-        """Build Layer B — theme communities per shelf."""
         raise _deferred("build-layer-b")
 
     def build_layer_c(self) -> None:
-        """Build Layer C — LLM write-up cards for every shelf and theme."""
         raise _deferred("build-layer-c")
 
     def build(self) -> None:
-        """Run annotate → build-layer-a → attach → build-layer-b → build-layer-c."""
         self.annotate()
         self.build_layer_a()
         self.attach()
@@ -470,16 +474,11 @@ class FoodScholar:
         self.build_layer_c()
 
     def query(self, text: str) -> Answer:
-        """Run the retrieval pipeline (§14) against the built graph."""
         raise _deferred("query")
 
 
 def _minimal_memory_config() -> FoodScholarConfig:
-    """Smallest valid config for `FoodScholar.in_memory()`.
-
-    Inline here (not in `config.py`) so it's clear this is a facade convenience,
-    not a public config preset.
-    """
+    """Smallest valid config for `FoodScholar.in_memory()` with no args."""
     return FoodScholarConfig.model_validate(
         {
             "corpus": {"chunks_path": "data/chunks.parquet"},
