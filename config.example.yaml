@@ -92,6 +92,16 @@ layer_a:
   # umbrella-eligible" — the typical configuration. Raise above min_support
   # only if you want to spare small niche shelves from umbrella detection.
   umbrella_min_count: 25
+  # NEL-drift filter: drop EntityLinks where (mention.text.lower(),
+  # ontology_id) matches an entry. Catches polysemous surface forms the
+  # upstream NEL mis-disambiguated. Surface match is case-insensitive;
+  # ontology_id match is exact. Notebook §5d surfaces frequent drift
+  # candidates so you can add them here without re-running NEL.
+  link_blocklist:
+    # `fish` mentions in food prose almost always mean fish-as-human-food,
+    # but the upstream linker pairs them with FOODON:00002281 (fish food =
+    # aquarium feed). Verified on the audit sample.
+    - { surface: fish, ontology_id: FOODON:00002281 }
   facets: [foods, health, sustainability, dietary_patterns, allergies, nutrients]
   # Per-facet overrides. Every field is optional — None falls back to globals.
   # Foods is the densest facet; tighten its threshold and add FoodOn's

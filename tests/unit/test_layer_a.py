@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from foodscholar.config import FacetConfig, LayerAConfig
+from foodscholar.config import FacetConfig, LayerAConfig, LinkBlocklistEntry
 from foodscholar.io.chunk import Chunk, EntityLink, Mention
 from foodscholar.layer_a import build_layer_a, build_shelves, shelf_id_for_foodon
 from foodscholar.ontology import FoodOnAPI, load_ontology
@@ -589,6 +589,112 @@ def test_synthetic_root_not_injected_when_already_single_rooted() -> None:
     assert len(roots) == 1
     # No synthetic root injected.
     assert all(s.shelf_id != "facet:foods" for s in shelves)
+
+
+def _chunk_with_links_text(
+    chunk_id: str,
+    links: list[tuple[str, float, str]],
+    *,
+    surface: str,
+) -> Chunk:
+    """Build a chunk where every link's mention.text == `surface`."""
+    entity_links = [
+        EntityLink(
+            mention=Mention(
+                text=surface,
+                start=0,
+                end=len(surface),
+                score=conf,
+                ner_model_version="test",
+                entity_type=entity_type,  # type: ignore[arg-type]
+            ),
+            ontology_id=ontology_id,
+            confidence=conf,
+            method="dense",
+            linker_version="test",
+        )
+        for ontology_id, conf, entity_type in links
+    ]
+    return Chunk(
+        chunk_id=chunk_id,
+        text="fixture text",
+        source_doc_id="fixture-doc",
+        source_type="abstract",
+        section_type="abstract",
+        entity_links=entity_links,
+        # No foodon_ids denormalization — force support to come only from
+        # entity_links, so the blocklist's effect is observable.
+        foodon_ids=[],
+    )
+
+
+def test_link_blocklist_filters_propagation() -> None:
+    # Three chunks link "fish" → TEST:0000009 (the surface-form-drift case).
+    # Without blocklist: TEST:0000009 has direct=3. With blocklist matching
+    # (fish, TEST:0000009): support is zero, shelf doesn't survive.
+    store = InMemoryChunkStore()
+    store.upsert(
+        [
+            _chunk_with_links_text("c1", [("TEST:0000009", 0.9, "food")], surface="fish"),
+            _chunk_with_links_text("c2", [("TEST:0000009", 0.9, "food")], surface="fish"),
+            _chunk_with_links_text("c3", [("TEST:0000009", 0.9, "food")], surface="fish"),
+        ]
+    )
+
+    # Without blocklist: term 9 survives at min_support=1.
+    cfg_no_block = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+        link_blocklist=[],
+    )
+    shelves_no_block = build_shelves(store, _mini_foodon(), cfg_no_block)
+    by_id_no_block = {s.shelf_id: s for s in shelves_no_block}
+    assert shelf_id_for_foodon("TEST:0000009") in by_id_no_block
+
+    # With blocklist on (fish, TEST:0000009): term 9 has zero support → gone.
+    cfg_with_block = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+        link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
+    )
+    shelves_with_block = build_shelves(store, _mini_foodon(), cfg_with_block)
+    by_id_with_block = {s.shelf_id: s for s in shelves_with_block}
+    assert shelf_id_for_foodon("TEST:0000009") not in by_id_with_block
+
+
+def test_link_blocklist_surface_matching_is_case_insensitive() -> None:
+    store = InMemoryChunkStore()
+    store.upsert([
+        _chunk_with_links_text("c1", [("TEST:0000009", 0.9, "food")], surface="FISH"),
+        _chunk_with_links_text("c2", [("TEST:0000009", 0.9, "food")], surface="Fish"),
+    ])
+    cfg = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+        link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    by_id = {s.shelf_id: s for s in shelves}
+    assert shelf_id_for_foodon("TEST:0000009") not in by_id
+
+
+def test_link_blocklist_ontology_id_is_specific() -> None:
+    # Blocking (fish, peanut) must NOT affect "fish" linked to olive_oil
+    # — the blocklist is a (surface, id) PAIR, not a surface or id alone.
+    store = InMemoryChunkStore()
+    store.upsert([
+        _chunk_with_links_text("c1", [("TEST:0000008", 0.9, "food")], surface="fish"),
+        _chunk_with_links_text("c2", [("TEST:0000008", 0.9, "food")], surface="fish"),
+    ])
+    cfg = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+        link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    by_id = {s.shelf_id: s for s in shelves}
+    # Olive oil link survives — blocklist entry doesn't match its ontology_id.
+    assert shelf_id_for_foodon("TEST:0000008") in by_id
 
 
 def test_build_layer_a_clears_stale_shelves_on_rerun() -> None:

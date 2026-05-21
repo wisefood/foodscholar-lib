@@ -113,6 +113,7 @@ def _build_facet(
         ontology,
         min_link_confidence=facet_config.min_link_confidence,
         facet=facet,
+        link_blocklist=facet_config.link_blocklist,
     )
 
     if not support:
