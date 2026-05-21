@@ -207,16 +207,34 @@ fs.ontology.search("olive", limit=25)             # substring prefilter for SapB
 
 First access triggers `load_ontology(path, cache_path=...)` which uses pronto with `import_depth=0` (FoodOn only — MONDO and ChEBI deferred to v2 per §2). Results cache to a Parquet file alongside the source, keyed on `(source_size, source_mtime)` so the cache invalidates when FoodOn is updated. Tests bypass the loader with `fs.attach_ontology(api)`.
 
-### Annotate (`fs.ner` / `fs.linker` / `fs.annotate()` / `fs.load_and_annotate(path)`)
+### Annotate (`fs.ingest` / `fs.ner` / `fs.linker` / `fs.annotate()` / `fs.load_and_annotate(path)`)
 
-The annotate phase is owned by three pluggable pieces, each with a default that works against the in-memory facade:
+The single recommended entry point for end users is `fs.ingest(corpus_dir, nel_dir=...)`:
+
+```python
+# Pre-computed NER/NEL on disk (skips GLiNER + HNSW; fast):
+fs.ingest("data/foodscholar/corpus", nel_dir="data/foodscholar/ner")
+
+# No pre-computed annotations — runs GLiNER + HNSW end-to-end:
+fs.ingest("data/foodscholar/corpus")
+```
+
+`fs.ingest` reads every CSV / parquet / JSONL chunk file in the directory,
+attaches annotations (from the supplied `nel_dir` CSVs in the prototype's
+`(chunk_id, chunk_entities_ner, chunk_uri_nel)` shape, or via GLiNER + HNSW
+when the directory is omitted), embeds each chunk via the source-type router,
+and upserts everything to the configured `chunk_store`. A parquet snapshot
+lands at `cfg.corpus.annotated_snapshot_path` when set; an existing
+non-empty snapshot short-circuits the whole call.
+
+The phase pieces remain inspectable for tests and debugging:
 
 ```python
 fs.ner.extract("Mediterranean diet rich in olive oil.")  # list[Mention]
 fs.linker.link(mention)                                  # EntityLink | None
 fs.linker.dry_run("evo")                                 # convenience: text -> EntityLink
 fs.annotate()                                            # full phase over the store
-fs.load_and_annotate("data/chunks.csv")                  # load → annotate → snapshot, one call
+fs.load_and_annotate("data/chunks.csv")                  # load → annotate → snapshot
 ```
 
 Defaults:

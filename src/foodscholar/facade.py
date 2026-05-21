@@ -307,6 +307,123 @@ class FoodScholar:
             )
         return meta
 
+    def ingest(
+        self,
+        corpus_dir: str | Path,
+        *,
+        nel_dir: str | Path | None = None,
+        snapshot_path: str | Path | None = None,
+    ) -> ArtifactMeta | None:
+        """End-to-end ingest: corpus → annotations → embeddings → store.
+
+        One call covers the entire pipeline. Two modes:
+
+        - ``nel_dir`` **supplied** → annotations come from pre-computed
+          `(chunk_id, chunk_entities_ner, chunk_uri_nel)` CSVs (the prototype's
+          output shape). Chunks are loaded from ``corpus_dir``, annotations
+          attached by `chunk_id`, embeddings computed via `fs.embedder`, and
+          everything upserted to `fs.chunk_store`. **No GLiNER, no HNSW** — fast,
+          deterministic, no `[annotate]` extras required beyond the embedder.
+
+        - ``nel_dir`` **omitted** → falls back to `load_and_annotate(corpus_dir)`
+          which runs GLiNER + HNSW from scratch.
+
+        ``snapshot_path`` (or `cfg.corpus.annotated_snapshot_path`) writes a
+        parquet snapshot of the annotated chunks after ingest. If the snapshot
+        already exists and is non-empty the whole call short-circuits — the
+        same idempotency guarantee as `load_and_annotate`.
+        """
+        from foodscholar.corpus import (
+            iter_chunks,
+            load_nel_dir,
+            write_chunks_parquet,
+        )
+
+        target = Path(snapshot_path) if snapshot_path is not None else (
+            self.config.corpus.annotated_snapshot_path
+        )
+        if target is not None and target.exists() and target.stat().st_size > 0:
+            self._log.info("ingest.skip_existing", snapshot=str(target))
+            return None
+
+        if nel_dir is None:
+            return self.load_and_annotate(corpus_dir, snapshot_path=snapshot_path)
+
+        nel_map = load_nel_dir(nel_dir)
+
+        # Stream chunks, attach annotations, embed, upsert in batches.
+        from foodscholar.annotate.embedder import SourceTypeRouter
+        from foodscholar.annotate.runner import ENRICHMENT_VERSION
+        from foodscholar.versioning import make_artifact_meta
+
+        router = self.embedder if isinstance(self.embedder, SourceTypeRouter) else None
+        batch_size = max(1, self.config.annotate.batch_size)
+        batch: list = []
+        n_chunks = 0
+        n_links = 0
+        n_attached = 0
+
+        def _flush(batch: list) -> None:
+            nonlocal n_chunks, n_links, n_attached
+            if not batch:
+                return
+            enriched = []
+            for chunk in batch:
+                ann = nel_map.get(chunk.chunk_id)
+                if ann is None:
+                    mentions, links, foodon_ids = [], [], []
+                else:
+                    mentions, links, foodon_ids = ann
+                    n_attached += 1
+                if router is not None:
+                    vec, model_id = router.embed_chunk(chunk.text, chunk.source_type)
+                else:
+                    [vec] = self.embedder.embed([chunk.text])
+                    model_id = self.embedder.model_id
+                enriched.append(
+                    chunk.model_copy(
+                        update={
+                            "mentions": mentions,
+                            "entity_links": links,
+                            "foodon_ids": foodon_ids,
+                            "embedding": vec,
+                            "embedding_model": model_id,
+                            "enrichment_version": ENRICHMENT_VERSION,
+                        }
+                    )
+                )
+                n_links += len(links)
+            self.chunk_store.upsert(enriched)
+            n_chunks += len(enriched)
+
+        for chunk in iter_chunks(corpus_dir):
+            batch.append(chunk)
+            if len(batch) >= batch_size:
+                _flush(batch)
+                batch = []
+        _flush(batch)
+
+        meta = make_artifact_meta(
+            phase="ingest",
+            config=self.config,
+            record_count=n_chunks,
+        )
+        self._log.info(
+            "ingest.done",
+            n_chunks=n_chunks,
+            n_attached=n_attached,
+            n_links=n_links,
+            artifact_id=meta.artifact_id,
+            config_hash=meta.config_hash,
+        )
+
+        if target is not None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            n = write_chunks_parquet(self.chunk_store.scan(), target)
+            self._log.info("ingest.snapshot_written", snapshot=str(target), n=n)
+
+        return meta
+
     # ------------------------------------------------------------------ ontology
 
     @property
