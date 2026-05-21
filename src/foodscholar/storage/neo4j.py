@@ -356,23 +356,46 @@ class Neo4jGraphStore:
         shelf_id: ShelfId,
         attachments: list[tuple[ChunkId, list[str]]],
     ) -> None:
+        """Wire `(:Chunk)-[r:ATTACHED_TO]->(:Shelf)` edges with `lifted_from`.
+
+        Dedupes attachments by chunk_id before sending — Neo4j's MERGE on
+        relationships would collapse duplicates anyway, but having the same
+        chunk_id twice in `$rows` makes our row count diverge from the
+        actual edge count and breaks any "rows sent == edges created"
+        invariant the caller depends on. Last-write-wins on `lifted_from`
+        if a chunk_id appears twice (shouldn't happen in correct usage but
+        is harmless when it does).
+        """
         if not attachments:
             return
+        # Dedupe by chunk_id, preserving the last seen lifted_from. dict
+        # ordering preserves insertion order so the iteration is deterministic.
+        deduped: dict[ChunkId, list[str]] = {}
+        for cid, lifted_from in attachments:
+            deduped[cid] = list(lifted_from)
         rows = [
-            {"chunk_id": cid, "lifted_from": list(lifted_from)}
-            for cid, lifted_from in attachments
+            {"chunk_id": cid, "lifted_from": lf}
+            for cid, lf in deduped.items()
         ]
+        if not rows:
+            return
+        # `execute_write` uses a managed transaction with automatic retry on
+        # transient errors (deadlocks, leader elections). `session.run` in
+        # auto-commit mode silently swallows TransientError retries on some
+        # driver/server combinations — leading to lost writes that surface as
+        # missing edges after a parallel attach. The managed-tx path is the
+        # documented correct pattern for concurrent MERGE on unique-constraint
+        # nodes (chunk_id), and it's the same cost as the implicit form.
+        cypher = (
+            "MATCH (s:Shelf {shelf_id: $shelf_id}) "
+            "UNWIND $rows AS row "
+            "MERGE (c:Chunk {chunk_id: row.chunk_id}) "
+            "MERGE (c)-[r:ATTACHED_TO]->(s) "
+            "SET r.lifted_from = row.lifted_from"
+        )
         with self._driver.session() as session:
-            session.run(
-                """
-                MATCH (s:Shelf {shelf_id: $shelf_id})
-                UNWIND $rows AS row
-                MERGE (c:Chunk {chunk_id: row.chunk_id})
-                MERGE (c)-[r:ATTACHED_TO]->(s)
-                SET r.lifted_from = row.lifted_from
-                """,
-                shelf_id=shelf_id,
-                rows=rows,
+            session.execute_write(
+                lambda tx: tx.run(cypher, shelf_id=shelf_id, rows=rows).consume()
             )
 
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None:

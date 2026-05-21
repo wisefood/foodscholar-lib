@@ -233,7 +233,7 @@ def attach(
     *,
     full_config: FoodScholarConfig,
     batch_size: int = 1000,
-    max_workers: int = 2,
+    max_workers: int = 1,
 ) -> ArtifactMeta:
     """Write `(:Chunk)-[:ATTACHED_TO {lifted_from}]->(:Shelf)` edges + denorm
     `shelf_ids` onto every chunk that reaches at least one shelf.
@@ -258,12 +258,19 @@ def attach(
     shelves = graph_store.list_shelves()
     index = ShelfIndex.from_shelves(shelves)
 
-    # Per-shelf edge buffer: shelf_id -> list[(chunk_id, lifted_from)]
-    pending_edges: dict[ShelfId, list[tuple[ChunkId, list[str]]]] = defaultdict(list)
-    # Per-chunk denorm buffer: list[(chunk_id, shelf_ids, theme_ids)]
-    pending_denorm: list[tuple[ChunkId, list[ShelfId], list[ThemeId]]] = []
+    # Per-shelf edge buffer: shelf_id -> {chunk_id: lifted_from}. A dict (not a
+    # list) so re-resolving the same chunk to the same shelf within a batch
+    # collapses to one edge — matters because chunks can arrive multiple times
+    # through `iter_chunks` if ES `_doc` ordering shifts across pages mid-scan
+    # under concurrent writes, and we'd otherwise inflate `n_edges` past the
+    # actual count of edges in the graph (Neo4j MERGE is idempotent so the
+    # graph state is right either way, but the audit metrics matter).
+    pending_edges: dict[ShelfId, dict[ChunkId, list[str]]] = defaultdict(dict)
+    # Per-chunk denorm buffer keyed by chunk_id, same dedupe rationale.
+    pending_denorm: dict[ChunkId, tuple[list[ShelfId], list[ThemeId]]] = {}
     pending_edge_count = 0
-    n_chunks_attached = 0
+    seen_chunks: set[ChunkId] = set()  # every chunk we examined (dedupe guard)
+    attached_chunks: set[ChunkId] = set()  # subset that actually got >=1 edge
     n_edges = 0
     shelves_with_chunks: set[ShelfId] = set()
 
@@ -272,11 +279,13 @@ def attach(
             nonlocal pending_edge_count, n_edges
             if not pending_edges and not pending_denorm:
                 return
-            # Snapshot the buffers so we can clear them before submitting —
-            # the workers run on copies and we start filling fresh buffers
-            # for the next batch immediately.
-            edges_snapshot = list(pending_edges.items())
-            denorm_snapshot = list(pending_denorm)
+            edges_snapshot = [
+                (sid, [(cid, lf) for cid, lf in d.items()])
+                for sid, d in pending_edges.items()
+            ]
+            denorm_snapshot = [
+                (cid, sids, tids) for cid, (sids, tids) in pending_denorm.items()
+            ]
             pending_edges.clear()
             pending_denorm.clear()
             pending_edge_count = 0
@@ -304,22 +313,31 @@ def attach(
 
         for batch in chunk_store.iter_chunks(batch_size=batch_size):
             for chunk in batch:
+                if chunk.chunk_id in seen_chunks:
+                    # iter_chunks can yield the same chunk twice if ES `_doc`
+                    # ordering shifts mid-scan; ignore the repeat so n_edges
+                    # stays honest. (Neo4j MERGE would dedupe anyway, but the
+                    # in-flight n_edges counter wouldn't.)
+                    continue
+                seen_chunks.add(chunk.chunk_id)
+
                 resolutions = resolve_chunk(chunk, index, ontology)
                 if not resolutions:
                     continue
 
+                attached_chunks.add(chunk.chunk_id)
                 for shelf_id, lifted_from in resolutions.items():
-                    pending_edges[shelf_id].append((chunk.chunk_id, lifted_from))
+                    pending_edges[shelf_id][chunk.chunk_id] = lifted_from
                     pending_edge_count += 1
 
                 # Authoritative shelf_ids set: layer-A is the sole writer now
                 # that clear_attachments() runs at the start, so any old
                 # shelf_ids on the chunk are stale by definition.
                 new_shelf_ids = sorted(resolutions.keys())
-                pending_denorm.append(
-                    (chunk.chunk_id, new_shelf_ids, list(chunk.theme_ids))
+                pending_denorm[chunk.chunk_id] = (
+                    new_shelf_ids,
+                    list(chunk.theme_ids),
                 )
-                n_chunks_attached += 1
 
                 if pending_edge_count >= batch_size:
                     flush()
@@ -333,7 +351,8 @@ def attach(
     )
     _log.info(
         "attach.done",
-        n_chunks_attached=n_chunks_attached,
+        n_chunks_attached=len(attached_chunks),
+        n_chunks_examined=len(seen_chunks),
         n_edges=n_edges,
         n_shelves_with_chunks=len(shelves_with_chunks),
         artifact_id=meta.artifact_id,

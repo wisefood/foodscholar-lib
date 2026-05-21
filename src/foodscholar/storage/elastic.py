@@ -220,6 +220,21 @@ class ElasticChunkStore:
         — pass on the last flush so subsequent BM25/kNN queries see them.
         Intermediate flushes pass `wait_for_refresh=False` and amortize the
         index refresh.
+
+        Errors handling: when `bulk(..., raise_on_error=False)` returns a
+        non-empty errors list we surface a deterministic exception. The
+        prior implementation discarded both `success_count` and `errors`,
+        which silently lost up to ~57% of writes in production: a
+        `clear_attachments` call (which uses `update_by_query` and bumps
+        every doc's `_version`) was followed by these bulk updates while
+        the cluster was still settling the version state, and many actions
+        returned `version_conflict_engine_exception`. Without checking the
+        result we never knew.
+
+        `retry_on_conflict=5` tells ES to internally retry version
+        conflicts a few times before giving up. Combined with the explicit
+        error check this protects against transient concurrent-update
+        races without masking real failures.
         """
         if not items:
             return
@@ -230,6 +245,7 @@ class ElasticChunkStore:
                 "_op_type": "update",
                 "_index": self.index,
                 "_id": chunk_id,
+                "retry_on_conflict": 5,
                 "doc": {
                     "shelf_ids": list(shelf_ids),
                     "theme_ids": list(theme_ids),
@@ -237,7 +253,32 @@ class ElasticChunkStore:
             }
             for chunk_id, shelf_ids, theme_ids in items
         ]
-        bulk(self._es, actions, refresh="wait_for" if wait_for_refresh else False)
+        success, errors = bulk(
+            self._es,
+            actions,
+            refresh="wait_for" if wait_for_refresh else False,
+            raise_on_error=False,
+            raise_on_exception=False,
+            stats_only=False,
+        )
+        if errors:
+            # Truncate the surfaced error list to keep the exception
+            # readable; full error details are loggable for debugging.
+            sample = errors[:5]
+            n_failed = len(errors)
+            _log.error(
+                "elastic.bulk_update_attachments.partial_failure",
+                index=self.index,
+                attempted=len(actions),
+                succeeded=success,
+                failed=n_failed,
+                first_errors=sample,
+            )
+            raise RuntimeError(
+                f"bulk_update_attachments lost {n_failed}/{len(actions)} writes "
+                f"on index {self.index!r} (succeeded={success}). "
+                f"First failures: {sample}"
+            )
 
     def clear_attachments(self) -> None:
         """Wipe `shelf_ids` + `theme_ids` on every chunk in the index.
@@ -398,18 +439,29 @@ class ElasticChunkStore:
     # ------------------------------------------------------------------ private
 
     def _iter_all(self, *, page: int = _SCAN_PAGE) -> Iterator[Chunk]:
-        """Stream every chunk via search_after.
+        """Stream every chunk via `search_after`.
 
-        Sort key is `_doc` (native index order) — fastest for full scans and
-        avoids fielddata errors when the index mapping was auto-inferred
-        (text fields aren't sortable without keyword subfields).
+        Sort key is `chunk_id` (keyword) — totally ordered, stable across
+        requests, mappable to a unique-per-document value. We previously used
+        `_doc` because it's the fastest sort to compute, but `_doc` is NOT
+        stable across multiple search calls: ES makes no guarantee about
+        monotonicity of `_doc` across segments or after a segment merge.
+        That broke `search_after` paging when `attach()` ran right after
+        `clear_attachments()` — the `update_by_query` triggered segment churn,
+        and the very next paginated scan terminated after 3 pages with the
+        cursor pointing at a now-invalid `_doc`, silently dropping ~75% of
+        the corpus.
+
+        `chunk_id` is a `keyword` with no field-data issues; it's also the
+        index's `_id`, so sorting by it is essentially an index lookup. Tiny
+        speed hit vs `_doc`; correctness is non-negotiable.
         """
         after: list[Any] | None = None
         while True:
             body: dict[str, Any] = {
                 "size": page,
                 "query": {"match_all": {}},
-                "sort": ["_doc"],
+                "sort": [{"chunk_id": "asc"}],
             }
             if after is not None:
                 body["search_after"] = after

@@ -541,3 +541,64 @@ def test_attach_handles_per_facet_overrides_without_crashing() -> None:
 
     meta = attach(chunk_store, graph_store, ontology, full_config=full_cfg)
     assert meta.record_count > 0
+
+
+def test_attach_record_count_matches_actual_edges() -> None:
+    """The honest version of the bug we hit on the live corpus: meta.record_count
+    must equal the actual count of (chunk_id, shelf_id) pairs in the graph, not
+    the number of (chunk_id, shelf_id) tuples we *submitted* (the latter can be
+    inflated by iter_chunks yielding the same chunk twice or by duplicate
+    resolutions across batches). The dict-backed pending_edges buffer + the
+    seen_chunks dedupe guarantee this invariant."""
+    chunk_store, graph_store, ontology = _build_corpus_and_layer_a()
+    meta = attach(chunk_store, graph_store, ontology, full_config=_full_config())
+
+    actual_edges = sum(
+        len(bucket) for bucket in graph_store._shelf_chunks.values()
+    )
+    assert meta.record_count == actual_edges, (
+        f"record_count ({meta.record_count}) != actual edges in store ({actual_edges}) "
+        "— the dedupe invariant broke"
+    )
+
+
+def test_attach_dedupes_chunk_yielded_twice_by_iter_chunks() -> None:
+    """Defensive: if iter_chunks yields the same chunk twice (which ES `_doc`
+    sort can do under concurrent writes mid-scan), attach() must still write
+    each (chunk, shelf) edge exactly once and report n_edges correctly."""
+
+    class _DoubleYieldStore(InMemoryChunkStore):
+        def iter_chunks(self, batch_size: int = 1000):
+            # Yield every chunk twice across two batches — simulating the
+            # ES search_after duplicate that motivated the dedupe.
+            chunks = list(self._chunks.values())
+            yield chunks
+            yield chunks  # same chunks again
+
+    chunk_store = _DoubleYieldStore()
+    chunk_store.upsert(
+        [_chunk_with_links("c1", foodon_ids=["TEST:0000008"])]
+    )
+    ontology = _mini_foodon()
+    graph_store = InMemoryGraphStore()
+    cfg = LayerAConfig(
+        min_support=1,
+        max_depth=5,
+        collapse_single_child_chains=False,
+        facets=["foods"],
+        umbrella_direct_share_max=0.0,
+    )
+    full_cfg = _full_config(cfg)
+    build_layer_a(chunk_store, graph_store, ontology, config=cfg, full_config=full_cfg)
+
+    meta = attach(chunk_store, graph_store, ontology, full_config=full_cfg)
+
+    actual_edges = sum(
+        len(bucket) for bucket in graph_store._shelf_chunks.values()
+    )
+    # c1 has one foodon_id resolving to one shelf -> exactly 1 edge,
+    # despite c1 being yielded by iter_chunks twice.
+    assert actual_edges == 1, f"expected 1 deduped edge, got {actual_edges}"
+    assert meta.record_count == 1, (
+        f"meta.record_count ({meta.record_count}) inflated past actual edges"
+    )
