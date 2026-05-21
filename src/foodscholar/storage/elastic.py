@@ -40,9 +40,10 @@ from foodscholar.logging import get_logger
 
 _log = get_logger("foodscholar.storage.elastic")
 
-# Page size for bulk upserts and scan iteration. Conservative — ES `_bulk`
-# becomes slower at very large payloads.
-_BULK_PAGE = 500
+# Default page size for bulk upserts when the constructor is invoked without
+# a `bulk_size=` override. Conservative default — ES `_bulk` slows down on
+# very large payloads but 500 is well within the safe envelope.
+_DEFAULT_BULK_SIZE = 500
 _SCAN_PAGE = 500
 
 
@@ -62,9 +63,13 @@ class ElasticChunkStore:
         api_key: str | None = None,
         username: str | None = None,
         password: str | None = None,
+        bulk_size: int = _DEFAULT_BULK_SIZE,
     ) -> None:
         if not url or not index:
             raise ValueError("ElasticChunkStore needs both `url` and `index`")
+        if bulk_size <= 0:
+            raise ValueError(f"bulk_size must be positive, got {bulk_size}")
+        self._bulk_size = bulk_size
         try:
             from elasticsearch import Elasticsearch  # type: ignore[import-not-found]
         except ImportError as e:
@@ -184,7 +189,7 @@ class ElasticChunkStore:
                     "_source": _chunk_to_doc(chunk),
                 }
             )
-            if len(actions) >= _BULK_PAGE:
+            if len(actions) >= self._bulk_size:
                 bulk(self._es, actions, refresh=False)
                 actions = []
         if actions:
