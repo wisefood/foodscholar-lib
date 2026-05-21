@@ -106,6 +106,20 @@ class Neo4jGraphStore:
             session.run("MATCH (s:Shelf) DETACH DELETE s")
         _log.info("neo4j.layer_a_cleared", url=self.url)
 
+    def clear_attachments(self) -> None:
+        """Drop every `(:Chunk)-[r:ATTACHED_TO]->(:Shelf)` edge.
+
+        Chunk and Shelf nodes survive; theme attachments (whose target is
+        `(:Theme)`) are untouched. `fs.attach()` calls this so a re-run
+        produces a clean projection without ghost edges from a previous
+        config.
+        """
+        with self._driver.session() as session:
+            session.run(
+                "MATCH (:Chunk)-[r:ATTACHED_TO]->(:Shelf) DELETE r"
+            )
+        _log.info("neo4j.attachments_cleared", url=self.url)
+
     def upsert_shelves(self, shelves: list[Shelf]) -> None:
         if not shelves:
             return
@@ -337,19 +351,28 @@ class Neo4jGraphStore:
 
     # ------------------------------------------------------------------ attachments
 
-    def attach_chunks_to_shelf(self, shelf_id: ShelfId, chunk_ids: list[ChunkId]) -> None:
-        if not chunk_ids:
+    def attach_chunks_to_shelf(
+        self,
+        shelf_id: ShelfId,
+        attachments: list[tuple[ChunkId, list[str]]],
+    ) -> None:
+        if not attachments:
             return
+        rows = [
+            {"chunk_id": cid, "lifted_from": list(lifted_from)}
+            for cid, lifted_from in attachments
+        ]
         with self._driver.session() as session:
             session.run(
                 """
                 MATCH (s:Shelf {shelf_id: $shelf_id})
-                UNWIND $chunk_ids AS cid
-                MERGE (c:Chunk {chunk_id: cid})
-                MERGE (c)-[:ATTACHED_TO]->(s)
+                UNWIND $rows AS row
+                MERGE (c:Chunk {chunk_id: row.chunk_id})
+                MERGE (c)-[r:ATTACHED_TO]->(s)
+                SET r.lifted_from = row.lifted_from
                 """,
                 shelf_id=shelf_id,
-                chunk_ids=chunk_ids,
+                rows=rows,
             )
 
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None:

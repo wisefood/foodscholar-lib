@@ -352,7 +352,12 @@ class GraphView:
             raise ValueError("attach_chunks takes either `shelf=` or `theme=`, not both")
 
         if shelf is not None:
-            self._graph.attach_chunks_to_shelf(shelf, chunks)
+            # Manual attachments via `fs.graph` carry no projection provenance —
+            # the build phase (`fs.attach()`) is what fills `lifted_from`. Pass
+            # empty lifted_from per edge so the protocol shape is honored.
+            self._graph.attach_chunks_to_shelf(
+                shelf, [(cid, []) for cid in chunks]
+            )
         else:
             assert theme is not None
             self._graph.attach_chunks_to_theme(theme, chunks)

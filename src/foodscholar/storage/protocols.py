@@ -35,6 +35,32 @@ class ChunkStore(Protocol):
         shelf_ids: list[ShelfId],
         theme_ids: list[ThemeId],
     ) -> None: ...
+    def bulk_update_attachments(
+        self,
+        items: list[tuple[ChunkId, list[ShelfId], list[ThemeId]]],
+        *,
+        wait_for_refresh: bool = False,
+    ) -> None:
+        """Patch `shelf_ids` + `theme_ids` on many chunks in one round-trip.
+
+        Used by `fs.attach()` so the chunk-side denormalization doesn't pay
+        one ES `_update` per chunk. `wait_for_refresh=True` blocks until the
+        new values are searchable — set on the last flush only so subsequent
+        queries in the same cell see the result. Remote backends collapse to
+        a single bulk call per invocation; in-memory loops.
+        """
+        ...
+    def clear_attachments(self) -> None:
+        """Reset all chunk-side shelf/theme denormalization.
+
+        `fs.attach()` calls this at the start so a re-run produces honest
+        `shelf_ids` even when the projection changed (a chunk that previously
+        attached to a now-pruned shelf no longer carries its id). Theme
+        attachments are wiped too — they're written by Layer B, which always
+        rebuilds them. Per-chunk content (text, mentions, entity_links,
+        embedding) is untouched.
+        """
+        ...
     def update_annotations(
         self,
         chunk_id: ChunkId,
@@ -83,7 +109,34 @@ class GraphStore(Protocol):
 
     def upsert_themes(self, themes: list[Theme]) -> None: ...
     def upsert_cards(self, cards: list[Card]) -> None: ...
-    def attach_chunks_to_shelf(self, shelf_id: ShelfId, chunk_ids: list[ChunkId]) -> None: ...
+    def clear_attachments(self) -> None:
+        """Delete every `(:Chunk)-[:ATTACHED_TO]->(:Shelf)` edge.
+
+        Called at the start of `fs.attach()` so a re-run doesn't leave ghost
+        edges from a previous projection. `(:Shelf)` nodes themselves
+        survive (they're the output of `build_layer_a`, not of attach), as
+        do `(:Chunk)` stub nodes and any `:ATTACHED_TO` edges pointing at
+        `(:Theme)` (those belong to Layer B). Idempotent.
+        """
+        ...
+
+    def attach_chunks_to_shelf(
+        self,
+        shelf_id: ShelfId,
+        attachments: list[tuple[ChunkId, list[str]]],
+    ) -> None:
+        """Wire `(:Chunk)-[:ATTACHED_TO {lifted_from}]->(:Shelf)` edges.
+
+        Each tuple is `(chunk_id, lifted_from)`. `lifted_from` lists the
+        FOODON ids on the chunk whose ancestry/collapse resolved to this
+        shelf — empty when the chunk linked the shelf's own `foodon_id`
+        directly. Used by the attach phase to record projection provenance
+        on every edge so audits can answer "why is this chunk on this
+        shelf?" without re-running the resolver. Idempotent — re-running
+        with the same shelf+chunk pair overwrites `lifted_from`.
+        """
+        ...
+
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None: ...
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None: ...
     def get_themes_for_shelf(self, shelf_id: ShelfId) -> list[Theme]: ...
