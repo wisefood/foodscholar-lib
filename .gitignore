@@ -9,6 +9,8 @@ data/
 .vscode/
 *.local.yaml
 
+pytest-of-dpetrou/
+
 # Distribution / packaging
 .Python
 build/
