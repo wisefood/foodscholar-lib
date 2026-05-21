@@ -43,6 +43,13 @@ def route_link_to_facet(link: EntityLink) -> Facet | None:
     Returns None when no mapping exists. Foods is special: any FOODON ontology
     id also routes to foods regardless of entity_type, so the prototype's
     `entity_type='other'` mentions with FoodOn ids still populate foods.
+
+    Why no prefix-based fallback for non-FOODON links: a sample of the
+    prototype NEL output showed the upstream linker mis-assigns across OBOs
+    (e.g. "heart disease" → UBERON instead of MONDO, "dairy products" → ENVO
+    instead of FOODON, "breakfast" → NCIT instead of ONS). Routing by prefix
+    would inherit that noise. The clean fix is re-annotation with GLiNER,
+    which populates entity_type correctly — see BRIEF §15 (MONDO/CHEBI v2).
     """
     facet = facet_for_entity_type(link.mention.entity_type)
     if facet is not None:
