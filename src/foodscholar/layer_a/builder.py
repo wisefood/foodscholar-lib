@@ -121,7 +121,67 @@ def _build_facet(
     shelves = prune(support, ontology, facet_config, facet)
     if not shelves:
         return [stub_root(facet)]
-    return shelves
+    return _ensure_single_root(shelves, facet)
+
+
+def _ensure_single_root(shelves: list[Shelf], facet: Facet) -> list[Shelf]:
+    """Guarantee one entry point per facet.
+
+    Layer A often produces a forest — terms whose FoodOn ancestry doesn't
+    intersect with any surviving ancestor become depth-0 orphans. Users
+    navigate by facet, not by ontology branch, so a forest is a worse UX than
+    a single tree. Inject a synthetic facet root and re-parent every current
+    root (parent_shelf_id=None) under it. After this:
+      - depth 0 = 1 shelf (the facet root)
+      - depth 1 = the former roots
+      - depth 2+ = everything else, shifted down by 1
+    Re-rooted shelves keep their previous depth + 1 (clamped to a sane max).
+    """
+    roots = [s for s in shelves if s.parent_shelf_id is None]
+    if len(roots) <= 1:
+        # Already single-rooted (or empty) — no synthetic root needed.
+        return shelves
+
+    # Build the facet root. Its chunk_count is the sum of root chunks (note:
+    # subtree-summing would double-count via lifting; root-summing is the
+    # honest "total chunks reachable through this facet" without overcount).
+    total_count = sum(s.chunk_count for s in roots)
+    total_direct = sum(s.support_direct for s in roots)
+    total_lifted = sum(s.support_lifted for s in roots)
+    root_shelf = Shelf(
+        shelf_id=f"facet:{facet}",
+        label=_FACET_ROOT_LABELS[facet],
+        facet=facet,
+        depth=0,
+        foodon_id=None,
+        parent_shelf_id=None,
+        chunk_count=total_count,
+        support_direct=total_direct,
+        support_lifted=total_lifted,
+        see_also=[],
+    )
+
+    # Re-parent every former root + shift every shelf's depth by 1.
+    rerooted: list[Shelf] = [root_shelf]
+    for s in shelves:
+        new_parent = root_shelf.shelf_id if s.parent_shelf_id is None else s.parent_shelf_id
+        rerooted.append(
+            s.model_copy(update={
+                "parent_shelf_id": new_parent,
+                "depth": s.depth + 1,
+            })
+        )
+    return rerooted
+
+
+_FACET_ROOT_LABELS: dict[Facet, str] = {
+    "foods": "Foods",
+    "health": "Health",
+    "sustainability": "Sustainability",
+    "dietary_patterns": "Dietary patterns",
+    "allergies": "Allergies",
+    "nutrients": "Nutrients",
+}
 
 
 __all__ = ["build_layer_a", "build_shelves", "shelf_id_for_foodon"]

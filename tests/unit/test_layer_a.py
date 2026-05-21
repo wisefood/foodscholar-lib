@@ -371,12 +371,14 @@ def test_umbrella_rule_drops_organizational_classes() -> None:
             _chunk("c5", ["TEST:0000009"]),
         ]
     )
-    # Umbrella defaults (0.05 / 0.85) — `plant food` direct=0, lifted_share=1.0.
+    # Umbrella defaults (0.10 / 0.85) — `plant food` direct=0, lifted_share=1.0.
+    # min_count guard is normally 100; lower for the fixture's small counts.
     cfg = LayerAConfig(
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
         facets=["foods"],
+        umbrella_min_count=1,
     )
     shelves = build_shelves(store, _mini_foodon(), cfg)
     by_id = {s.shelf_id: s for s in shelves}
@@ -405,12 +407,13 @@ def test_umbrella_rule_keeps_term_with_meaningful_direct_support() -> None:
         ]
     )
     # plant food: direct=1, count_wd=6, direct_share=0.167. Default
-    # umbrella_direct_share_max=0.05 → 0.167 is NOT < 0.05 → survives.
+    # umbrella_direct_share_max=0.10 → 0.167 is NOT < 0.10 → survives.
     cfg = LayerAConfig(
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
         facets=["foods"],
+        umbrella_min_count=1,
     )
     shelves = build_shelves(store, _mini_foodon(), cfg)
     by_id = {s.shelf_id: s for s in shelves}
@@ -434,6 +437,7 @@ def test_umbrella_rule_bypassed_by_whitelist() -> None:
         max_depth=10,
         collapse_single_child_chains=False,
         facets=["foods"],
+        umbrella_min_count=1,  # so umbrella DOES try to fire
         facet_overrides={
             "foods": FacetConfig(whitelist=["TEST:0000002"]),
         },
@@ -465,6 +469,88 @@ def test_umbrella_rule_disabled_when_direct_share_max_is_zero() -> None:
     # All ancestors survive — including the umbrella-shaped `plant food`.
     assert shelf_id_for_foodon("TEST:0000002") in by_id
     assert shelf_id_for_foodon("TEST:0000001") in by_id
+
+
+def test_umbrella_min_count_guard_protects_small_shelves() -> None:
+    # With default umbrella_min_count=100, a small shelf that matches
+    # direct-share + lifted-share is left alone — variance is too high at
+    # that scale to confidently call it an umbrella.
+    store = InMemoryChunkStore()
+    store.upsert(
+        [
+            _chunk("c1", ["TEST:0000008"]),
+            _chunk("c2", ["TEST:0000008"]),
+            _chunk("c3", ["TEST:0000008"]),
+            _chunk("c4", ["TEST:0000009"]),
+            _chunk("c5", ["TEST:0000009"]),
+        ]
+    )
+    cfg = LayerAConfig(
+        min_support=1,
+        max_depth=10,
+        collapse_single_child_chains=False,
+        facets=["foods"],
+        umbrella_min_count=100,  # default — plant food (count=5) won't qualify
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    by_id = {s.shelf_id: s for s in shelves}
+    # plant food is umbrella-shaped (direct=0, lifted=5) but below min_count.
+    assert shelf_id_for_foodon("TEST:0000002") in by_id
+
+
+def test_synthetic_facet_root_injected_when_multiple_orphans() -> None:
+    # Multiple disconnected branches in FoodOn → orphan roots → synthetic
+    # facet root collects them all so the projection is one tree, not a forest.
+    store = InMemoryChunkStore()
+    store.upsert(
+        [
+            _chunk("c1", ["TEST:0000008"]),  # olive oil branch
+            _chunk("c2", ["TEST:0000008"]),
+            _chunk("c3", ["TEST:0000009"]),  # peanut branch
+            _chunk("c4", ["TEST:0000009"]),
+            _chunk("c5", ["TEST:0000011"]),  # dairy branch (separate sibling of plant food)
+            _chunk("c6", ["TEST:0000011"]),
+        ]
+    )
+    cfg = LayerAConfig(
+        min_support=1,
+        max_depth=10,
+        collapse_single_child_chains=False,
+        facets=["foods"],
+        umbrella_min_count=1,  # let umbrella fire so org classes drop
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    # Exactly one synthetic facet root at depth=0.
+    roots = [s for s in shelves if s.parent_shelf_id is None]
+    assert len(roots) == 1
+    assert roots[0].shelf_id == "facet:foods"
+    assert roots[0].depth == 0
+    assert roots[0].foodon_id is None
+    # Total chunk_count on the root sums the orphan-root counts (each former
+    # root contributes its with-descendants count; lifting is already accounted).
+    # All other shelves got shifted down by 1.
+    non_root = [s for s in shelves if s.parent_shelf_id is not None]
+    assert all(s.depth >= 1 for s in non_root)
+
+
+def test_synthetic_root_not_injected_when_already_single_rooted() -> None:
+    # If the projection naturally has one root, don't add a synthetic one.
+    store = InMemoryChunkStore()
+    store.upsert([_chunk("c1", ["TEST:0000008"])])
+
+    cfg = LayerAConfig(
+        min_support=1,
+        max_depth=10,
+        collapse_single_child_chains=True,
+        facets=["foods"],
+        umbrella_min_count=1,
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    # Only the umbrella-collapsed leaf survives; it's the single root.
+    roots = [s for s in shelves if s.parent_shelf_id is None]
+    assert len(roots) == 1
+    # No synthetic root injected.
+    assert all(s.shelf_id != "facet:foods" for s in shelves)
 
 
 def test_build_layer_a_clears_stale_shelves_on_rerun() -> None:
