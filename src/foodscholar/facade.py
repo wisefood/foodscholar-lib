@@ -119,7 +119,10 @@ class FoodScholar:
         self.config = cfg
         self.chunk_store = chunk_store
         self.graph_store = graph_store
-        self.embedder: Embedder = embedder or _MockEmbedder()
+        # Embedder is built lazily on first access — production embedders
+        # (SPECTER2 + BGE-large via SourceTypeRouter) cost ~1.7 GB of model
+        # weights to load, which we don't want to pay just to print info().
+        self._embedder: Embedder | None = embedder
         self.llm: LLMClient = llm or _MockLLM()
         self.config_hash = config_hash(cfg)
         self.graph = GraphView(chunk_store, graph_store)
@@ -127,6 +130,30 @@ class FoodScholar:
         self._ner: NER | None = None
         self._linker: Linker | None = None
         self._log = get_logger("foodscholar")
+
+    @property
+    def embedder(self) -> Embedder:
+        """Lazily-built chunk embedder.
+
+        For `memory` backends or when the `[annotate]` extra is missing, this
+        is `_MockEmbedder()`. For production it is a
+        `SourceTypeRouter(HFEmbedder("allenai/specter2_base"),
+        HFEmbedder("BAAI/bge-large-en-v1.5"))` — SPECTER2 for abstracts,
+        BGE-large for textbook / guide chunks (BRIEF §2). First access pays
+        the model-load cost; subsequent accesses are free.
+        """
+        if self._embedder is None:
+            chunk_backend = self.config.storage.chunk_store.backend
+            if chunk_backend == "memory":
+                self._embedder = _MockEmbedder()
+            else:
+                built = self._build_embedder(self.config)
+                self._embedder = built if built is not None else _MockEmbedder()
+        return self._embedder
+
+    @embedder.setter
+    def embedder(self, value: Embedder) -> None:
+        self._embedder = value
 
     # ------------------------------------------------------------------ factories
 
@@ -206,12 +233,10 @@ class FoodScholar:
 
             llm = build_llm(cfg.llm)
 
-        # Build the chunk embedder from cfg.annotate unless the caller passed
-        # one. SPECTER2 for abstracts, BGE-large for textbook/guide, routed by
-        # source_type (BRIEF §2/§7). Falls back to the mock — with a loud
-        # warning — when the [annotate] deps are missing.
-        if embedder is None and chunk_backend != "memory":
-            embedder = cls._build_embedder(cfg)
+        # The chunk embedder is built lazily on first access (the `embedder`
+        # property on the facade), so a 1.7 GB SPECTER2 + BGE-large load does
+        # NOT happen here just for fs.info() or fs.init(). An explicit
+        # `embedder=` kwarg still wins — it skips the lazy build entirely.
 
         return cls(
             config=cfg,
@@ -245,12 +270,23 @@ class FoodScholar:
         ontology = "loaded" if self._ontology else (
             "configured" if self.config.ontology else "none"
         )
+        # `embedder` is lazy: never force it just to print info(). When
+        # unbuilt, report which backend WILL be built on first use.
+        if self._embedder is not None:
+            embedder = self._embedder.model_id
+        elif self.config.storage.chunk_store.backend == "memory":
+            embedder = "lazy(mock)"
+        else:
+            embedder = (
+                f"lazy(router:{self.config.annotate.scientific_embedder}"
+                f",{self.config.annotate.general_embedder})"
+            )
         return {
             "foodscholar": __version__,
             "config_hash": self.config_hash,
             "chunk_store": self.config.storage.chunk_store.backend,
             "graph_store": self.config.storage.graph_store.backend,
-            "embedder": self.embedder.model_id,
+            "embedder": embedder,
             "llm": self.llm.model_id,
             "ontology": ontology,
             "ner": self.config.annotate.ner,
