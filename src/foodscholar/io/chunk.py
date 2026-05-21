@@ -58,6 +58,7 @@ class Chunk(BaseModel):
     source_type: SourceType
     section_type: SectionType
     year: int | None = None
+    source_metadata: dict[str, object] = Field(default_factory=dict)
 
     embedding: list[float] | None = None
     embedding_model: str | None = None

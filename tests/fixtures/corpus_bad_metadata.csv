@@ -1,0 +1,2 @@
+chunk_id,chunk_text,type,chunk_metadata
+c-bad,"This row has malformed metadata.",guide,"{'file': 'broken.pdf'"

@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Literal
 
-from foodscholar.io.chunk import Chunk, ChunkId
+from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -117,8 +117,40 @@ class InMemoryChunkStore:
             update={"shelf_ids": list(shelf_ids), "theme_ids": list(theme_ids)}
         )
 
+    def update_annotations(
+        self,
+        chunk_id: ChunkId,
+        mentions: list[Mention],
+        entity_links: list[EntityLink],
+        foodon_ids: list[str],
+        enrichment_version: str,
+    ) -> None:
+        c = self._chunks.get(chunk_id)
+        if c is None:
+            return
+        self._chunks[chunk_id] = c.model_copy(
+            update={
+                "mentions": list(mentions),
+                "entity_links": list(entity_links),
+                "foodon_ids": list(foodon_ids),
+                "enrichment_version": enrichment_version,
+            }
+        )
+
     def scan(self) -> list[Chunk]:
         return list(self._chunks.values())
+
+    def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        batch: list[Chunk] = []
+        for chunk in self._chunks.values():
+            batch.append(chunk)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
 
 
 class InMemoryGraphStore:

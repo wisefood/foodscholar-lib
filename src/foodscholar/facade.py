@@ -206,7 +206,7 @@ class FoodScholar:
         # one. SPECTER2 for abstracts, BGE-large for textbook/guide, routed by
         # source_type (BRIEF §2/§7). Falls back to the mock — with a loud
         # warning — if the [annotate] deps aren't installed.
-        if embedder is None:
+        if embedder is None and chunk_backend != "memory":
             embedder = cls._build_embedder(cfg)
 
         return cls(
@@ -235,9 +235,9 @@ class FoodScholar:
                 scientific=HFEmbedder(cfg.annotate.scientific_embedder),
                 general=HFEmbedder(cfg.annotate.general_embedder),
             )
-        except ImportError as e:
+        except Exception as e:
             log.warning(
-                "embedder.deps_missing",
+                "embedder.unavailable",
                 error=str(e),
                 note="chunk embeddings will be MOCK — install: pip install 'foodscholar[annotate]'",
             )
@@ -437,9 +437,17 @@ class FoodScholar:
             graph_backend=graph_backend,
         )
 
-    def build_layer_a(self) -> None:
+    def build_layer_a(self) -> ArtifactMeta:
         """Build Layer A — the curated, multi-facet backbone from FoodOn."""
-        raise _deferred("build-layer-a")
+        from foodscholar.layer_a import build_layer_a
+
+        return build_layer_a(
+            self.chunk_store,
+            self.graph_store,
+            self.ontology,
+            config=self.config.layer_a,
+            full_config=self.config,
+        )
 
     def attach(self) -> None:
         """Write chunk→shelf attachments and denormalize shelf_ids onto chunks."""

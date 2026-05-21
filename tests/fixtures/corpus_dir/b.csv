@@ -1,0 +1,2 @@
+chunk_id,chunk_text,type,chunk_metadata
+c-b,"Second directory chunk.",textbook,"{'file': 'b.pdf', 'heading': 'B'}"
