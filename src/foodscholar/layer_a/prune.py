@@ -84,19 +84,12 @@ def prune(
     if not survivors:
         return []
 
-    # Compute depth for every survivor against the ontology DAG.
-    depths = {tid: _depth(ontology, tid) for tid in survivors}
-
-    # Step 4: depth cap is a lifting concern, not a drop. We just need parent
-    # re-pointing logic to consult `survivors` AND honor the cap — i.e. lift
-    # past any ancestor whose depth exceeds the cap, even if that ancestor
-    # itself survived. In practice the nearest_included_ancestor walk already
-    # produces the right parent; we just clamp the recorded `depth` field so
-    # the resulting shelf reports its post-lift depth.
     cap = config.max_depth
 
-    # Build initial shelves keyed by term_id; parents resolved next.
+    # Build initial shelves keyed by term_id with parent_shelf_id set;
+    # projection-relative depth is assigned in a second pass below.
     shelf_by_id: dict[str, Shelf] = {}
+    parent_term_by_id: dict[str, str | None] = {}
     for term_id in sorted(survivors):
         direct = support.direct.get(term_id, 0)
         with_descendants = support.with_descendants.get(term_id, 0)
@@ -104,16 +97,12 @@ def prune(
         parent_term = _nearest_included_ancestor(
             ontology, term_id, survivors, max_depth=cap
         )
-        # Reported depth: clamp to [0, cap]. A term originally at depth 8 that
-        # lifts under a depth-3 ancestor is reported as depth 4.
-        reported_depth = (
-            0 if parent_term is None else min(depths[parent_term] + 1, cap)
-        )
+        parent_term_by_id[term_id] = parent_term
         shelf_by_id[term_id] = Shelf(
             shelf_id=shelf_id_for_foodon(term_id),
             label=ontology.id_to_label(term_id) or term_id,
             facet=facet,
-            depth=reported_depth,
+            depth=0,  # provisional — set in projection BFS below.
             foodon_id=term_id,
             parent_shelf_id=shelf_id_for_foodon(parent_term) if parent_term else None,
             chunk_count=with_descendants,
@@ -121,6 +110,12 @@ def prune(
             support_lifted=lifted,
             see_also=[],
         )
+
+    # Assign projection-relative depth (not ontology depth): roots get 0,
+    # children get parent.depth + 1, capped at `cap`. This is what users
+    # navigate — "how many clicks from a root am I" — and it's stable under
+    # the umbrella rule (which kills ontology-intermediate ancestors).
+    shelf_by_id = _assign_projection_depth(shelf_by_id, parent_term_by_id, cap)
 
     # Step 5: single-child collapse, iterated to fixed point.
     if config.collapse_single_child_chains:
@@ -133,6 +128,47 @@ def prune(
 
 
 # ---------------------------------------------------------------- helpers
+
+
+def _assign_projection_depth(
+    shelf_by_id: dict[str, Shelf],
+    parent_term_by_id: dict[str, str | None],
+    cap: int,
+) -> dict[str, Shelf]:
+    """Set each shelf's `depth` to its projection-relative depth.
+
+    Roots (no parent in projection) get 0; everyone else gets `parent.depth + 1`,
+    clamped at `cap`. Topological — handled by iterating until depths stabilize.
+    Cycle detection via a visit counter (FoodOn shouldn't have cycles, but if
+    a survivor set produces one via the lifted-ancestor walk, we cap iteration
+    at 2*|shelves| and treat anything still unresolved as a root).
+    """
+    depth_by_id: dict[str, int] = {}
+    max_iters = 2 * len(shelf_by_id) + 1
+    pending = set(shelf_by_id.keys())
+    for _ in range(max_iters):
+        if not pending:
+            break
+        resolved_this_pass: set[str] = set()
+        for tid in pending:
+            parent_term = parent_term_by_id.get(tid)
+            if parent_term is None:
+                depth_by_id[tid] = 0
+                resolved_this_pass.add(tid)
+            elif parent_term in depth_by_id:
+                depth_by_id[tid] = min(depth_by_id[parent_term] + 1, cap)
+                resolved_this_pass.add(tid)
+        if not resolved_this_pass:
+            # Unresolved cycle / dangling — treat remaining as roots.
+            for tid in pending:
+                depth_by_id[tid] = 0
+            break
+        pending -= resolved_this_pass
+
+    return {
+        tid: shelf.model_copy(update={"depth": depth_by_id.get(tid, 0)})
+        for tid, shelf in shelf_by_id.items()
+    }
 
 
 def _is_allowed(term_id: str, label: str | None, blocked: set[str]) -> bool:
@@ -164,29 +200,35 @@ def _nearest_included_ancestor(
     *,
     max_depth: int,
 ) -> str | None:
-    """BFS up the ancestor chain for the first survivor at depth <= max_depth.
+    """Pick the deepest surviving ancestor at ontology-depth <= max_depth.
 
-    This handles depth-cap lifting and blacklist re-parenting in one pass. A
-    surviving ancestor whose own depth exceeds `max_depth` is skipped — its
-    chunks were lifted past it already.
+    Why ancestors, not BFS-via-parents: FoodOn is a DAG and `id_to_parents`
+    only returns direct is_a parents — equivalent-class axioms and parents
+    from related ontologies (UBERON, NCBITaxon) can be on the parent list but
+    get filtered out by `prefix_filter=[FOODON:]`. The resulting parent index
+    is too sparse to find a real ancestor via BFS in cases like cow milk
+    (parents=[animal milk → UBERON dead-end] and one cow-substance branch that
+    doesn't reach food product). `id_to_ancestors` carries the closed
+    transitive set from pronto's `t.superclasses()`, which captures every
+    is_a / subClassOf path — so it sees `food product` as an ancestor of cow
+    milk even when no parent chain in the loaded subset does.
+
+    Among the surviving ancestors at depth <= max_depth, return the deepest
+    (the one closest to the term being parented). Ties broken by id for
+    determinism.
     """
-    frontier = sorted(p for p in ontology.id_to_parents(term_id) if p in ontology)
-    seen: set[str] = set()
-    while frontier:
-        parent_id = frontier.pop(0)
-        if parent_id in seen:
+    candidates: list[tuple[int, str]] = []
+    for ancestor_id in ontology.id_to_ancestors(term_id):
+        if ancestor_id not in ontology or ancestor_id not in included:
             continue
-        seen.add(parent_id)
-        if parent_id in included and _depth(ontology, parent_id) <= max_depth:
-            return parent_id
-        frontier.extend(
-            sorted(
-                gp
-                for gp in ontology.id_to_parents(parent_id)
-                if gp in ontology and gp not in seen
-            )
-        )
-    return None
+        d = _depth(ontology, ancestor_id)
+        if d <= max_depth:
+            candidates.append((d, ancestor_id))
+    if not candidates:
+        return None
+    # Deepest first, then alphabetical id for tie-break.
+    candidates.sort(key=lambda x: (-x[0], x[1]))
+    return candidates[0][1]
 
 
 def _collapse_single_children(
