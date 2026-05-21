@@ -58,7 +58,9 @@ def test_ingest_attaches_pre_computed_nel(tmp_path: Path) -> None:
     assert c1 is not None
     assert {m.text for m in c1.mentions} == {"Mediterranean diet", "olive oil"}
     assert set(c1.foodon_ids) == {"FOODON:00001234", "FOODON:03309927"}
-    assert c1.embedding is not None
+    # Ingest does NOT embed — vectors are populated by fs.embed() afterwards.
+    assert c1.embedding is None
+    assert c1.embedding_model is None
     assert c1.enrichment_version == "annotate-v2"
 
 
@@ -85,7 +87,8 @@ def test_ingest_handles_chunks_without_matching_nel_row(tmp_path: Path) -> None:
     assert orphan is not None
     assert orphan.mentions == []
     assert orphan.foodon_ids == []
-    assert orphan.embedding is not None  # still embedded
+    # No embedding at ingest time; the chunk is still stored, just vector-less.
+    assert orphan.embedding is None
 
 
 def test_ingest_writes_snapshot_when_configured(tmp_path: Path) -> None:
