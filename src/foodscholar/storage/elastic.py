@@ -215,6 +215,24 @@ class ElasticChunkStore:
             refresh="wait_for",
         )
 
+    def update_embedding(
+        self,
+        chunk_id: ChunkId,
+        embedding: list[float],
+        embedding_model: str,
+    ) -> None:
+        self._es.update(
+            index=self.index,
+            id=chunk_id,
+            body={
+                "doc": {
+                    "embedding": list(embedding),
+                    "embedding_model": embedding_model,
+                }
+            },
+            refresh="wait_for",
+        )
+
     # ------------------------------------------------------------------ reads
 
     def get(self, chunk_id: ChunkId) -> Chunk | None:

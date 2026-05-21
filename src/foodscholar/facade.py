@@ -51,6 +51,20 @@ if TYPE_CHECKING:
 
 ConfigSource = str | Path | dict[str, Any] | FoodScholarConfig
 
+# Model ids that don't count as "real" embeddings — used by fs.embed() to
+# decide whether a chunk needs encoding under `only_missing=True`. The list
+# is small on purpose: anything outside it is treated as a real production
+# embedder so we don't accidentally re-encode SPECTER2/BGE vectors.
+_MOCK_EMBEDDING_MODELS: frozenset[str] = frozenset(
+    {"mock-embedder-v0", "hash-embedder-v0"}
+)
+
+
+def _is_real_embedding(model_id: str | None) -> bool:
+    """True iff the chunk already carries a real (non-mock) embedding."""
+    return bool(model_id) and model_id not in _MOCK_EMBEDDING_MODELS
+
+
 _DEFERRED_TEMPLATE = (
     "phase '{phase}' is not implemented yet in foodscholar v{version}. "
     "See BRIEF.md §12 for the implementation order."
@@ -350,19 +364,19 @@ class FoodScholar:
         nel_dir: str | Path | None = None,
         snapshot_path: str | Path | None = None,
     ) -> ArtifactMeta | None:
-        """End-to-end ingest: corpus → annotations → embeddings → store.
-
-        One call covers the entire pipeline. Two modes:
+        """Ingest corpus + annotations into `fs.chunk_store`. Two modes:
 
         - ``nel_dir`` **supplied** → annotations come from pre-computed
           `(chunk_id, chunk_entities_ner, chunk_uri_nel)` CSVs (the prototype's
           output shape). Chunks are loaded from ``corpus_dir``, annotations
-          attached by `chunk_id`, embeddings computed via `fs.embedder`, and
-          everything upserted to `fs.chunk_store`. **No GLiNER, no HNSW** — fast,
-          deterministic, no `[annotate]` extras required beyond the embedder.
+          attached by `chunk_id`, and everything upserted to `fs.chunk_store`.
+          **No GLiNER, no HNSW, no chunk embedding** — fast, deterministic,
+          works without the `[annotate]` extra installed. Call `fs.embed()`
+          afterwards to fill in chunk vectors for kNN search.
 
         - ``nel_dir`` **omitted** → falls back to `load_and_annotate(corpus_dir)`
-          which runs GLiNER + HNSW from scratch.
+          which runs GLiNER + HNSW from scratch (this path does embed, since
+          the runner has the SPECTER2/BGE router already loaded).
 
         ``snapshot_path`` (or `cfg.corpus.annotated_snapshot_path`) writes a
         parquet snapshot of the annotated chunks after ingest. If the snapshot
@@ -387,12 +401,23 @@ class FoodScholar:
 
         nel_map = load_nel_dir(nel_dir)
 
-        # Stream chunks, attach annotations, embed, upsert in batches.
-        from foodscholar.annotate.embedder import SourceTypeRouter
+        # Stream chunks, attach annotations, upsert in batches.
+        #
+        # No embedding happens here — that is a separate, opt-in step
+        # (`fs.embed()`). Reasons:
+        #   - The prototype's `nel_*.csv` files carry mentions + linked URIs
+        #     only, not chunk vectors. There is nothing to attach beyond text.
+        #   - Production chunk embedders (SPECTER2 + BGE-large via
+        #     SourceTypeRouter) cost ~1.7 GB of model load + per-chunk
+        #     encoding; making that mandatory at ingest forces users to wait
+        #     for vector machinery they may not need (BM25 + filtered search
+        #     work without it).
+        #   - Iterating on annotations should be cheap. Keeping embed as its
+        #     own step means re-ingesting after a NEL refresh doesn't redo
+        #     the SPECTER2/BGE pass.
         from foodscholar.annotate.runner import ENRICHMENT_VERSION
         from foodscholar.versioning import make_artifact_meta
 
-        router = self.embedder if isinstance(self.embedder, SourceTypeRouter) else None
         batch_size = max(1, self.config.annotate.batch_size)
         batch: list = []
         n_chunks = 0
@@ -411,19 +436,12 @@ class FoodScholar:
                 else:
                     mentions, links, foodon_ids = ann
                     n_attached += 1
-                if router is not None:
-                    vec, model_id = router.embed_chunk(chunk.text, chunk.source_type)
-                else:
-                    [vec] = self.embedder.embed([chunk.text])
-                    model_id = self.embedder.model_id
                 enriched.append(
                     chunk.model_copy(
                         update={
                             "mentions": mentions,
                             "entity_links": links,
                             "foodon_ids": foodon_ids,
-                            "embedding": vec,
-                            "embedding_model": model_id,
                             "enrichment_version": ENRICHMENT_VERSION,
                         }
                     )
@@ -504,6 +522,88 @@ class FoodScholar:
 
     def attach_linker(self, linker: Linker) -> None:
         self._linker = linker
+
+    def embed(
+        self,
+        *,
+        only_missing: bool = True,
+        batch_size: int = 64,
+    ) -> ArtifactMeta:
+        """Fill in chunk-text embeddings for chunks already in `fs.chunk_store`.
+
+        Walks the store, encodes each chunk with the source-type-routed
+        embedder (SPECTER2 for abstracts, BGE-large for textbook / guide
+        chunks — BRIEF §2/§7), and writes back only the `embedding` +
+        `embedding_model` fields via `chunk_store.update_embedding`. Mentions,
+        links, and other annotations are untouched.
+
+        - `only_missing=True` (default): skip chunks whose `embedding_model`
+          is already a real model id (anything that isn't the deterministic
+          `mock-embedder-v0`). Re-runs are cheap.
+        - `only_missing=False`: re-encode every chunk regardless. Useful
+          after swapping the configured embedder.
+
+        Builds the production embedder lazily on first call — that is the
+        ~1.7 GB SPECTER2 + BGE-large load, paid once per process.
+        """
+        from foodscholar.annotate.embedder import SourceTypeRouter
+        from foodscholar.versioning import make_artifact_meta
+
+        embedder = self.embedder  # lazy build happens here on first call
+        router = embedder if isinstance(embedder, SourceTypeRouter) else None
+
+        n_seen = 0
+        n_embedded = 0
+        n_skipped = 0
+        pending_texts: list[str] = []
+        pending_chunks: list = []
+
+        def _flush() -> None:
+            nonlocal n_embedded
+            if not pending_chunks:
+                return
+            if router is not None:
+                for chunk in pending_chunks:
+                    vec, model_id = router.embed_chunk(chunk.text, chunk.source_type)
+                    self.chunk_store.update_embedding(chunk.chunk_id, vec, model_id)
+                    n_embedded += 1
+            else:
+                vecs = embedder.embed(pending_texts)
+                for chunk, vec in zip(pending_chunks, vecs, strict=True):
+                    self.chunk_store.update_embedding(
+                        chunk.chunk_id, vec, embedder.model_id
+                    )
+                    n_embedded += 1
+            pending_texts.clear()
+            pending_chunks.clear()
+
+        for batch in self.chunk_store.iter_chunks(batch_size=batch_size):
+            for chunk in batch:
+                n_seen += 1
+                if only_missing and _is_real_embedding(chunk.embedding_model):
+                    n_skipped += 1
+                    continue
+                pending_chunks.append(chunk)
+                pending_texts.append(chunk.text)
+                if len(pending_chunks) >= batch_size:
+                    _flush()
+        _flush()
+
+        meta = make_artifact_meta(
+            phase="embed",
+            config=self.config,
+            record_count=n_embedded,
+        )
+        self._log.info(
+            "embed.done",
+            n_seen=n_seen,
+            n_embedded=n_embedded,
+            n_skipped=n_skipped,
+            embedder=embedder.model_id,
+            artifact_id=meta.artifact_id,
+            config_hash=meta.config_hash,
+        )
+        return meta
 
     def annotate(self) -> ArtifactMeta:
         """Run NER + linking + embedding over every chunk in `chunk_store`."""

@@ -141,6 +141,19 @@ class InMemoryChunkStore:
             }
         )
 
+    def update_embedding(
+        self,
+        chunk_id: ChunkId,
+        embedding: list[float],
+        embedding_model: str,
+    ) -> None:
+        c = self._chunks.get(chunk_id)
+        if c is None:
+            return
+        self._chunks[chunk_id] = c.model_copy(
+            update={"embedding": list(embedding), "embedding_model": embedding_model}
+        )
+
     def scan(self) -> list[Chunk]:
         return list(self._chunks.values())
 

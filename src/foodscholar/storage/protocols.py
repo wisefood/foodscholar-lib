@@ -41,6 +41,20 @@ class ChunkStore(Protocol):
         foodon_ids: list[str],
         enrichment_version: str,
     ) -> None: ...
+    def update_embedding(
+        self,
+        chunk_id: ChunkId,
+        embedding: list[float],
+        embedding_model: str,
+    ) -> None:
+        """Patch the chunk's `embedding` + `embedding_model` only.
+
+        Used by `fs.embed()` so re-embedding doesn't rewrite the
+        `mentions` / `entity_links` / `foodon_ids` payload — a single
+        field-scoped update on the remote backends, a `model_copy` on the
+        in-memory ones.
+        """
+        ...
     def scan(self) -> list[Chunk]: ...
     def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
 
