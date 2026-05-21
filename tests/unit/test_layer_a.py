@@ -523,11 +523,14 @@ def test_synthetic_facet_root_injected_when_multiple_orphans() -> None:
     # Exactly one synthetic facet root at depth=0.
     roots = [s for s in shelves if s.parent_shelf_id is None]
     assert len(roots) == 1
-    assert roots[0].shelf_id == "facet:foods"
-    assert roots[0].depth == 0
-    assert roots[0].foodon_id is None
-    # Total chunk_count on the root sums the orphan-root counts (each former
-    # root contributes its with-descendants count; lifting is already accounted).
+    root = roots[0]
+    assert root.shelf_id == "facet:foods"
+    assert root.depth == 0
+    assert root.foodon_id is None
+    # Synthetic root has no foodon_id → no chunk can name it directly →
+    # support_direct MUST be 0 and every chunk reaching it counts as lifted.
+    assert root.support_direct == 0
+    assert root.support_lifted == root.chunk_count
     # All other shelves got shifted down by 1.
     non_root = [s for s in shelves if s.parent_shelf_id is not None]
     assert all(s.depth >= 1 for s in non_root)
