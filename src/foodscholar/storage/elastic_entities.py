@@ -68,11 +68,18 @@ class ElasticEntityStore:
             if effective_key:
                 client_kwargs["api_key"] = effective_key
         self._es = Elasticsearch(url, **client_kwargs)
+        # Track whether `init()` (or a self-heal in upsert) has provisioned
+        # the index with the explicit mapping in this process. Without this,
+        # the very first `upsert` against a fresh cluster would let ES create
+        # the index with dynamic text/keyword inference — which breaks sort
+        # and term aggregations.
+        self._ensured_init = False
 
     # ------------------------------------------------------------------ admin
 
     def init(self) -> None:
         if self._es.indices.exists(index=self.index):
+            self._ensured_init = True
             return
         self._es.indices.create(
             index=self.index,
@@ -81,8 +88,11 @@ class ElasticEntityStore:
                     "number_of_shards": 1,
                     "number_of_replicas": 0,
                 },
+                # `dynamic: strict` so an unexpected field at upsert time raises
+                # rather than silently auto-inferring to text — the bug we just
+                # debugged. Every field a Pydantic Entity carries must be listed.
                 "mappings": {
-                    "dynamic": "false",
+                    "dynamic": "strict",
                     "properties": {
                         "ontology_id": {"type": "keyword"},
                         "prefix": {"type": "keyword"},
@@ -95,17 +105,25 @@ class ElasticEntityStore:
                         "facet_hint": {"type": "keyword"},
                         "mention_count": {"type": "integer"},
                         "chunk_count": {"type": "integer"},
+                        "chunk_ids": {"type": "keyword"},
                         "last_seen": {"type": "date"},
                     },
                 },
             },
         )
+        self._ensured_init = True
         _log.info("elastic_entities.index_created", index=self.index)
 
     # ------------------------------------------------------------------ writes
 
     def upsert(self, entities: Iterable[Entity]) -> None:
         from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        # Defensive: if init() wasn't called explicitly, run it once now so
+        # ES doesn't auto-create the index with dynamic text inference (the
+        # bug that triggered fielddata errors on ontology_id sort/aggs).
+        if not self._ensured_init:
+            self.init()
 
         actions: list[dict[str, Any]] = []
         for e in entities:
@@ -171,10 +189,12 @@ class ElasticEntityStore:
         out: list[Entity] = []
         after: list[Any] | None = None
         while True:
+            # Sort by `_doc` (native index order) — fastest for full scans and
+            # avoids depending on any user-managed field being keyword-typed.
             body: dict[str, Any] = {
                 "size": _SCAN_PAGE,
                 "query": {"match_all": {}},
-                "sort": [{"ontology_id": "asc"}],
+                "sort": ["_doc"],
             }
             if after is not None:
                 body["search_after"] = after
