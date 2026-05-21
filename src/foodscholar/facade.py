@@ -153,6 +153,11 @@ class FoodScholar:
         self.config_hash = config_hash(cfg)
         self.graph = GraphView(chunk_store, graph_store)
         self.entities = _EntityView(self)
+        # Visualization view — builds VizGraphs on demand. Renderers are
+        # lazy-imported behind the [viz] extra so this import is free.
+        from foodscholar.viz import VizView
+
+        self.viz = VizView(self)
         self._ontology: FoodOnAPI | None = None
         self._ner: NER | None = None
         self._linker: Linker | None = None

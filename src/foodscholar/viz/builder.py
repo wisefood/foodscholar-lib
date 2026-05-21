@@ -1,0 +1,421 @@
+"""Build `VizGraph`s from the foodscholar stores.
+
+One function per visualization level. Each takes the facade (or the relevant
+sub-stores) and returns a `VizGraph` the renderers consume.
+
+  - L0  `entity_histogram`     — corpus-wide entity counts (no graph).
+  - L1  `entity_neighborhood`  — one entity + its chunks + co-mentioned entities.
+  - L2  `shelf_view`           — one shelf + its themes + its chunks (Layer A/B).
+  - L3  `backbone`             — shelves + themes + cards (Layer A/B/C).
+  - L4  `ontology_subtree`     — FoodOn ancestors / descendants of one term.
+
+Builders are pure: they only read. They never call `init`, `upsert`, or
+mutate the stores.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from typing import TYPE_CHECKING, Any
+
+from foodscholar.viz.model import VizEdge, VizGraph, VizNode
+
+if TYPE_CHECKING:
+    from foodscholar.facade import FoodScholar
+    from foodscholar.io.entity import Entity
+    from foodscholar.ontology import FoodOnAPI
+
+# How many chunks / co-entities / descendants the default views surface
+# inline. Renderers can't usefully show thousands of nodes, so the builder
+# trims with `max_*` knobs and the truncation count lands in `attrs`.
+DEFAULT_MAX_CHUNKS = 12
+DEFAULT_MAX_CO_ENTITIES = 25
+DEFAULT_MAX_DESCENDANTS = 30
+
+
+# ---------------------------------------------------------------------- L0
+
+
+def entity_histogram(
+    fs: FoodScholar,
+    *,
+    prefix: str | None = None,
+    k: int = 30,
+) -> VizGraph:
+    """Top-`k` entities by `chunk_count`. Disconnected — pure node stats.
+
+    The renderers (esp. matplotlib) treat this as a bar chart over
+    `node.weight = chunk_count`. The graph renderers degenerate to a
+    scatter of unconnected dots — useful for at-a-glance prefix density.
+    """
+    entities = fs.entity_store.list_by_prefix(prefix, k=k) if prefix else \
+        sorted(fs.entity_store.scan(), key=lambda e: e.chunk_count, reverse=True)[:k]
+
+    nodes = [_entity_node(e) for e in entities]
+    return VizGraph(
+        title=f"Top {len(nodes)} entities" + (f" ({prefix})" if prefix else ""),
+        nodes=nodes,
+        edges=[],
+        level="L0",
+        attrs={"prefix": prefix, "k": k, "n_total": len(entities)},
+    )
+
+
+# ---------------------------------------------------------------------- L1
+
+
+def entity_neighborhood(
+    fs: FoodScholar,
+    ontology_id: str,
+    *,
+    max_chunks: int = DEFAULT_MAX_CHUNKS,
+    max_co_entities: int = DEFAULT_MAX_CO_ENTITIES,
+) -> VizGraph:
+    """Anchor entity + its mentioning chunks + co-mentioned entities.
+
+    Edges:
+      (chunk)-[mentions]->(entity)        for every chunk mention
+      (chunk)-[mentions]->(co-entity)     for entities co-occurring in those chunks
+
+    The chunk store carries the chunks; the entity store carries the entity
+    metadata. Falls back to a single-node graph if the entity isn't found.
+    """
+    anchor = fs.entity_store.get(ontology_id)
+    if anchor is None:
+        return VizGraph(
+            title=f"{ontology_id}: not found",
+            nodes=[VizNode(id=ontology_id, label=ontology_id, kind="entity")],
+            edges=[],
+            level="L1",
+            attrs={"missing": True, "ontology_id": ontology_id},
+        )
+
+    chunks = fs.entities.chunks_for(ontology_id, k=max_chunks)
+    nodes: list[VizNode] = [_entity_node(anchor, anchor=True)]
+    edges: list[VizEdge] = []
+    seen_entity_ids = {anchor.ontology_id}
+    co_counts: Counter[str] = Counter()
+
+    for chunk in chunks:
+        chunk_node = VizNode(
+            id=chunk.chunk_id,
+            label=_chunk_label(chunk.text),
+            kind="chunk",
+            attrs={
+                "source_type": chunk.source_type,
+                "section_type": chunk.section_type,
+                "text_preview": chunk.text[:200],
+                "foodon_ids": list(chunk.foodon_ids[:10]),
+            },
+        )
+        nodes.append(chunk_node)
+        edges.append(VizEdge(
+            source=chunk.chunk_id, target=anchor.ontology_id,
+            kind="mentions", weight=1.0,
+        ))
+        # Track co-mentioned entities (excluding the anchor).
+        for link in chunk.entity_links:
+            if link.ontology_id == anchor.ontology_id:
+                continue
+            co_counts[link.ontology_id] += 1
+
+    # Top-N co-mentioned entities — pull their Entity records for label/prefix.
+    top_co = [oid for oid, _ in co_counts.most_common(max_co_entities)]
+    co_ents = fs.entity_store.get_many(top_co) if top_co else []
+    co_by_id = {e.ontology_id: e for e in co_ents}
+    for oid in top_co:
+        ent = co_by_id.get(oid)
+        if ent is None:
+            # Co-entity exists in chunk.entity_links but not in entity store
+            # — surfaced as a placeholder so the edge isn't dangling.
+            ent_node = VizNode(id=oid, label=oid, kind="entity", attrs={"placeholder": True})
+        else:
+            ent_node = _entity_node(ent)
+        if ent_node.id not in seen_entity_ids:
+            nodes.append(ent_node)
+            seen_entity_ids.add(ent_node.id)
+        # Wire the chunk → co-entity edges (one per chunk that mentions both).
+        for chunk in chunks:
+            if any(ln.ontology_id == oid for ln in chunk.entity_links):
+                edges.append(VizEdge(
+                    source=chunk.chunk_id, target=oid,
+                    kind="mentions", weight=float(co_counts[oid]),
+                ))
+
+    return VizGraph(
+        title=f"Neighborhood of {anchor.label} ({anchor.ontology_id})",
+        nodes=nodes,
+        edges=edges,
+        level="L1",
+        attrs={
+            "anchor": anchor.ontology_id,
+            "n_chunks": len(chunks),
+            "n_chunks_total": anchor.chunk_count,
+            "n_co_entities": len(top_co),
+        },
+    )
+
+
+# ---------------------------------------------------------------------- L2
+
+
+def shelf_view(
+    fs: FoodScholar,
+    shelf_id: str,
+    *,
+    max_chunks: int = DEFAULT_MAX_CHUNKS,
+) -> VizGraph:
+    """One shelf + its themes + a sample of attached chunks.
+
+    Stays empty if Layer A hasn't been built (no shelves yet) — the
+    builder reports it via `attrs["empty_state"]` so renderers can show a
+    helpful message.
+    """
+    shelf_handle = fs.graph.shelf(shelf_id)
+    if shelf_handle is None:
+        return _empty_layer_graph(
+            "L2",
+            title=f"Shelf {shelf_id}: not found",
+            reason="Shelf does not exist. Run fs.build_layer_a() first.",
+        )
+
+    shelf = shelf_handle.model
+    nodes: list[VizNode] = [_shelf_node(shelf)]
+    edges: list[VizEdge] = []
+
+    for theme_handle in shelf_handle.themes():
+        nodes.append(_theme_node(theme_handle.model))
+        edges.append(VizEdge(
+            source=shelf.shelf_id, target=theme_handle.model.theme_id,
+            kind="has_theme",
+        ))
+
+    chunks = shelf_handle.chunks()[:max_chunks]
+    for chunk in chunks:
+        nodes.append(VizNode(
+            id=chunk.chunk_id,
+            label=_chunk_label(chunk.text),
+            kind="chunk",
+            attrs={"source_type": chunk.source_type, "text_preview": chunk.text[:200]},
+        ))
+        edges.append(VizEdge(
+            source=chunk.chunk_id, target=shelf.shelf_id,
+            kind="attached_to",
+        ))
+
+    return VizGraph(
+        title=f"Shelf: {shelf.label}",
+        nodes=nodes,
+        edges=edges,
+        level="L2",
+        attrs={"shelf_id": shelf.shelf_id, "facet": shelf.facet, "n_chunks": len(chunks)},
+    )
+
+
+# ---------------------------------------------------------------------- L3
+
+
+def backbone(
+    fs: FoodScholar,
+    *,
+    facet: str | None = None,
+    include_cards: bool = True,
+) -> VizGraph:
+    """Whole shelf/theme/card backbone (Layer A + B + C).
+
+    Empty graph with a helpful message if no shelves exist.
+    """
+    shelves = fs.graph.shelves(facet=facet) if facet else fs.graph.shelves()
+    if not shelves:
+        return _empty_layer_graph(
+            "L3",
+            title="Backbone: empty",
+            reason="No shelves yet. Run fs.build_layer_a() to populate the backbone.",
+        )
+
+    nodes: list[VizNode] = []
+    edges: list[VizEdge] = []
+
+    for sh in shelves:
+        nodes.append(_shelf_node(sh.model))
+        if sh.model.parent_shelf_id:
+            edges.append(VizEdge(
+                source=sh.model.parent_shelf_id, target=sh.model.shelf_id,
+                kind="parent_of",
+            ))
+        for theme_h in sh.themes():
+            theme = theme_h.model
+            # Theme may appear in multiple shelves — dedupe by id.
+            if not any(n.id == theme.theme_id for n in nodes):
+                nodes.append(_theme_node(theme))
+            edges.append(VizEdge(
+                source=sh.model.shelf_id, target=theme.theme_id, kind="has_theme",
+            ))
+        if include_cards:
+            card_h = sh.card()
+            if card_h is not None:
+                nodes.append(_card_node(card_h.model))
+                edges.append(VizEdge(
+                    source=card_h.model.card_id, target=sh.model.shelf_id,
+                    kind="describes",
+                ))
+
+    return VizGraph(
+        title="Backbone" + (f" ({facet})" if facet else ""),
+        nodes=nodes,
+        edges=edges,
+        level="L3",
+        attrs={"facet": facet, "n_shelves": len(shelves)},
+    )
+
+
+# ---------------------------------------------------------------------- L4
+
+
+def ontology_subtree(
+    ontology: FoodOnAPI,
+    ontology_id: str,
+    *,
+    max_descendants: int = DEFAULT_MAX_DESCENDANTS,
+    include_ancestors: bool = True,
+) -> VizGraph:
+    """Subtree of the loaded ontology centered on `ontology_id`.
+
+    Up the tree: every ancestor (closed transitive set).
+    Down the tree: up to `max_descendants` immediate / transitive descendants.
+    """
+    term = ontology.get(ontology_id) if hasattr(ontology, "get") else None
+    if term is None:
+        return VizGraph(
+            title=f"{ontology_id}: not in ontology",
+            nodes=[VizNode(id=ontology_id, label=ontology_id, kind="ontology_term")],
+            edges=[],
+            level="L4",
+            attrs={"missing": True, "ontology_id": ontology_id},
+        )
+
+    nodes: list[VizNode] = [_ontology_node(ontology, term.id, anchor=True)]
+    edges: list[VizEdge] = []
+    seen: set[str] = {term.id}
+
+    if include_ancestors:
+        # Walk parents until roots; ancestor_ids is closed transitive but we
+        # only need direct-parent edges for the tree to make sense visually.
+        frontier = {term.id}
+        while frontier:
+            next_frontier: set[str] = set()
+            for cid in frontier:
+                for pid in ontology.id_to_parents(cid):
+                    edges.append(VizEdge(source=cid, target=pid, kind="is_a"))
+                    if pid not in seen:
+                        nodes.append(_ontology_node(ontology, pid))
+                        seen.add(pid)
+                        next_frontier.add(pid)
+            frontier = next_frontier
+
+    descendants = ontology.id_to_descendants(term.id)[:max_descendants]
+    for did in descendants:
+        if did in seen:
+            continue
+        nodes.append(_ontology_node(ontology, did))
+        seen.add(did)
+        # Connect descendant to its closest known ancestor in the subtree
+        # (parent if available; otherwise the anchor).
+        parents = ontology.id_to_parents(did)
+        target = next((p for p in parents if p in seen), term.id)
+        edges.append(VizEdge(source=did, target=target, kind="is_a"))
+
+    return VizGraph(
+        title=f"Ontology subtree: {term.label} ({term.id})",
+        nodes=nodes,
+        edges=edges,
+        level="L4",
+        attrs={
+            "anchor": term.id,
+            "n_ancestors": len(nodes) - len(descendants) - 1,
+            "n_descendants_shown": len(descendants),
+            "n_descendants_total": len(ontology.id_to_descendants(term.id)),
+        },
+    )
+
+
+# ---------------------------------------------------------------- helpers
+
+
+def _entity_node(e: Entity, *, anchor: bool = False) -> VizNode:
+    return VizNode(
+        id=e.ontology_id,
+        label=e.label,
+        kind="entity",
+        weight=float(e.chunk_count),
+        facet=e.facet_hint,
+        attrs={
+            "prefix": e.prefix,
+            "mention_count": e.mention_count,
+            "chunk_count": e.chunk_count,
+            "is_anchor": anchor,
+            "synonyms": list(e.synonyms[:5]),
+        },
+    )
+
+
+def _shelf_node(s: Any) -> VizNode:
+    return VizNode(
+        id=s.shelf_id,
+        label=s.label,
+        kind="shelf",
+        weight=float(s.chunk_count),
+        facet=s.facet,
+        attrs={"depth": s.depth, "foodon_id": s.foodon_id},
+    )
+
+
+def _theme_node(t: Any) -> VizNode:
+    return VizNode(
+        id=t.theme_id,
+        label=t.label,
+        kind="theme",
+        weight=float(t.chunk_count),
+        attrs={"discovered_by": t.discovered_by, "discovery_version": t.discovery_version},
+    )
+
+
+def _card_node(c: Any) -> VizNode:
+    return VizNode(
+        id=c.card_id,
+        label=c.title,
+        kind="card",
+        attrs={
+            "target_id": c.target_id,
+            "target_type": c.target_type,
+            "evidence_quality": c.evidence_quality,
+            "summary_preview": c.summary[:200],
+        },
+    )
+
+
+def _ontology_node(ontology: FoodOnAPI, term_id: str, *, anchor: bool = False) -> VizNode:
+    label = ontology.id_to_label(term_id) or term_id
+    return VizNode(
+        id=term_id,
+        label=label,
+        kind="ontology_term",
+        attrs={"is_anchor": anchor, "ontology_id": term_id},
+    )
+
+
+def _chunk_label(text: str, *, max_len: int = 60) -> str:
+    """Single-line chunk label for graph rendering."""
+    snippet = " ".join(text.split())
+    return snippet[:max_len] + ("…" if len(snippet) > max_len else "")
+
+
+def _empty_layer_graph(level: str, *, title: str, reason: str) -> VizGraph:
+    """Placeholder graph for Layer A/B views when those phases haven't run."""
+    return VizGraph(
+        title=title,
+        nodes=[VizNode(id="empty", label=reason, kind="anchor")],
+        edges=[],
+        level=level,  # type: ignore[arg-type]
+        attrs={"empty_state": True, "reason": reason},
+    )
