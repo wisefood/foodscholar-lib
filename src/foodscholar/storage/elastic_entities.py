@@ -30,7 +30,9 @@ from foodscholar.logging import get_logger
 
 _log = get_logger("foodscholar.storage.elastic_entities")
 
-_BULK_PAGE = 500
+# Default ES `_bulk` page size when the constructor is invoked without a
+# `bulk_size=` override. Mirrors ElasticChunkStore for the paired entity index.
+_DEFAULT_BULK_SIZE = 500
 _SCAN_PAGE = 500
 
 
@@ -45,9 +47,13 @@ class ElasticEntityStore:
         api_key: str | None = None,
         username: str | None = None,
         password: str | None = None,
+        bulk_size: int = _DEFAULT_BULK_SIZE,
     ) -> None:
         if not url or not index:
             raise ValueError("ElasticEntityStore needs both `url` and `index`")
+        if bulk_size <= 0:
+            raise ValueError(f"bulk_size must be positive, got {bulk_size}")
+        self._bulk_size = bulk_size
         try:
             from elasticsearch import Elasticsearch  # type: ignore[import-not-found]
         except ImportError as e:
@@ -135,7 +141,7 @@ class ElasticEntityStore:
                     "_source": _entity_to_doc(e),
                 }
             )
-            if len(actions) >= _BULK_PAGE:
+            if len(actions) >= self._bulk_size:
                 bulk(self._es, actions, refresh=False)
                 actions = []
         if actions:

@@ -240,9 +240,11 @@ class FoodScholar:
                 api_key=cs.api_key,
                 username=cs.username,
                 password=cs.password,
+                bulk_size=cs.bulk_size,
             )
             # The entity index name mirrors the chunk index with an `_entities`
-            # suffix so the two artifacts are always paired.
+            # suffix so the two artifacts are always paired. Same bulk_size
+            # — the paired indexes are a single tuning surface.
             entity_index = (cs.index or "foodscholar_chunks") + "_entities"
             entity_store = ElasticEntityStore(
                 url=cs.url or "http://localhost:9200",
@@ -250,6 +252,7 @@ class FoodScholar:
                 api_key=cs.api_key,
                 username=cs.username,
                 password=cs.password,
+                bulk_size=cs.bulk_size,
             )
         else:
             raise ValueError(f"unknown chunk_store backend: {chunk_backend}")

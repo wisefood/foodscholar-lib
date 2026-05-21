@@ -162,6 +162,12 @@ class ChunkStoreConfig(BaseModel):
     username: str | None = None
     password: str | None = None
     """Optional HTTP-basic credentials for ES. Take precedence over `api_key`."""
+    bulk_size: int = 500
+    """How many documents per ES `_bulk` request. Drives both the chunk index
+    and the paired entity index. Larger values are faster on healthy clusters
+    but each request carries more memory + retry weight; ES rejects requests
+    above ~100 MB by default. Sweet spot for chunk-sized text docs is usually
+    1000-5000."""
 
 
 class GraphStoreConfig(BaseModel):
