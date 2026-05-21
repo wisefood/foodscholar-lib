@@ -142,12 +142,21 @@ def _ensure_single_root(shelves: list[Shelf], facet: Facet) -> list[Shelf]:
         # Already single-rooted (or empty) — no synthetic root needed.
         return shelves
 
-    # Build the facet root. Its chunk_count is the sum of root chunks (note:
-    # subtree-summing would double-count via lifting; root-summing is the
-    # honest "total chunks reachable through this facet" without overcount).
+    # Build the facet root. By construction it has no foodon_id — nothing
+    # in any ontology resolves to it — so no chunk can ever name it directly.
+    # That means support_direct MUST be 0 and every chunk reaching it counts
+    # as lifted. (Earlier code summed roots' direct support into total_direct
+    # via a copy-paste of the FOODON shelf accounting, producing a
+    # diagnostic-misleading number like `Foods: direct=7365` even though
+    # nothing names the synthetic root.)
+    #
+    # chunk_count is the sum of former-root counts. Strictly an upper bound:
+    # a chunk in multiple ontology branches reachable from different roots
+    # would be counted once per branch. We don't carry chunk-level identity
+    # past prune (the support table is one-pass), so we accept the upper
+    # bound here — in practice it matches sum-of-roots since most chunks
+    # don't cross root branches.
     total_count = sum(s.chunk_count for s in roots)
-    total_direct = sum(s.support_direct for s in roots)
-    total_lifted = sum(s.support_lifted for s in roots)
     root_shelf = Shelf(
         shelf_id=f"facet:{facet}",
         label=_FACET_ROOT_LABELS[facet],
@@ -156,8 +165,8 @@ def _ensure_single_root(shelves: list[Shelf], facet: Facet) -> list[Shelf]:
         foodon_id=None,
         parent_shelf_id=None,
         chunk_count=total_count,
-        support_direct=total_direct,
-        support_lifted=total_lifted,
+        support_direct=0,
+        support_lifted=total_count,
         see_also=[],
     )
 
