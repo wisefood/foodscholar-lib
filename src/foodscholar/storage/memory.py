@@ -294,6 +294,22 @@ class InMemoryGraphStore:
     def list_themes(self) -> list[Theme]:
         return list(self._themes.values())
 
+    def list_chunk_shelf_attachments(self) -> dict[ChunkId, set[ShelfId]]:
+        out: dict[ChunkId, set[ShelfId]] = defaultdict(set)
+        for shelf_id, bucket in self._shelf_chunks.items():
+            for chunk_id in bucket:
+                out[chunk_id].add(shelf_id)
+        return dict(out)
+
+    def list_chunk_foodon_mentions(self) -> dict[ChunkId, set[str]]:
+        out: dict[ChunkId, set[str]] = defaultdict(set)
+        for ontology_id, links in self._entity_chunks.items():
+            if not ontology_id.startswith("FOODON:"):
+                continue
+            for chunk_id in links:
+                out[chunk_id].add(ontology_id)
+        return dict(out)
+
     # ------------------------------------------------------------- entities
 
     def upsert_entities(self, entities: list[Entity]) -> None:

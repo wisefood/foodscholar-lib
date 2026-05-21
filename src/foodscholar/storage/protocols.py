@@ -148,6 +148,22 @@ class GraphStore(Protocol):
     def list_shelves(self) -> list[Shelf]: ...
     def list_themes(self) -> list[Theme]: ...
 
+    def list_chunk_shelf_attachments(self) -> dict[ChunkId, set[ShelfId]]:
+        """Return every `(:Chunk)-[:ATTACHED_TO]->(:Shelf)` edge as a map
+        `chunk_id -> {shelf_id, ...}`. Used by audit to cross-check the
+        Elastic `shelf_ids` denorm against the actual edge graph. One round
+        trip; output size proportional to total attach edges.
+        """
+        ...
+
+    def list_chunk_foodon_mentions(self) -> dict[ChunkId, set[str]]:
+        """Return every `(:Chunk)-[:MENTIONS]->(:Entity)` edge whose entity is
+        FOODON-prefixed, as a map `chunk_id -> {ontology_id, ...}`. Used by
+        audit to verify the Elastic `foodon_ids` denorm matches what
+        `build_entities` wrote. One round trip.
+        """
+        ...
+
     # Entity graph (first-class linked entities)
     def upsert_entities(self, entities: list[Entity]) -> None: ...
     def attach_chunks_to_entity(
