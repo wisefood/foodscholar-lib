@@ -50,6 +50,7 @@ from foodscholar.storage.protocols import (
 from foodscholar.versioning import config_hash
 
 if TYPE_CHECKING:
+    from foodscholar.evaluation.audit import AuditReport
     from foodscholar.io.artifacts import ArtifactMeta
     from foodscholar.io.chunk import Chunk
     from foodscholar.ontology import FoodOnAPI
@@ -919,6 +920,23 @@ class FoodScholar:
             self.graph_store,
             self.ontology,
             full_config=self.config,
+        )
+
+    def audit(self) -> AuditReport:
+        """Run cross-store invariant checks and return a structured report.
+
+        Read-only — never writes. Returns an `AuditReport` with five sections:
+        inventory, coverage, cross-store consistency, attach integrity, and
+        structural sanity. `report.passed` is True iff zero critical checks
+        failed; `report.critical_failures` lists the broken invariants.
+        Print `report` directly for a human-readable summary.
+        """
+        from foodscholar.evaluation.audit import audit as _audit
+
+        return _audit(
+            self.chunk_store,
+            self.graph_store,
+            config_hash=self.config_hash,
         )
 
     def build_layer_b(self) -> None:
