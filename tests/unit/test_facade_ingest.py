@@ -132,12 +132,162 @@ def test_ingest_without_nel_dir_calls_load_and_annotate(
     fs = _fs(tmp_path)
     called: dict = {}
 
-    def fake_load_and_annotate(self, path, *, snapshot_path=None):  # type: ignore[no-untyped-def]
+    def fake_load_and_annotate(
+        self, path, *, snapshot_path=None, ignore_source_types=None
+    ):  # type: ignore[no-untyped-def]
         called["path"] = Path(path)
         called["snapshot_path"] = snapshot_path
+        called["ignore_source_types"] = ignore_source_types
         return None
 
     monkeypatch.setattr(FoodScholar, "load_and_annotate", fake_load_and_annotate)
     fs.ingest(corpus)
     assert called["path"] == corpus
     assert called["snapshot_path"] is None
+    assert called["ignore_source_types"] is None
+
+
+# ---------------------------------------------------------- ignore_source_types
+
+
+def _write_mixed_corpus_csv(path: Path) -> None:
+    """Three chunks: one abstract, one textbook, one guide."""
+    path.write_text(
+        "chunk_id,chunk_text,type,chunk_metadata\n"
+        '"c-abs","Abstract text about olive oil.","abstract","{}"\n'
+        '"c-txt","Textbook chapter on nutrition.","textbook","{}"\n'
+        '"c-gui","Public health guideline.","guide","{}"\n',
+        encoding="utf-8",
+    )
+
+
+def _write_mixed_nel_csv(path: Path) -> None:
+    path.write_text(
+        "chunk_id,chunk_entities_ner,chunk_uri_nel\n"
+        '"c-abs","olive oil","http://purl.obolibrary.org/obo/FOODON_03309927"\n'
+        '"c-txt","nutrition","http://purl.obolibrary.org/obo/FOODON_00001020"\n'
+        '"c-gui","guidelines",""\n',
+        encoding="utf-8",
+    )
+
+
+def test_ingest_drops_chunks_in_ignore_source_types(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = _fs(tmp_path)
+    meta = fs.ingest(corpus, nel_dir=nel_dir, ignore_source_types={"abstract"})
+
+    assert meta is not None
+    assert meta.record_count == 2  # textbook + guide land; abstract dropped
+    assert fs.chunk_store.get("c-abs") is None
+    assert fs.chunk_store.get("c-txt") is not None
+    assert fs.chunk_store.get("c-gui") is not None
+
+
+def test_ingest_filter_drops_multiple_source_types(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = _fs(tmp_path)
+    meta = fs.ingest(
+        corpus, nel_dir=nel_dir, ignore_source_types={"abstract", "textbook"}
+    )
+
+    assert meta is not None
+    assert meta.record_count == 1
+    assert fs.chunk_store.get("c-gui") is not None
+
+
+def test_ingest_empty_filter_keeps_all_chunks(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = _fs(tmp_path)
+    meta = fs.ingest(corpus, nel_dir=nel_dir, ignore_source_types=set())
+    assert meta is not None
+    assert meta.record_count == 3
+
+
+def test_ingest_falls_back_to_config_default_filter(tmp_path: Path) -> None:
+    """When the kwarg is omitted, cfg.corpus.ignore_source_types is used."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = FoodScholar.from_config(
+        {
+            "corpus": {
+                "chunks_path": str(corpus),
+                "ignore_source_types": ["abstract"],
+            },
+            "storage": {
+                "chunk_store": {"backend": "memory"},
+                "graph_store": {"backend": "memory"},
+            },
+        }
+    )
+    fs.ingest(corpus, nel_dir=nel_dir)  # no explicit kwarg
+    assert fs.chunk_store.get("c-abs") is None
+    assert fs.chunk_store.get("c-txt") is not None
+
+
+def test_ingest_kwarg_overrides_config_default(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = FoodScholar.from_config(
+        {
+            "corpus": {
+                "chunks_path": str(corpus),
+                "ignore_source_types": ["abstract"],   # config says drop abstract
+            },
+            "storage": {
+                "chunk_store": {"backend": "memory"},
+                "graph_store": {"backend": "memory"},
+            },
+        }
+    )
+    # kwarg overrides: drop guide instead.
+    fs.ingest(corpus, nel_dir=nel_dir, ignore_source_types={"guide"})
+    assert fs.chunk_store.get("c-abs") is not None  # config filter NOT applied
+    assert fs.chunk_store.get("c-gui") is None
+
+
+def test_ingest_filter_skips_matching_nel_rows_too(tmp_path: Path) -> None:
+    """A skipped chunk's NEL row is never attached anywhere — entity_links stay
+    out of the chunk store, so fs.entities wouldn't see them later.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    _write_mixed_corpus_csv(corpus / "chunks_mixed.csv")
+    nel_dir = tmp_path / "nel"
+    nel_dir.mkdir()
+    _write_mixed_nel_csv(nel_dir / "nel_chunks_mixed.csv")
+
+    fs = _fs(tmp_path)
+    fs.ingest(corpus, nel_dir=nel_dir, ignore_source_types={"abstract"})
+
+    # Only the abstract chunk had a FOODON link; with abstracts skipped that
+    # FoodOn id must not appear anywhere in the store.
+    all_foodon_ids = {fid for c in fs.chunk_store.scan() for fid in c.foodon_ids}
+    assert "FOODON:03309927" not in all_foodon_ids
