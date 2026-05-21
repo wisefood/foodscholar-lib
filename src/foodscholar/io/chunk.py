@@ -17,15 +17,23 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
-# Coarse class of an extracted mention. `other` is the safe default for NER
-# implementations that don't classify (e.g. KeywordNER). The agentic NER does
-# classify; downstream (Layer A facet routing) can use it.
+# Class of an extracted mention. The set is the literal label vocabulary
+# emitted by GLiNER-bio so the NER bridge is a no-op string copy. `other` is
+# kept as the safe default for NER impls that don't classify.
 EntityType = Literal[
     "food",
     "nutrient",
-    "health",
-    "dietary_pattern",
-    "allergen",
+    "micronutrient",
+    "macronutrient",
+    "food component",
+    "dietary supplement",
+    "dietary pattern",
+    "medical condition",
+    "biomarker",
+    "Country",
+    "Measurement",
+    "Population",
+    "Time expression",
     "other",
 ]
 

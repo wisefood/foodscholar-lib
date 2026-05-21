@@ -24,7 +24,13 @@ dependencies = [
 
 [project.optional-dependencies]
 ontology = ["pronto"]
-annotate = ["torch", "transformers", "sentence-transformers", "rapidfuzz"]
+annotate = [
+    "torch",
+    "transformers",
+    "sentence-transformers",
+    "gliner",
+    "hnswlib",
+]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
 elastic = ["elasticsearch>=8"]
@@ -35,7 +41,8 @@ all = [
     "torch",
     "transformers",
     "sentence-transformers",
-    "rapidfuzz",
+    "gliner",
+    "hnswlib",
     "leidenalg",
     "python-igraph",
     "hdbscan",
@@ -49,7 +56,7 @@ all = [
     "groq",
     "ollama",
 ]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto", "rapidfuzz"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto"]
 
 [project.urls]
 Homepage = "https://github.com/wisefood/foodscholar-lib"

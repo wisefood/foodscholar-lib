@@ -1,10 +1,14 @@
 """End-to-end tests against real ML models.
 
-Marked @pytest.mark.slow — opt-in via `pytest -m slow`. First run downloads
-SPECTER2 (~440MB) and SapBERT (~440MB) into ~/.cache/huggingface; subsequent
-runs use the cache. Real-provider tests (Groq) also need the relevant API key.
+Marked @pytest.mark.slow — opt-in via `pytest -m slow`. First run downloads:
 
-Only runs if `transformers` and `sentence-transformers` are importable.
+  - SPECTER2 (~440MB), BioLORD (~440MB), SapBERT (~440MB)
+  - GLiNER bio-v0.1 (~1.5GB)
+
+into ~/.cache/huggingface; subsequent runs use the cache. Real-provider
+tests (Groq) also need the relevant API key.
+
+Skip-imports gate ensures CI without ML deps still passes.
 """
 
 from __future__ import annotations
@@ -64,51 +68,65 @@ def test_groq_generate_json_returns_schema_object() -> None:
 
 
 @pytest.mark.slow
-def test_agentic_ner_with_real_groq() -> None:
-    """End-to-end AgenticNER against a real Groq model."""
-    client = _groq_or_skip()
-    from foodscholar.annotate.agent_ner import AgenticNER
+def test_gliner_ner_extracts_mentions_with_correct_offsets() -> None:
+    """End-to-end GLinerNER: downloads the bio model, runs a single chunk."""
+    pytest.importorskip("gliner")
+    from foodscholar.annotate.gliner_ner import GLinerNER
 
-    ner = AgenticNER(client)
+    ner = GLinerNER(
+        labels=[
+            "food",
+            "nutrient",
+            "dietary pattern",
+            "medical condition",
+        ],
+        threshold=0.4,
+        batch_size=2,
+    )
     text = "The Mediterranean diet is rich in olive oil and whole grains."
-    out = ner.extract(text)
-    # The model should find at least one food mention; offsets must be exact.
-    assert out, "expected at least one mention"
-    for m in out:
+    mentions = ner.extract(text)
+    assert mentions, "expected at least one mention"
+    # Offsets must always be exact substrings of the source.
+    for m in mentions:
         assert text[m.start : m.end] == m.text
 
 
 @pytest.mark.slow
-def test_sapbert_embedder_round_trip() -> None:
-    from foodscholar.annotate.embedder import SapBERTEmbedder
+def test_gliner_ner_batched_path_matches_per_text() -> None:
+    """`extract_batch` and `extract` must produce the same mentions per text."""
+    pytest.importorskip("gliner")
+    from foodscholar.annotate.gliner_ner import GLinerNER
 
-    e = SapBERTEmbedder()
-    [vec] = e.embed(["olive oil"])
-    assert e.dim == 768
-    assert len(vec) == 768
+    ner = GLinerNER(
+        labels=["food", "dietary pattern"],
+        threshold=0.4,
+        batch_size=4,
+    )
+    texts = [
+        "The Mediterranean diet is rich in olive oil.",
+        "Apples are a common breakfast food.",
+    ]
+    by_batch = ner.extract_batch(texts)
+    by_single = [ner.extract(t) for t in texts]
+    assert len(by_batch) == len(by_single) == 2
+    for b, s in zip(by_batch, by_single, strict=True):
+        # Order-invariant comparison on (text, start, end, entity_type).
+        keys_b = sorted((m.text, m.start, m.end, m.entity_type) for m in b)
+        keys_s = sorted((m.text, m.start, m.end, m.entity_type) for m in s)
+        assert keys_b == keys_s
 
 
 @pytest.mark.slow
-def test_dense_tier_links_lexically_distinct_synonym() -> None:
-    """The dense tier's real strength: linking a mention to a term whose name
-    shares NO tokens with it, but means the same thing.
+def test_hnsw_nel_index_links_lexically_distinct_synonym(tmp_path: Path) -> None:
+    """End-to-end NEL: BioLORD + HNSW links 'ascorbate' to vitamin C.
 
-    The mention 'ascorbate' shares no tokens with 'vitamin C' — fuzzy matching
-    cannot connect them. SapBERT (trained on UMLS synonymy) embeds 'ascorbate'
-    at ~0.76 cosine to the 'vitamin C ascorbic acid' term text, well clear of
-    the unrelated baseline (~0.32 vs salmon / olive oil), so the dense tier
-    resolves it.
-
-    Honest caveats this test encodes:
-      - We use dense_threshold=0.70, not the 0.78 production default: SapBERT
-        puts 'ascorbate' near vitamin C, but not overwhelmingly. This is a
-        real near-miss, documented rather than hidden.
-      - SapBERT does NOT reliably link opaque abbreviations ('EVOO' ~ 'olive
-        oil' measures only ~0.46). Those are the LLM tier's job. This asserts
-        what the dense tier actually delivers, not what we wish it did.
+    'ascorbate' shares no tokens with 'vitamin C' — pure string matching cannot
+    connect them. BioLORD (biomedical paraphrase-aware) embeds 'ascorbate' near
+    the 'vitamin C ; ascorbic acid' term text, so the HNSW kNN resolves it.
     """
-    from foodscholar.annotate.embedder import SapBERTEmbedder
-    from foodscholar.annotate.linker import ThreeTierLinker
+    pytest.importorskip("hnswlib")
+    from foodscholar.annotate.linker import HNSWLinker
+    from foodscholar.annotate.nel_index import HNSWNELIndex
     from foodscholar.io.chunk import Mention
     from foodscholar.io.ontology import OntologyTerm
     from foodscholar.ontology import FoodOnAPI
@@ -121,15 +139,27 @@ def test_dense_tier_links_lexically_distinct_synonym() -> None:
         ],
         prefix_filter=None,
     )
-    linker = ThreeTierLinker(
+    index = HNSWNELIndex(
         api,
-        fuzzy_threshold=0.99,          # force fuzzy to miss
-        dense_embedder=SapBERTEmbedder(),
-        dense_threshold=0.70,          # see docstring — a documented near-miss
+        encoder="biolord",
+        min_sim=0.60,  # documented near-miss — see prototype's 0.70 default
+        cache_dir=tmp_path,
     )
+    linker = HNSWLinker(index, min_sim=0.60)
     link = linker.link(
         Mention(text="ascorbate", start=0, end=9, score=1.0, ner_model_version="test")
     )
     assert link is not None
     assert link.method == "dense"
-    assert link.ontology_id == "FOODON:V1"  # vitamin C
+    assert link.ontology_id == "FOODON:V1"
+
+
+@pytest.mark.slow
+def test_sapbert_embedder_round_trip() -> None:
+    """SapBERT remains available for the `nel_encoder='sapbert'` option."""
+    from foodscholar.annotate.embedder import SapBERTEmbedder
+
+    e = SapBERTEmbedder()
+    [vec] = e.embed(["olive oil"])
+    assert e.dim == 768
+    assert len(vec) == 768
