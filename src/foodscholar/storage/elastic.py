@@ -87,12 +87,18 @@ class ElasticChunkStore:
             if effective_key:
                 client_kwargs["api_key"] = effective_key
         self._es = Elasticsearch(url, **client_kwargs)
+        # Tracks whether init() (or upsert's self-heal) has provisioned the
+        # index with the explicit mapping in this process. Without this, the
+        # very first upsert against a fresh cluster would let ES auto-create
+        # the index with dynamic text inference and break sort / term aggs.
+        self._ensured_init = False
 
     # ------------------------------------------------------------------ admin
 
     def init(self) -> None:
         """Create the index with the FoodScholar mapping if missing. Idempotent."""
         if self._es.indices.exists(index=self.index):
+            self._ensured_init = True
             return
         self._es.indices.create(
             index=self.index,
@@ -157,12 +163,16 @@ class ElasticChunkStore:
                 },
             },
         )
+        self._ensured_init = True
         _log.info("elastic.index_created", index=self.index)
 
     # ------------------------------------------------------------------ writes
 
     def upsert(self, chunks: Iterable[Chunk]) -> None:
         from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        if not self._ensured_init:
+            self.init()
 
         actions: list[dict[str, Any]] = []
         for chunk in chunks:
@@ -330,13 +340,18 @@ class ElasticChunkStore:
     # ------------------------------------------------------------------ private
 
     def _iter_all(self, *, page: int = _SCAN_PAGE) -> Iterator[Chunk]:
-        """Stream every chunk via search_after over a sort on chunk_id."""
+        """Stream every chunk via search_after.
+
+        Sort key is `_doc` (native index order) — fastest for full scans and
+        avoids fielddata errors when the index mapping was auto-inferred
+        (text fields aren't sortable without keyword subfields).
+        """
         after: list[Any] | None = None
         while True:
             body: dict[str, Any] = {
                 "size": page,
                 "query": {"match_all": {}},
-                "sort": [{"chunk_id": "asc"}],
+                "sort": ["_doc"],
             }
             if after is not None:
                 body["search_after"] = after
