@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from foodscholar.io.artifacts import ArtifactMeta
 from foodscholar.io.graph import Shelf
 from foodscholar.layer_a.facet import stub_root
-from foodscholar.layer_a.propagate import collect_support
+from foodscholar.layer_a.propagate import SupportTable, collect_support
 from foodscholar.layer_a.prune import prune, shelf_id_for_foodon
 from foodscholar.logging import get_logger
 from foodscholar.versioning import make_artifact_meta
@@ -121,10 +121,14 @@ def _build_facet(
     shelves = prune(support, ontology, facet_config, facet)
     if not shelves:
         return [stub_root(facet)]
-    return _ensure_single_root(shelves, facet)
+    return _ensure_single_root(shelves, facet, support)
 
 
-def _ensure_single_root(shelves: list[Shelf], facet: Facet) -> list[Shelf]:
+def _ensure_single_root(
+    shelves: list[Shelf],
+    facet: Facet,
+    support: SupportTable,
+) -> list[Shelf]:
     """Guarantee one entry point per facet.
 
     Layer A often produces a forest — terms whose FoodOn ancestry doesn't
@@ -144,19 +148,25 @@ def _ensure_single_root(shelves: list[Shelf], facet: Facet) -> list[Shelf]:
 
     # Build the facet root. By construction it has no foodon_id — nothing
     # in any ontology resolves to it — so no chunk can ever name it directly.
-    # That means support_direct MUST be 0 and every chunk reaching it counts
-    # as lifted. (Earlier code summed roots' direct support into total_direct
-    # via a copy-paste of the FOODON shelf accounting, producing a
-    # diagnostic-misleading number like `Foods: direct=7365` even though
-    # nothing names the synthetic root.)
+    # support_direct is 0; every chunk reaching it counts as lifted.
     #
-    # chunk_count is the sum of former-root counts. Strictly an upper bound:
-    # a chunk in multiple ontology branches reachable from different roots
-    # would be counted once per branch. We don't carry chunk-level identity
-    # past prune (the support table is one-pass), so we accept the upper
-    # bound here — in practice it matches sum-of-roots since most chunks
-    # don't cross root branches.
-    total_count = sum(s.chunk_count for s in roots)
+    # Honest chunk_count = unique chunks reaching ANY former root (union of
+    # their chunk-id sets from the support table). Previously this was
+    # `sum(s.chunk_count for s in roots)` — but a chunk linking to multiple
+    # FOODON terms in different orphan branches contributes to each root's
+    # count, so summing double-counted heavily on the real corpus (6,290
+    # unique chunks reported as 13,731 on the foods root).
+    root_chunk_ids: set = set()
+    for root_shelf_node in roots:
+        if root_shelf_node.foodon_id is None:
+            continue
+        chunks_for_root = support.with_descendants_chunk_ids.get(
+            root_shelf_node.foodon_id
+        )
+        if chunks_for_root:
+            root_chunk_ids |= chunks_for_root
+    total_count = len(root_chunk_ids)
+
     root_shelf = Shelf(
         shelf_id=f"facet:{facet}",
         label=_FACET_ROOT_LABELS[facet],

@@ -539,6 +539,38 @@ def test_synthetic_facet_root_injected_when_multiple_orphans() -> None:
     assert all(s.depth >= 1 for s in non_root)
 
 
+def test_synthetic_root_chunk_count_is_unique_chunks_not_sum_of_roots() -> None:
+    # A chunk linking to two terms in different orphan branches must not be
+    # double-counted on the synthetic root. Olive oil (TEST:0000008) and
+    # peanut (TEST:0000009) live under different surviving sub-trees after
+    # the umbrella rule kills plant food. With one chunk attached to BOTH,
+    # the synthetic root's chunk_count should be 1 — not 2.
+    store = InMemoryChunkStore()
+    store.upsert(
+        [
+            _chunk("c1", ["TEST:0000008", "TEST:0000009"]),  # both in one chunk
+            _chunk("c2", ["TEST:0000008"]),  # olive oil only
+            _chunk("c3", ["TEST:0000009"]),  # peanut only
+        ]
+    )
+    cfg = LayerAConfig(
+        min_support=1,
+        max_depth=10,
+        collapse_single_child_chains=False,
+        facets=["foods"],
+        umbrella_min_count=1,  # force umbrella to fire on plant food
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    root = next(s for s in shelves if s.shelf_id == "facet:foods")
+    # Three unique chunks total reach the foods facet; sum-of-roots would have
+    # given 4 (c1 counted under each of olive oil's and peanut's subtrees).
+    assert root.chunk_count == 3, (
+        f"synthetic root must count unique chunks (expected 3, got {root.chunk_count})"
+    )
+    assert root.support_direct == 0
+    assert root.support_lifted == 3
+
+
 def test_synthetic_root_not_injected_when_already_single_rooted() -> None:
     # If the projection naturally has one root, don't add a synthetic one.
     store = InMemoryChunkStore()
