@@ -26,8 +26,8 @@ Chunks attach to multiple Layer A shelves (multi-label, propagated through ontol
 | Graph store | **Neo4j** (hierarchy, edges, card nodes, chunk stub nodes) |
 | Bridge key | `chunk_id` exists in both stores; full chunk body lives only in Elastic |
 | Ontology v1 | **FoodOn only**, loaded with `pronto` and `import_depth=0`. MONDO and ChEBI deferred to v2. |
-| Food NER | **Agentic NER** — an LLM extracts mentions via `cfg.llm` (`cfg.annotate.ner: agentic`). Deterministic `KeywordNER` is the offline default. *(Deviation: the brief originally specified SciFoodNER; the project moved off bespoke fine-tuned models — see §3.5.)* |
-| Entity linking | Lexical (exact + fuzzy against FoodOn names + synonyms) then dense fallback (**SapBERT**), with semantic-type gate |
+| Food NER | **GLiNER bio** (`urchade/gliner_large_bio-v0.1`). Deterministic, batched, runs locally. *(Deviation: the brief originally specified SciFoodNER. Agentic-LLM NER was tried as an interim and dropped — see §3.5.)* |
+| Entity linking | **HNSW kNN over BioLORD embeddings** of every FoodOn term (`hnswlib` `ip` index, built on first use and cached to disk). Encoder pluggable via `cfg.annotate.linker.nel_encoder ∈ {biolord, sapbert, minilm, mpnet}`. Elastic `dense_vector` backend opt-in. |
 | Embeddings | **SPECTER2** for scientific abstract chunks, **BGE-large** (`BAAI/bge-large-en-v1.5`) for textbook / guide chunks |
 | Clustering | **Leiden / hierarchical Leiden** primary, **HDBSCAN** fallback. BERTopic acceptable for fast prototyping. |
 | LLM (Layer C + linker `llm` tier) | Provider-agnostic — `anthropic`, `openai`, `groq`, `gemini`, `ollama`, configured via `cfg.llm` with an ordered fallback chain. `config.example.yaml` default: Groq `llama-3.3-70b-versatile`, fallback local Ollama. Tests use a mock client. |
@@ -70,10 +70,10 @@ foodscholar/
         │   └── sources.py   # adapters per source_type
         ├── annotate/
         │   ├── __init__.py
-        │   ├── ner.py       # KeywordNER → list[Mention]
-        │   ├── agent_ner.py # AgenticNER — LLM-driven → list[Mention]
-        │   ├── linker.py    # mention → ontology_id (lexical + dense)
-        │   └── embedder.py  # SPECTER2 / BGE wrappers
+        │   ├── gliner_ner.py # GLinerNER — GLiNER-bio → list[Mention]
+        │   ├── nel_index.py  # NELIndex protocol + HNSWNELIndex / ElasticNELIndex
+        │   ├── linker.py     # HNSWLinker: mention → ontology_id (dense kNN)
+        │   └── embedder.py   # SPECTER2 / BGE / SapBERT wrappers
         ├── ontology/
         │   ├── __init__.py
         │   ├── foodon.py    # pronto loader + cache
@@ -207,7 +207,7 @@ fs.ontology.search("olive", limit=25)             # substring prefilter for SapB
 
 First access triggers `load_ontology(path, cache_path=...)` which uses pronto with `import_depth=0` (FoodOn only — MONDO and ChEBI deferred to v2 per §2). Results cache to a Parquet file alongside the source, keyed on `(source_size, source_mtime)` so the cache invalidates when FoodOn is updated. Tests bypass the loader with `fs.attach_ontology(api)`.
 
-### Annotate (`fs.ner` / `fs.linker` / `fs.annotate()`)
+### Annotate (`fs.ner` / `fs.linker` / `fs.annotate()` / `fs.load_and_annotate(path)`)
 
 The annotate phase is owned by three pluggable pieces, each with a default that works against the in-memory facade:
 
@@ -215,27 +215,23 @@ The annotate phase is owned by three pluggable pieces, each with a default that 
 fs.ner.extract("Mediterranean diet rich in olive oil.")  # list[Mention]
 fs.linker.link(mention)                                  # EntityLink | None
 fs.linker.dry_run("evo")                                 # convenience: text -> EntityLink
-fs.annotate()                                            # full phase, returns ArtifactMeta
+fs.annotate()                                            # full phase over the store
+fs.load_and_annotate("data/chunks.csv")                  # load → annotate → snapshot, one call
 ```
 
 Defaults:
 
-- **NER** — selected by `cfg.annotate.ner`:
-  - `keyword` (default) — `KeywordNER.from_ontology(fs.ontology)`. Word-boundary regex over every label + exact synonym (obsolete excluded). `expand_labels=True` also registers a noise-stripped variant of each label (`simplify_label` removes EFSA/EC code prefixes, parenthetical qualifiers, trailing category words) so `"red meat (raw)"` also matches the bare `"red meat"`. Deterministic, no LLM, no model download.
-  - `agentic` — `AgenticNER`. One `LLMClient.generate_json` call per chunk: the model returns mention strings + `entity_type`; spans are reconciled *locally* (`str.find`, cursor-advanced for repeats) because LLM character offsets are unreliable. A returned string not found verbatim in the source is dropped. LLM failure degrades to "no mentions", never crashes the phase. Each `Mention` carries `entity_type ∈ {food, nutrient, health, dietary_pattern, allergen, other}`. This is the first piece of the agentic-annotation redesign — see `docs/DESIGN_agentic_annotate.md`.
-  - **Deviation from §2:** the brief specified SciFoodNER (a bespoke fine-tuned model). It has been removed — the project moved off proprietary ML models. `keyword` (offline default) and `agentic` are the two NER strategies; agentic is the recommended setup.
-- **Linker** — `ThreeTierLinker(fs.ontology, ...)`. A 3-or-4 tier cascade, first confident hit wins:
-  1. `lexical_exact` — case- and punctuation-insensitive match against a label or exact synonym.
-  2. `lexical_fuzzy` — rapidfuzz `WRatio` (length-aware; replaced `token_set_ratio` after it routinely preferred generic short labels on real FoodOn). Short queries (≤4 chars) require a stricter 0.95 threshold; a length-ratio gate and a label-over-synonym tie-break further constrain it.
-  3. `dense` — cosine kNN over precomputed term embeddings via `DenseIndex` (a cached numpy matrix; ~29k FoodOn terms scored per query in <2ms). Opt-in: enabled when `cfg.annotate.linker.dense_model` is set (e.g. SapBERT). **Measured behavior:** SapBERT links *lexically-distinct synonyms and morphological variants* well (`whole grains`/`whole grain` ≈0.96; `ascorbate`/`vitamin C` ≈0.76; `vitamin C`/`ascorbic acid` ≈0.90) but does **not** reliably link opaque abbreviations (`EVOO`/`olive oil` ≈0.46 — barely above the unrelated baseline). Abbreviations are the `llm` tier's job, not the dense tier's.
-  4. `llm` — *opt-in, deviation from §2; see "Deviations" below.* When no deterministic tier clears `llm_select_threshold`, an LLM is shown the top-k candidates plus the mention and picks one or rejects. Gated so it fires only on the hard residue, not every mention.
+- **NER** — `GLinerNER` (`cfg.annotate.ner: gliner`). Wraps `urchade/gliner_large_bio-v0.1` (a fine-tuned biomedical GLiNER), runs locally, batched: `ner.extract_batch(texts)` is a single `GLiNER.inference(batch_size=N)` call. Character offsets come from GLiNER directly. The configured labels (`cfg.annotate.gliner.labels`) are the `EntityType` literal — the bridge from GLiNER's output to `Mention.entity_type` is a verbatim string copy. Default vocabulary covers `food`, `nutrient`/`micronutrient`/`macronutrient`/`food component`/`dietary supplement`, `dietary pattern`, `medical condition`, `biomarker`, and four pragmatic context tags (`Country`, `Measurement`, `Population`, `Time expression`). Gated behind the `[annotate]` extra.
+- **Linker** — `HNSWLinker` over a `NELIndex`. The default backend is `HNSWNELIndex`: every non-obsolete FoodOn term is encoded once with a sentence-transformer (BioLORD by default; SapBERT / MiniLM / MPNet selectable via `cfg.annotate.linker.nel_encoder`) and inserted into an `hnswlib` `ip` index built on first use and cached to disk (key derives from encoder model id + a content hash of the term set, so a re-encode happens iff the ontology or encoder changes). At link time the surface form is encoded with the same model, top-1 kNN is taken, and the hit is accepted iff cosine ≥ `nel_min_sim`. `link_many(mentions)` batches every surface form in a chunk batch through a single encode + single kNN call — the path the runner uses. A surface-form cache on the index instance amortizes repeats across chunks. Every accepted link records `method = "dense"` and the cosine score as `confidence`.
 
-  Each link records `method` ∈ `{lexical_exact, lexical_fuzzy, dense, llm}` and `confidence`, so the §17 audit is mechanical.
-- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")`, `SapBERTEmbedder` (entity-linking; the dense tier's model), or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
+  An `ElasticNELIndex` backend (same `NELIndex` protocol) is opt-in via `cfg.annotate.linker.nel_backend: elastic`; it queries an ES `dense_vector` index. Stub today — implementation lands with the storage milestone.
+- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")`, `SapBERTEmbedder` (also available as a `nel_encoder` choice), or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
 
 Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by passing `embedder=...` to either factory.
 
-**Deviation from §2 — the `llm` tier.** BRIEF §2 specifies the linker as "lexical then dense (SapBERT)". The `llm` tier is an addition: on real FoodOn the lexical/dense tiers cannot *reject* a query that isn't semantically a food (e.g. `"iron deficiency"` orthographically matches `"flat iron steak"`). An LLM shown the candidates with context can. The tier is **off by default in the Pydantic config defaults** (so `FoodScholar.in_memory()` and tests stay deterministic and offline), but **on in `config.example.yaml`** (the recommended production setup). Even when on it fires only below a confidence threshold — not per mention. This honors §13's instruction to "treat [retrieval] as a v1 — measure, iterate, and document deviations". §15's "no agentic/multi-step retrieval" still holds: there is no retry loop, just one gated selection call.
+**Single-pass ingest.** `fs.load_and_annotate(path)` mirrors the validated standalone prototype: load chunks (CSV / parquet / JSONL — the CSV reader lifts the field-size limit to 10MB for large abstracts), run batched GLiNER + batched HNSW, upsert annotated chunks back to the store, and optionally write a parquet snapshot to `cfg.corpus.annotated_snapshot_path`. If the snapshot exists and is non-empty, the call short-circuits — idempotent reruns over a fixed corpus.
+
+**Deviations from §2.** The original brief listed SciFoodNER + lexical→dense linking. SciFoodNER was dropped (no proprietary models); an LLM-driven `AgenticNER` was tried as an interim and superseded — it was non-deterministic, expensive, and required local span reconciliation because LLM offsets are unreliable. A four-tier `ThreeTierLinker` (lexical-exact + fuzzy + dense + LLM-select) was the matching interim linker; the fuzzy tier accounted for the §17 audit's wrong links and the LLM tier was a per-residue cost. Both are now removed in favor of GLiNER + HNSW, which validated cleanly in the prototype and is deterministic, fast, and pure dense.
 
 ### LLM client (`fs.llm`)
 
@@ -523,6 +519,7 @@ Single YAML, loaded into a Pydantic config model.
 ```yaml
 corpus:
   chunks_path: data/chunks.parquet
+  annotated_snapshot_path: data/annotated.parquet
 
 ontology:
   foodon_path: data/foodon.owl
@@ -530,13 +527,19 @@ ontology:
   include_imports: false           # import_depth=0 in pronto
 
 annotate:
-  ner: agentic                     # keyword | agentic
+  ner: gliner
+  gliner:
+    model_id: urchade/gliner_large_bio-v0.1
+    threshold: 0.4
+    batch_size: 16
   scientific_embedder: allenai/specter2_base
   general_embedder: BAAI/bge-large-en-v1.5
+  batch_size: 16
   linker:
-    lexical_threshold: 0.85
-    dense_threshold: 0.78
-    semantic_type_gate: true
+    nel_backend: hnsw              # hnsw | elastic
+    nel_encoder: biolord           # biolord | sapbert | minilm | mpnet
+    nel_top_k: 1
+    nel_min_sim: 0.70
 
 layer_a:
   min_support: 20                  # min chunks per shelf
