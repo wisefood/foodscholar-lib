@@ -29,7 +29,9 @@ import os
 from typing import TYPE_CHECKING, Any, Literal
 
 from foodscholar.io.chunk import ChunkId
+from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
+from foodscholar.io.ontology import OntologyId
 from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
@@ -87,6 +89,7 @@ class Neo4jGraphStore:
             "CREATE CONSTRAINT theme_id IF NOT EXISTS FOR (t:Theme) REQUIRE t.theme_id IS UNIQUE",
             "CREATE CONSTRAINT card_id IF NOT EXISTS FOR (c:Card) REQUIRE c.card_id IS UNIQUE",
             "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.chunk_id IS UNIQUE",
+            "CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.ontology_id IS UNIQUE",
         ]
         with self._driver.session() as session:
             for stmt in statements:
@@ -348,6 +351,68 @@ class Neo4jGraphStore:
                 """,
                 theme_id=theme_id,
                 chunk_ids=chunk_ids,
+            )
+
+    # ------------------------------------------------------------------ entities
+
+    def upsert_entities(self, entities: list[Entity]) -> None:
+        if not entities:
+            return
+        rows = [
+            {
+                "ontology_id": e.ontology_id,
+                "prefix": e.prefix,
+                "label": e.label,
+                "synonyms": list(e.synonyms),
+                "ancestor_ids": list(e.ancestor_ids),
+                "facet_hint": e.facet_hint,
+                "mention_count": e.mention_count,
+                "chunk_count": e.chunk_count,
+                "last_seen": e.last_seen.isoformat(),
+            }
+            for e in entities
+        ]
+        with self._driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (e:Entity {ontology_id: row.ontology_id})
+                SET e.prefix = row.prefix,
+                    e.label = row.label,
+                    e.synonyms = row.synonyms,
+                    e.ancestor_ids = row.ancestor_ids,
+                    e.facet_hint = row.facet_hint,
+                    e.mention_count = row.mention_count,
+                    e.chunk_count = row.chunk_count,
+                    e.last_seen = row.last_seen
+                """,
+                rows=rows,
+            )
+
+    def attach_chunks_to_entity(
+        self,
+        ontology_id: OntologyId,
+        chunk_links: list[tuple[ChunkId, float, str]],
+    ) -> None:
+        if not chunk_links:
+            return
+        rows = [
+            {"chunk_id": cid, "confidence": float(conf), "method": str(method)}
+            for cid, conf, method in chunk_links
+        ]
+        with self._driver.session() as session:
+            session.run(
+                """
+                MERGE (e:Entity {ontology_id: $ontology_id})
+                WITH e
+                UNWIND $rows AS row
+                MERGE (c:Chunk {chunk_id: row.chunk_id})
+                MERGE (c)-[r:MENTIONS]->(e)
+                SET r.confidence = row.confidence,
+                    r.method = row.method
+                """,
+                ontology_id=ontology_id,
+                rows=rows,
             )
 
 

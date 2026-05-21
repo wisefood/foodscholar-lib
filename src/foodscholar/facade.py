@@ -25,6 +25,7 @@ The facade owns the wiring; phase modules stay pure (no I/O, no global state).
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,11 +33,16 @@ from foodscholar import __version__
 from foodscholar.config import FoodScholarConfig, resolve_config
 from foodscholar.graph_view import GraphView
 from foodscholar.logging import configure_logging, get_logger
-from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+from foodscholar.storage.memory import (
+    InMemoryChunkStore,
+    InMemoryEntityStore,
+    InMemoryGraphStore,
+)
 from foodscholar.storage.protocols import (
     NER,
     ChunkStore,
     Embedder,
+    EntityStore,
     GraphStore,
     Linker,
     LLMClient,
@@ -128,6 +134,7 @@ class FoodScholar:
         graph_store: GraphStore,
         embedder: Embedder | None = None,
         llm: LLMClient | None = None,
+        entity_store: EntityStore | None = None,
     ) -> None:
         cfg = resolve_config(config)
         self.config = cfg
@@ -138,8 +145,14 @@ class FoodScholar:
         # weights to load, which we don't want to pay just to print info().
         self._embedder: Embedder | None = embedder
         self.llm: LLMClient = llm or _MockLLM()
+        # First-class entity store. Mirrors the chunk-store backend (memory ↔
+        # in-memory, elastic ↔ Elastic entity index). Built eagerly because
+        # the adapter ctor is cheap and we want fs.entities to work without
+        # extra wiring.
+        self.entity_store: EntityStore = entity_store or InMemoryEntityStore()
         self.config_hash = config_hash(cfg)
         self.graph = GraphView(chunk_store, graph_store)
+        self.entities = _EntityView(self)
         self._ontology: FoodOnAPI | None = None
         self._ner: NER | None = None
         self._linker: Linker | None = None
@@ -192,6 +205,7 @@ class FoodScholar:
             graph_store=InMemoryGraphStore(),
             embedder=embedder,
             llm=llm,
+            entity_store=InMemoryEntityStore(),
         )
 
     @classmethod
@@ -211,15 +225,28 @@ class FoodScholar:
         cfg = resolve_config(config)
 
         chunk_backend = cfg.storage.chunk_store.backend
+        entity_store: EntityStore
         if chunk_backend == "memory":
             chunk_store: ChunkStore = InMemoryChunkStore()
+            entity_store = InMemoryEntityStore()
         elif chunk_backend == "elastic":
             from foodscholar.storage.elastic import ElasticChunkStore
+            from foodscholar.storage.elastic_entities import ElasticEntityStore
 
             cs = cfg.storage.chunk_store
             chunk_store = ElasticChunkStore(
                 url=cs.url or "http://localhost:9200",
                 index=cs.index or "foodscholar_chunks",
+                api_key=cs.api_key,
+                username=cs.username,
+                password=cs.password,
+            )
+            # The entity index name mirrors the chunk index with an `_entities`
+            # suffix so the two artifacts are always paired.
+            entity_index = (cs.index or "foodscholar_chunks") + "_entities"
+            entity_store = ElasticEntityStore(
+                url=cs.url or "http://localhost:9200",
+                index=entity_index,
                 api_key=cs.api_key,
                 username=cs.username,
                 password=cs.password,
@@ -258,6 +285,7 @@ class FoodScholar:
             graph_store=graph_store,
             embedder=embedder,
             llm=llm,
+            entity_store=entity_store,
         )
 
     @staticmethod
@@ -605,6 +633,132 @@ class FoodScholar:
         )
         return meta
 
+    def build_entities(
+        self,
+        *,
+        cap_chunk_sample: int | None = None,
+    ) -> ArtifactMeta:
+        """Derive first-class `Entity` records from the chunks already in the
+        store and write them to (a) `fs.entity_store`, (b) `fs.graph_store`
+        as `(:Entity)` nodes with `(:Chunk)-[:MENTIONS]->(:Entity)` edges.
+
+        Walks `fs.chunk_store.iter_chunks(...)`, dedupes `EntityLink`s by
+        `ontology_id`, aggregates `(mention_count, chunk_count, chunk_ids,
+        facet_hint, last_seen)`, and enriches with `(label, synonyms,
+        ancestor_ids)` from `fs.ontology` when an ontology is configured AND
+        the entity id is a FOODON id (other OBO prefixes ship with the
+        most-frequent surface form as the label and no ancestors).
+
+        Idempotent — re-running over an unchanged corpus produces the same
+        Entity records; re-running after `fs.ingest` of new chunks updates
+        counts and the chunk_ids sample.
+        """
+        from foodscholar.io.entity import ENTITY_CHUNK_SAMPLE_CAP, Entity
+        from foodscholar.versioning import make_artifact_meta
+
+        sample_cap = cap_chunk_sample if cap_chunk_sample is not None else ENTITY_CHUNK_SAMPLE_CAP
+        ontology = self._ontology  # use only if already loaded — never force a load here
+
+        aggregates: dict[str, dict[str, object]] = {}
+        # per-entity: chunk_id -> (confidence, method) for the Neo4j edges
+        chunk_edges: dict[str, dict[str, tuple[float, str]]] = {}
+
+        n_chunks_seen = 0
+        for batch in self.chunk_store.iter_chunks(batch_size=500):
+            for chunk in batch:
+                n_chunks_seen += 1
+                for link in chunk.entity_links:
+                    oid = link.ontology_id
+                    if not oid:
+                        continue
+                    agg = aggregates.setdefault(
+                        oid,
+                        {
+                            "mention_count": 0,
+                            "chunk_ids": [],
+                            "chunk_id_set": set(),
+                            "surface_counts": {},  # surface form -> count, used for fallback label
+                            "facet_counts": {},
+                            "last_seen": chunk.created_at,
+                        },
+                    )
+                    agg["mention_count"] = int(agg["mention_count"]) + 1
+                    chunk_id_set: set[str] = agg["chunk_id_set"]  # type: ignore[assignment]
+                    if chunk.chunk_id not in chunk_id_set:
+                        chunk_id_set.add(chunk.chunk_id)
+                        sample: list[str] = agg["chunk_ids"]  # type: ignore[assignment]
+                        if len(sample) < sample_cap:
+                            sample.append(chunk.chunk_id)
+                    surface_counts: dict[str, int] = agg["surface_counts"]  # type: ignore[assignment]
+                    surface = link.mention.text
+                    surface_counts[surface] = surface_counts.get(surface, 0) + 1
+                    facet_counts: dict[str, int] = agg["facet_counts"]  # type: ignore[assignment]
+                    facet = _facet_hint_for_entity_type(link.mention.entity_type)
+                    if facet is not None:
+                        facet_counts[facet] = facet_counts.get(facet, 0) + 1
+                    last: datetime = agg["last_seen"]  # type: ignore[assignment]
+                    if chunk.created_at > last:
+                        agg["last_seen"] = chunk.created_at
+
+                    edges = chunk_edges.setdefault(oid, {})
+                    # Highest-confidence link per (chunk, entity) wins — same
+                    # entity may appear multiple times in one chunk.
+                    prev = edges.get(chunk.chunk_id)
+                    if prev is None or float(link.confidence) > prev[0]:
+                        edges[chunk.chunk_id] = (float(link.confidence), link.method)
+
+        entities: list[Entity] = []
+        for oid, agg in aggregates.items():
+            prefix = oid.split(":", 1)[0] if ":" in oid else ""
+            label, synonyms, ancestors = _enrich_from_ontology(ontology, oid, prefix)
+            if not label:
+                # Fall back to the most-frequent surface form when ontology
+                # lookup didn't yield a preferred label (typical for non-FoodOn
+                # prefixes when the loader is FoodOn-scoped).
+                surface_counts: dict[str, int] = agg["surface_counts"]  # type: ignore[assignment]
+                label = max(surface_counts.items(), key=lambda x: x[1])[0] if surface_counts else oid
+            facet_counts: dict[str, int] = agg["facet_counts"]  # type: ignore[assignment]
+            facet_hint = (
+                max(facet_counts.items(), key=lambda x: x[1])[0] if facet_counts else None
+            )
+            entities.append(
+                Entity(
+                    ontology_id=oid,
+                    prefix=prefix,
+                    label=label,
+                    synonyms=tuple(synonyms),
+                    ancestor_ids=tuple(ancestors),
+                    facet_hint=facet_hint,  # type: ignore[arg-type]
+                    mention_count=int(agg["mention_count"]),
+                    chunk_count=len(agg["chunk_id_set"]),  # type: ignore[arg-type]
+                    chunk_ids=tuple(agg["chunk_ids"]),  # type: ignore[arg-type]
+                    last_seen=agg["last_seen"],  # type: ignore[arg-type]
+                )
+            )
+
+        # Persist: entity store first (so search works even if graph write
+        # later fails partway through), then Neo4j entity nodes + edges.
+        self.entity_store.upsert(entities)
+        self.graph_store.upsert_entities(entities)
+        for oid, edges in chunk_edges.items():
+            links = [(cid, conf, method) for cid, (conf, method) in edges.items()]
+            self.graph_store.attach_chunks_to_entity(oid, links)
+
+        meta = make_artifact_meta(
+            phase="build_entities",
+            config=self.config,
+            record_count=len(entities),
+        )
+        self._log.info(
+            "build_entities.done",
+            n_chunks_seen=n_chunks_seen,
+            n_entities=len(entities),
+            n_edges=sum(len(e) for e in chunk_edges.values()),
+            artifact_id=meta.artifact_id,
+            config_hash=meta.config_hash,
+        )
+        return meta
+
     def annotate(self) -> ArtifactMeta:
         """Run NER + linking + embedding over every chunk in `chunk_store`."""
         from foodscholar.annotate.runner import run
@@ -684,17 +838,20 @@ class FoodScholar:
     # ------------------------------------------------------------------ phases (stubs)
 
     def init(self) -> None:
-        """Provision both backing stores declared by the config.
+        """Provision the backing stores declared by the config.
 
-        Calls `chunk_store.init()` and `graph_store.init()` — both methods are
-        in the storage protocols and are no-ops for the in-memory backends, so
-        this works uniformly regardless of where the stores live.
+        Calls `chunk_store.init()`, `entity_store.init()`, and
+        `graph_store.init()` — all three are in the storage protocols and are
+        no-ops for the in-memory backends, so this works uniformly regardless
+        of where the stores live.
         """
         self.chunk_store.init()
+        self.entity_store.init()
         self.graph_store.init()
         self._log.info(
             "init.done",
             chunk_store=self.config.storage.chunk_store.backend,
+            entity_store=type(self.entity_store).__name__,
             graph_store=self.config.storage.graph_store.backend,
             config_hash=self.config_hash,
         )
@@ -741,3 +898,113 @@ def _minimal_memory_config() -> FoodScholarConfig:
             },
         }
     )
+
+
+# ---------------------------------------------------------------- entity helpers
+
+
+# Maps GLiNER label vocabulary → Layer A facet. Best-effort: entries left out
+# (Country, Measurement, Population, Time expression, …) carry no facet hint.
+_ENTITY_TYPE_TO_FACET: dict[str, str] = {
+    "food": "foods",
+    "food component": "foods",
+    "nutrient": "nutrients",
+    "micronutrient": "nutrients",
+    "macronutrient": "nutrients",
+    "dietary supplement": "nutrients",
+    "dietary pattern": "dietary_patterns",
+    "medical condition": "health",
+    "biomarker": "health",
+    "allergen": "allergies",
+}
+
+
+def _facet_hint_for_entity_type(entity_type: str | None) -> str | None:
+    if not entity_type:
+        return None
+    return _ENTITY_TYPE_TO_FACET.get(entity_type)
+
+
+def _enrich_from_ontology(
+    ontology: Any, ontology_id: str, prefix: str
+) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """Look up label / synonyms / ancestors via `fs.ontology` if available.
+
+    Returns ``("", (), ())`` when no enrichment is possible (no ontology
+    attached, or the id is not in the loaded ontology — typical for non-FOODON
+    prefixes when the loader is FoodOn-scoped).
+    """
+    if ontology is None or prefix != "FOODON":
+        return "", (), ()
+    term = ontology.get(ontology_id) if hasattr(ontology, "get") else None
+    if term is None:
+        return "", (), ()
+    return term.label, tuple(term.synonyms), tuple(term.ancestor_ids)
+
+
+# ---------------------------------------------------------------- entity view
+
+
+class _EntityView:
+    """Fluent read surface over `fs.entity_store`. Exposed as `fs.entities`.
+
+    Read-only: writes go through `fs.build_entities()`, which mirrors them to
+    both the entity store and the graph store atomically per entity.
+    """
+
+    def __init__(self, fs: FoodScholar) -> None:
+        self._fs = fs
+
+    def __len__(self) -> int:
+        return len(self._fs.entity_store.scan())
+
+    def list(self, *, prefix: str | None = None, k: int = 100) -> list:
+        """Top-`k` entities. Sorted by `chunk_count` desc when `prefix` is set;
+        unsorted otherwise (use `search` for ranked queries).
+        """
+        if prefix is not None:
+            return self._fs.entity_store.list_by_prefix(prefix, k=k)
+        return self._fs.entity_store.scan()[:k]
+
+    def get(self, ontology_id: str):  # type: ignore[no-untyped-def]
+        return self._fs.entity_store.get(ontology_id)
+
+    def search(self, query: str, *, prefix: str | None = None, k: int = 10) -> list:
+        """Lexical search over label + synonyms. `prefix` filters to one OBO source."""
+        return self._fs.entity_store.search(query, prefix=prefix, k=k)
+
+    def chunks_for(self, ontology_id: str, *, k: int = 50) -> list:
+        """Return chunks that mention `ontology_id`.
+
+        Uses the chunk store's `foodon_ids` `terms`-filter for FoodOn ids
+        (fast). For other prefixes it falls back to walking the entity's
+        inline `chunk_ids` sample (capped at 50 by default).
+        """
+        if ontology_id.startswith("FOODON:"):
+            # The chunk store exposes its index name via `.index` (Elastic) or
+            # nothing (InMemory). Fast path: terms filter on foodon_ids.
+            try:
+                # ES-specific shortcut — InMemory falls through to the sample.
+                if hasattr(self._fs.chunk_store, "_es"):
+                    es = self._fs.chunk_store._es  # type: ignore[attr-defined]
+                    idx = self._fs.chunk_store.index  # type: ignore[attr-defined]
+                    resp = es.search(
+                        index=idx,
+                        body={
+                            "size": k,
+                            "query": {"term": {"foodon_ids": ontology_id}},
+                        },
+                    )
+                    from foodscholar.io.chunk import Chunk
+
+                    return [Chunk.model_validate(h["_source"]) for h in resp["hits"]["hits"]]
+            except Exception:  # pragma: no cover — defensive fallback
+                pass
+        ent = self._fs.entity_store.get(ontology_id)
+        if ent is None:
+            return []
+        return self._fs.chunk_store.get_many(list(ent.chunk_ids))[:k]
+
+    def build(self, *, cap_chunk_sample: int | None = None):
+        """Convenience: same as `fs.build_entities(...)`. Returns ArtifactMeta."""
+        return self._fs.build_entities(cap_chunk_sample=cap_chunk_sample)

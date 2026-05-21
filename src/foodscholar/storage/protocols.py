@@ -2,7 +2,9 @@ from collections.abc import Iterable
 from typing import Literal, Protocol, runtime_checkable
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
+from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
+from foodscholar.io.ontology import OntologyId
 
 
 @runtime_checkable
@@ -79,6 +81,38 @@ class GraphStore(Protocol):
     ) -> Card | None: ...
     def list_shelves(self) -> list[Shelf]: ...
     def list_themes(self) -> list[Theme]: ...
+
+    # Entity graph (first-class linked entities)
+    def upsert_entities(self, entities: list[Entity]) -> None: ...
+    def attach_chunks_to_entity(
+        self,
+        ontology_id: OntologyId,
+        chunk_links: list[tuple[ChunkId, float, str]],
+    ) -> None:
+        """Wire up `(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)` edges.
+
+        `chunk_links` is a list of `(chunk_id, confidence, method)` tuples
+        carrying the per-mention metadata. Implementations must be idempotent
+        — re-running with the same links must not duplicate the edges.
+        """
+        ...
+
+
+@runtime_checkable
+class EntityStore(Protocol):
+    """Dedicated, queryable store for first-class linked entities.
+
+    Local stores implement `init()` as a no-op; the Elastic adapter creates a
+    `foodscholar_entities` index alongside the chunk index.
+    """
+
+    def init(self) -> None: ...
+    def upsert(self, entities: Iterable[Entity]) -> None: ...
+    def get(self, ontology_id: OntologyId) -> Entity | None: ...
+    def get_many(self, ontology_ids: list[OntologyId]) -> list[Entity]: ...
+    def list_by_prefix(self, prefix: str, *, k: int = 100) -> list[Entity]: ...
+    def search(self, query: str, *, prefix: str | None = None, k: int = 10) -> list[Entity]: ...
+    def scan(self) -> list[Entity]: ...
 
 
 @runtime_checkable
