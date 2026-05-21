@@ -204,3 +204,67 @@ def test_parse_json_object_rejects_garbage() -> None:
 
     with pytest.raises(ValueError, match="did not return JSON"):
         _parse_json_object("no json here at all")
+
+
+# ---------------------------------------------------------- _resolve_secret
+
+
+def test_resolve_secret_prefers_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from foodscholar.llm.providers import _resolve_secret
+
+    monkeypatch.setenv("FAKE_KEY", "from-env")
+    assert _resolve_secret("from-config", "FAKE_KEY", "Fake") == "from-config"
+
+
+def test_resolve_secret_falls_back_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from foodscholar.llm.providers import _resolve_secret
+
+    monkeypatch.setenv("FAKE_KEY", "from-env")
+    assert _resolve_secret(None, "FAKE_KEY", "Fake") == "from-env"
+    assert _resolve_secret("", "FAKE_KEY", "Fake") == "from-env"
+
+
+def test_resolve_secret_raises_when_neither_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from foodscholar.llm.providers import _resolve_secret
+
+    monkeypatch.delenv("FAKE_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="requires an API key"):
+        _resolve_secret(None, "FAKE_KEY", "Fake")
+
+
+def test_provider_config_accepts_api_key_field() -> None:
+    cfg = ProviderConfig(provider="groq", model="x", api_key="secret-123")
+    assert cfg.api_key == "secret-123"
+
+
+def test_factory_forwards_api_key_to_provider() -> None:
+    """build_llm must pass cfg.llm.primary.api_key down to the client."""
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        model_id = "fake"
+
+        def __init__(self, model: str, *, timeout_s: float, api_key: str | None) -> None:
+            captured.update({"model": model, "timeout_s": timeout_s, "api_key": api_key})
+
+        def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+            return ""
+
+        def generate_json(self, prompt, schema, max_tokens=1024):  # type: ignore[no-untyped-def]
+            return {}
+
+    PROVIDERS["groq"] = _FakeClient  # type: ignore[assignment]
+    try:
+        cfg = LLMConfig(
+            primary=ProviderConfig(provider="groq", model="x", api_key="key-abc"),
+        )
+        build_llm(cfg)
+        assert captured["api_key"] == "key-abc"
+        assert captured["model"] == "x"
+    finally:
+        # Restore the real adapter for other tests.
+        from foodscholar.llm.providers import GroqClient
+
+        PROVIDERS["groq"] = GroqClient
