@@ -14,7 +14,9 @@ from collections.abc import Iterable
 from typing import Literal
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
+from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
+from foodscholar.io.ontology import OntologyId
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 
@@ -177,6 +179,13 @@ class InMemoryGraphStore:
         self._cards: dict[tuple[str, str], Card] = {}
         self._shelf_chunks: dict[ShelfId, set[ChunkId]] = defaultdict(set)
         self._theme_chunks: dict[ThemeId, set[ChunkId]] = defaultdict(set)
+        # First-class entities (mirrors the Neo4j Entity graph). Each entity
+        # gets a Pydantic record plus a chunk_id → (confidence, method) map
+        # so re-attaching the same chunk updates rather than duplicates.
+        self._entities: dict[OntologyId, Entity] = {}
+        self._entity_chunks: dict[OntologyId, dict[ChunkId, tuple[float, str]]] = (
+            defaultdict(dict)
+        )
 
     def init(self) -> None:
         """No-op — there is nothing to provision for an in-memory store."""
@@ -238,3 +247,68 @@ class InMemoryGraphStore:
 
     def list_themes(self) -> list[Theme]:
         return list(self._themes.values())
+
+    # ------------------------------------------------------------- entities
+
+    def upsert_entities(self, entities: list[Entity]) -> None:
+        for e in entities:
+            self._entities[e.ontology_id] = e
+
+    def attach_chunks_to_entity(
+        self,
+        ontology_id: OntologyId,
+        chunk_links: list[tuple[ChunkId, float, str]],
+    ) -> None:
+        bucket = self._entity_chunks[ontology_id]
+        for chunk_id, confidence, method in chunk_links:
+            bucket[chunk_id] = (float(confidence), str(method))
+
+
+class InMemoryEntityStore:
+    """Dict-backed `EntityStore`. Search is a token-overlap toy, same flavor
+    as `InMemoryChunkStore`. Used by tests and the `in_memory()` facade.
+    """
+
+    def __init__(self) -> None:
+        self._entities: dict[OntologyId, Entity] = {}
+
+    def init(self) -> None:
+        """No-op — there is nothing to provision for an in-memory store."""
+        return
+
+    def upsert(self, entities: Iterable[Entity]) -> None:
+        for e in entities:
+            self._entities[e.ontology_id] = e
+
+    def get(self, ontology_id: OntologyId) -> Entity | None:
+        return self._entities.get(ontology_id)
+
+    def get_many(self, ontology_ids: list[OntologyId]) -> list[Entity]:
+        return [self._entities[oid] for oid in ontology_ids if oid in self._entities]
+
+    def list_by_prefix(self, prefix: str, *, k: int = 100) -> list[Entity]:
+        out = [e for e in self._entities.values() if e.prefix == prefix]
+        out.sort(key=lambda e: e.chunk_count, reverse=True)
+        return out[:k]
+
+    def search(
+        self, query: str, *, prefix: str | None = None, k: int = 10
+    ) -> list[Entity]:
+        q_tokens = set(_tokenize(query))
+        if not q_tokens:
+            return []
+        scored: list[tuple[Entity, int]] = []
+        for e in self._entities.values():
+            if prefix is not None and e.prefix != prefix:
+                continue
+            hay = set(_tokenize(e.label))
+            for syn in e.synonyms:
+                hay.update(_tokenize(syn))
+            score = len(q_tokens & hay)
+            if score > 0:
+                scored.append((e, score))
+        scored.sort(key=lambda x: (x[1], x[0].chunk_count), reverse=True)
+        return [e for e, _ in scored[:k]]
+
+    def scan(self) -> list[Entity]:
+        return list(self._entities.values())
