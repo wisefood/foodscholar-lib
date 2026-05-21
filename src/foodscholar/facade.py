@@ -911,8 +911,15 @@ class FoodScholar:
             full_config=self.config,
         )
 
-    def attach(self) -> None:
-        raise _deferred("attach")
+    def attach(self) -> ArtifactMeta:
+        from foodscholar.layer_a import attach as _attach
+
+        return _attach(
+            self.chunk_store,
+            self.graph_store,
+            self.ontology,
+            full_config=self.config,
+        )
 
     def build_layer_b(self) -> None:
         raise _deferred("build-layer-b")

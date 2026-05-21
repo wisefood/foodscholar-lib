@@ -208,6 +208,59 @@ class ElasticChunkStore:
             refresh="wait_for",
         )
 
+    def bulk_update_attachments(
+        self,
+        items: list[tuple[ChunkId, list[ShelfId], list[ThemeId]]],
+        *,
+        wait_for_refresh: bool = False,
+    ) -> None:
+        """Patch shelf_ids + theme_ids on many chunks via one `_bulk` call.
+
+        `wait_for_refresh=True` blocks until the new values are searchable
+        — pass on the last flush so subsequent BM25/kNN queries see them.
+        Intermediate flushes pass `wait_for_refresh=False` and amortize the
+        index refresh.
+        """
+        if not items:
+            return
+        from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        actions = [
+            {
+                "_op_type": "update",
+                "_index": self.index,
+                "_id": chunk_id,
+                "doc": {
+                    "shelf_ids": list(shelf_ids),
+                    "theme_ids": list(theme_ids),
+                },
+            }
+            for chunk_id, shelf_ids, theme_ids in items
+        ]
+        bulk(self._es, actions, refresh="wait_for" if wait_for_refresh else False)
+
+    def clear_attachments(self) -> None:
+        """Wipe `shelf_ids` + `theme_ids` on every chunk in the index.
+
+        Implemented as `_update_by_query` — server-side, single round-trip,
+        no chunk download. The query is `match_all` because the per-chunk
+        cost of "did this chunk ever have an attachment?" via a script
+        wouldn't beat just rewriting the field set.
+        """
+        self._es.update_by_query(
+            index=self.index,
+            body={
+                "script": {
+                    "source": "ctx._source.shelf_ids = []; ctx._source.theme_ids = []",
+                    "lang": "painless",
+                },
+                "query": {"match_all": {}},
+            },
+            refresh=True,
+            conflicts="proceed",
+            wait_for_completion=True,
+        )
+
     def update_annotations(
         self,
         chunk_id: ChunkId,

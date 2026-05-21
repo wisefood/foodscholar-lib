@@ -123,6 +123,24 @@ class InMemoryChunkStore:
             update={"shelf_ids": list(shelf_ids), "theme_ids": list(theme_ids)}
         )
 
+    def bulk_update_attachments(
+        self,
+        items: list[tuple[ChunkId, list[ShelfId], list[ThemeId]]],
+        *,
+        wait_for_refresh: bool = False,
+    ) -> None:
+        # `wait_for_refresh` is a no-op for in-memory — writes are immediately
+        # visible. Kept in the signature so callers don't need a backend check.
+        for chunk_id, shelf_ids, theme_ids in items:
+            self.update_attachments(chunk_id, shelf_ids, theme_ids)
+
+    def clear_attachments(self) -> None:
+        for cid, c in list(self._chunks.items()):
+            if c.shelf_ids or c.theme_ids:
+                self._chunks[cid] = c.model_copy(
+                    update={"shelf_ids": [], "theme_ids": []}
+                )
+
     def update_annotations(
         self,
         chunk_id: ChunkId,
@@ -177,7 +195,10 @@ class InMemoryGraphStore:
         self._shelves: dict[ShelfId, Shelf] = {}
         self._themes: dict[ThemeId, Theme] = {}
         self._cards: dict[tuple[str, str], Card] = {}
-        self._shelf_chunks: dict[ShelfId, set[ChunkId]] = defaultdict(set)
+        # shelf_id -> {chunk_id -> lifted_from foodon_ids}. The inner dict
+        # carries provenance written by `fs.attach()` per edge; an empty list
+        # means "direct" (chunk linked to the shelf's own foodon_id).
+        self._shelf_chunks: dict[ShelfId, dict[ChunkId, list[str]]] = defaultdict(dict)
         self._theme_chunks: dict[ThemeId, set[ChunkId]] = defaultdict(set)
         # First-class entities (mirrors the Neo4j Entity graph). Each entity
         # gets a Pydantic record plus a chunk_id → (confidence, method) map
@@ -210,6 +231,10 @@ class InMemoryGraphStore:
             if key[1] != "shelf"
         }
 
+    def clear_attachments(self) -> None:
+        """Drop every shelf->chunk attachment without touching the shelves."""
+        self._shelf_chunks.clear()
+
     def upsert_themes(self, themes: list[Theme]) -> None:
         for t in themes:
             self._themes[t.theme_id] = t
@@ -218,8 +243,14 @@ class InMemoryGraphStore:
         for c in cards:
             self._cards[(c.target_id, c.target_type)] = c
 
-    def attach_chunks_to_shelf(self, shelf_id: ShelfId, chunk_ids: list[ChunkId]) -> None:
-        self._shelf_chunks[shelf_id].update(chunk_ids)
+    def attach_chunks_to_shelf(
+        self,
+        shelf_id: ShelfId,
+        attachments: list[tuple[ChunkId, list[str]]],
+    ) -> None:
+        bucket = self._shelf_chunks[shelf_id]
+        for chunk_id, lifted_from in attachments:
+            bucket[chunk_id] = list(lifted_from)
 
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None:
         self._theme_chunks[theme_id].update(chunk_ids)

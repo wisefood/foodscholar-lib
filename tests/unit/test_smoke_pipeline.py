@@ -70,7 +70,7 @@ def test_smoke_end_to_end(mini_chunks, mock_embedder, mock_llm):  # type: ignore
         "s-foods": ["c4"],
     }
     for shelf_id, cids in attachments.items():
-        graph_store.attach_chunks_to_shelf(shelf_id, cids)
+        graph_store.attach_chunks_to_shelf(shelf_id, [(cid, []) for cid in cids])
         for cid in cids:
             existing = chunk_store.get(cid)
             assert existing is not None
