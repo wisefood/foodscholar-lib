@@ -25,7 +25,16 @@ class ChunkStore(Protocol):
         shelf_ids: list[ShelfId],
         theme_ids: list[ThemeId],
     ) -> None: ...
+    def update_annotations(
+        self,
+        chunk_id: ChunkId,
+        mentions: list[Mention],
+        entity_links: list[EntityLink],
+        foodon_ids: list[str],
+        enrichment_version: str,
+    ) -> None: ...
     def scan(self) -> list[Chunk]: ...
+    def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
 
 
 @runtime_checkable

@@ -1,3 +1,4 @@
+from foodscholar.io.chunk import EntityLink, Mention
 from foodscholar.io.graph import Card, Shelf, Theme
 from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
 from foodscholar.storage.protocols import ChunkStore, GraphStore
@@ -34,6 +35,52 @@ def test_chunk_search_with_shelf_filter(mini_chunks) -> None:  # type: ignore[no
     store.update_attachments("c1", shelf_ids=["s-med"], theme_ids=[])
     hits = store.search("cardiovascular", k=5, shelf_ids=["s-med"])
     assert {h.chunk_id for h in hits} == {"c1"}
+
+
+def test_chunk_store_iter_chunks_batches(mini_chunks) -> None:  # type: ignore[no-untyped-def]
+    store = InMemoryChunkStore()
+    store.upsert(mini_chunks)
+    batches = list(store.iter_chunks(batch_size=2))
+    assert [len(batch) for batch in batches] == [2, 2, 1]
+    assert [c.chunk_id for batch in batches for c in batch] == [c.chunk_id for c in mini_chunks]
+
+
+def test_chunk_store_iter_chunks_rejects_non_positive_batch_size() -> None:
+    store = InMemoryChunkStore()
+    import pytest
+
+    with pytest.raises(ValueError):
+        list(store.iter_chunks(batch_size=0))
+
+
+def test_chunk_store_update_annotations(mini_chunks) -> None:  # type: ignore[no-untyped-def]
+    store = InMemoryChunkStore()
+    store.upsert(mini_chunks)
+    mention = Mention(
+        text="olive oil",
+        start=0,
+        end=9,
+        score=0.99,
+        ner_model_version="fixture-ner",
+        entity_type="food",
+    )
+    link = EntityLink(
+        mention=mention,
+        ontology_id="TEST:0000008",
+        confidence=0.95,
+        method="lexical_exact",
+        linker_version="fixture-linker",
+    )
+
+    store.update_annotations("c1", [mention], [link], ["TEST:0000008"], "fixture-v1")
+    store.update_annotations("missing", [], [], [], "fixture-v1")
+
+    chunk = store.get("c1")
+    assert chunk is not None
+    assert chunk.mentions == [mention]
+    assert chunk.entity_links == [link]
+    assert chunk.foodon_ids == ["TEST:0000008"]
+    assert chunk.enrichment_version == "fixture-v1"
 
 
 def test_graph_store_shelves_and_neighbors() -> None:

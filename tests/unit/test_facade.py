@@ -78,13 +78,13 @@ def test_upsert_chunks_routes_to_store() -> None:
 
 def test_deferred_phases_raise_not_implemented() -> None:
     fs = FoodScholar.in_memory()
-    for method in ["build_layer_a", "attach", "build_layer_b", "build_layer_c"]:
+    for method in ["attach", "build_layer_b", "build_layer_c"]:
         with pytest.raises(NotImplementedError, match="not implemented yet"):
             getattr(fs, method)()
 
 
 def test_build_stops_at_first_deferred_phase() -> None:
-    """`fs.build()` runs annotate (real) then trips on build-layer-a (deferred)."""
+    """`fs.build()` runs annotate + Layer A, then trips on attach (deferred)."""
     from pathlib import Path
 
     from foodscholar import FoodOnAPI
@@ -97,7 +97,7 @@ def test_build_stops_at_first_deferred_phase() -> None:
             prefix_filter=None,
         )
     )
-    with pytest.raises(NotImplementedError, match="'build-layer-a'"):
+    with pytest.raises(NotImplementedError, match="'attach'"):
         fs.build()
 
 
@@ -184,15 +184,6 @@ def test_from_config_explicit_embedder_is_respected() -> None:
 
 
 def test_from_config_embedder_degrades_to_mock_without_deps() -> None:
-    """When the [annotate] embedder deps are absent, from_config falls back to
-    the mock embedder rather than crashing — `_build_embedder` returns None and
-    __init__ supplies _MockEmbedder."""
-    import importlib.util
-
+    """Memory configs stay offline/lightweight unless an embedder is explicit."""
     fs = FoodScholar.from_config(_memory_config())
-    if importlib.util.find_spec("sentence_transformers") is None:
-        # No sentence-transformers in this env → SourceTypeRouter can't build.
-        assert fs.embedder.model_id == "mock-embedder-v0"
-    else:
-        # Deps present → a real source-type router was built.
-        assert fs.embedder.model_id.startswith("router(")
+    assert fs.embedder.model_id == "mock-embedder-v0"

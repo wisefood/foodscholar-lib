@@ -37,7 +37,7 @@ def test_cli_init_memory_backend_is_noop(tmp_path: Path) -> None:
 
 def test_cli_phase_command_is_deferred(tmp_path: Path) -> None:
     cfg = _write_memory_config(tmp_path)
-    result = runner.invoke(app, ["build-layer-a", "--config", str(cfg)])
+    result = runner.invoke(app, ["build-layer-b", "--config", str(cfg)])
     assert result.exit_code == 1
     assert "not implemented yet" in result.output
 

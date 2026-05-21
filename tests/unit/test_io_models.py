@@ -15,6 +15,26 @@ def test_chunk_roundtrip() -> None:
     assert restored == c
     assert restored.shelf_ids == []
     assert restored.theme_ids == []
+    assert restored.source_metadata == {}
+
+
+def test_chunk_preserves_source_metadata() -> None:
+    c = Chunk(
+        chunk_id="c-1",
+        text="Olive oil and heart health.",
+        source_doc_id="10.123/example",
+        source_type="abstract",
+        section_type="abstract",
+        year=2024,
+        source_metadata={
+            "title": "Olive oil study",
+            "DOI": "https://doi.org/10.123/example",
+            "citationCount": 12,
+        },
+    )
+    restored = Chunk.model_validate_json(c.model_dump_json())
+    assert restored.source_metadata["title"] == "Olive oil study"
+    assert restored.source_metadata["citationCount"] == 12
 
 
 def test_entity_link_validates_method() -> None:
