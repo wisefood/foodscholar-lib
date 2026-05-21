@@ -6,6 +6,75 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-21 — Iteration 6.0 (M3): GLiNER + HNSW pivot, ES/Neo4j adapters, ingest/embed/entities
+
+**Goal:** the M2 agentic-NER + 3-tier-linker stack was not converging — the fuzzy tier was the source of the §17 audit wrong-links, agentic NER was non-deterministic and required local span reconciliation. A standalone `gliner.py` prototype validated GLiNER bio + HNSW-over-BioLORD on real FoodOn. M3 makes that pipeline the only NER+NEL path, finalizes the storage backends end-to-end, makes the configuration in-code-friendly, and promotes linked entities to first-class citizens.
+
+### What changed (in commit order — 8 landed commits)
+
+**`a3f40a0` M3 (annotate): pivot to GLiNER + HNSW NEL.**
+- New `GLinerNER` (`annotate/gliner_ner.py`) wraps `urchade/gliner_large_bio-v0.1` behind the `NER` protocol. Batched fast path `ner.extract_batch(texts)` runs a single `GLiNER.inference(batch_size=N)` call — the runner is wired against it.
+- New `NELIndex` protocol (`annotate/nel_index.py`) with `HNSWNELIndex` (default; local `hnswlib ip` index over BioLORD-encoded FoodOn term labels, build-on-first-use cache keyed on `sha256(encoder + sorted-term-id-set)`) and `ElasticNELIndex` (stub, opt-in for the storage milestone).
+- `HNSWLinker` (`annotate/linker.py`) is a thin single-tier dense linker over the NEL index. `link_many` is the batched path the runner uses.
+- `EntityType` (`io/chunk.py`) widened to GLiNER's 13-label vocab (food/nutrient/micronutrient/macronutrient/food component/dietary supplement/dietary pattern/medical condition/biomarker/Country/Measurement/Population/Time expression + `other`).
+- Deleted: `agent_ner.py`, `ner.py` (`KeywordNER`), `dense_index.py`, `ontorag/`, repo-root `gliner.py` prototype, and the 5 test files exercising them.
+
+**`3bf7e93` M3 (config): in-code dict config + `fs.load_and_annotate`.**
+- `resolve_config(config)` normalizes `str | Path | dict | FoodScholarConfig` into a validated config — `${ENV}` substitution now flows over dict inputs too. `from_config()`, `in_memory(config=...)`, and `__init__` all route through it.
+- `AnnotateConfig` / `LinkerConfig` reshaped: `cfg.annotate.ner: "gliner"`, `cfg.annotate.gliner.*`, `cfg.annotate.linker.{nel_backend, nel_encoder, nel_top_k, nel_min_sim, nel_index_path, nel_metadata_path}`, `cfg.annotate.batch_size`, `cfg.corpus.annotated_snapshot_path`.
+- `fs.load_and_annotate(path)` is the release-ready single-call entry point that mirrors the prototype's `main()` — load → annotate → upsert → optional parquet snapshot with skip-if-exists idempotency.
+- CSV reader hardened: `csv.field_size_limit(10 MB)` at import (large abstracts in the prototype's corpus).
+
+**`0aa52f5` M3 (storage): release-ready ElasticChunkStore + Neo4jGraphStore.**
+- `ElasticChunkStore` fully implemented: index mapping (BM25 `text`, `dense_vector` cosine, nested mentions/entity_links, `keyword[]` for shelf_ids/theme_ids/foodon_ids, flattened source_metadata), bulk upsert paginated at 500, search with BM25+kNN+RRF fusion, search_after-based `scan` / `iter_chunks`, scoped `_update` for annotations. `init()` is idempotent.
+- `Neo4jGraphStore` fully implemented: MERGE upserts for shelves/themes/cards/chunk stubs, parameterized Cypher, list/get/get_neighbors. `init()` creates `CREATE CONSTRAINT … IF NOT EXISTS` on all four node types.
+- Auth at the config layer: `ChunkStoreConfig.{api_key, username, password}` (HTTP-basic wins over api_key; env fallback to `ELASTICSEARCH_API_KEY`), `GraphStoreConfig.password` with env fallback to `NEO4J_PASSWORD`. `ProviderConfig.api_key` (with `_resolve_secret` cascade) plumbed through every LLM adapter.
+- `ChunkStore` + `GraphStore` protocols gain `init()` (no-op in-memory, real provisioning remote). `fs.init()` calls all three stores uniformly.
+
+**`a6f20b7` M3 (docs): BRIEF + notebook refresh.** §2/§3.5/§8 updated; full notebook rebuild around the new pipeline.
+
+**`941683f` M3 (api): one-call ingest + use precomputed NER/NEL when available.**
+- New `corpus/nel_loader.py` reads the prototype's `(chunk_id, chunk_entities_ner, chunk_uri_nel)` CSVs. `shorten_obo_uri` normalizes purls (`http://purl.obolibrary.org/obo/FOODON_03309927` → `FOODON:03309927`). Empty URI slots become NIL mentions (kept as `Mention`, no `EntityLink`). FoodOn ids land in the chunk's denormalized `foodon_ids`; CHEBI/GAZ/PATO/… stay in `entity_links` only.
+- `fs.ingest(corpus_dir, *, nel_dir=None, snapshot_path=None)` is the new top-level entry point. With `nel_dir`: load chunks → attach precomputed annotations → upsert (no GLiNER, no HNSW, no `[annotate]` extra needed). Without `nel_dir`: delegates to `load_and_annotate`. **All chunks are inserted** — chunks with no matching NEL row land with empty mentions/links, never silently dropped.
+- Notebook simplified to 3 happy-path cells + collapsed "Under the hood" appendix.
+
+**`d36c85f` M3 (perf): lazy chunk embedder.** `from_config` no longer eagerly builds `SourceTypeRouter(SPECTER2, BGE-large)` (~1.7 GB of model weights). `fs.embedder` is a property — first access pays the cost; `fs.info()` reports `lazy(…)` until then. An explicit `embedder=` kwarg still skips the lazy build.
+
+**`6a7c0d8` M3 (embed): split chunk-text embedding out of ingest into `fs.embed()`.**
+- `fs.ingest(nel_dir=...)` no longer embeds chunks — they land with `embedding=None`, so iterating on NER/NEL doesn't re-pay the SPECTER2/BGE cost. The runner's `fs.load_and_annotate` path still embeds inline (it already loads the router).
+- New `fs.embed(only_missing=True, batch_size=64)` walks the chunk store, encodes via the source-type router, writes back via a new `chunk_store.update_embedding(chunk_id, vec, model_id)` — a scoped `_update` in Elastic that does NOT touch annotations. `only_missing=True` (default) skips chunks whose `embedding_model` is already real (anchored to the `mock-embedder-v0` / `hash-embedder-v0` exclusion set).
+- New §3 "Embed (optional)" cell in the notebook.
+
+**`41c82ea` M3 (entities): linked entities as first-class citizens.**
+- New `Entity` Pydantic (`io/entity.py`): frozen record with `ontology_id`, `prefix` (FOODON/CHEBI/GAZ/…), `label`, `synonyms`, `ancestor_ids`, `facet_hint` (mapped from `Mention.entity_type` via `_ENTITY_TYPE_TO_FACET`), `mention_count`, `chunk_count`, sample `chunk_ids` (cap = 50), `last_seen`. Exported from `foodscholar.io`.
+- New `EntityStore` protocol with `InMemoryEntityStore` (dict-backed, token-overlap search) and `ElasticEntityStore` (own index `foodscholar_chunks_entities`, BM25 over `label`+`synonyms`, prefix-term filter, idempotent `init()`).
+- `GraphStore` extended with `upsert_entities` + `attach_chunks_to_entity(chunk_id, conf, method)`. Neo4j adds `CREATE CONSTRAINT` on `(:Entity {ontology_id})`, MERGEs `(:Entity)` nodes, and writes `(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)` edges. In-memory mirror tracks the same shape.
+- `fs.entity_store` plumbed through the facade (eager construction — adapter ctor is cheap). `fs.init()` now provisions all three stores in lockstep.
+- `fs.build_entities()` walks the chunk store, dedupes EntityLinks by `ontology_id`, aggregates counts + facet_hint (max-voted) + chunk_ids (capped sample), enriches FOODON ids with `label`/`synonyms`/`ancestor_ids` from the loaded ontology (other OBO prefixes fall back to the most-frequent surface form as label, no ancestors), upserts to entity store, then MERGEs entity nodes + `[:MENTIONS]` edges. Idempotent.
+- `fs.entities` view: `list(prefix=)`, `get(id)`, `search("query")`, `chunks_for(id)` (Elastic `terms`-filter shortcut for FOODON ids, in-memory sample otherwise), `build()` convenience.
+- Notebook gains §4 "Build & explore entities" between Embed and Inspect.
+
+### Design decisions worth remembering
+
+- **GLiNER bio is the only NER**. SciFoodNER and agentic NER were tried and dropped — the bio-fine-tuned GLiNER converges deterministically on real FoodOn and amortizes batches.
+- **Linker is pure dense, single tier**. The 3-tier (lexical exact / fuzzy / dense) plus optional LLM-select linker was the source of §17 wrong-links via fuzzy over-matching. HNSW over BioLORD is fast (one encode + one kNN per batch), deterministic, and audit-friendly (`method = "dense"`).
+- **Two-step pipeline by default**: `fs.ingest` (chunks + annotations, fast, no model loads) → `fs.embed` (vectors, opt-in, pays SPECTER2/BGE once). The prototype only produced surface forms + URIs; chunk-text embeddings are a downstream BRIEF §2/§7 requirement, not a prototype output.
+- **Entities are first-class**, not chunk-side payload. They live in their own ES index AND as `(:Entity)` nodes in Neo4j, so "what does my corpus mention" and "which chunks talk about X" are both fast lookups.
+- **In-code config is first-class** — `FoodScholar.from_config({...})` works exactly like a YAML path. Secrets (LLM api_key, Neo4j password, ES api_key/basic-auth) can be set in config OR fall back to env vars.
+
+### Verification
+
+- `ruff check src tests` — clean.
+- `pytest` — full suite green: **220 passed, 2 skipped** (`torch`/`groq` import-skip paths). New tests: `test_gliner_ner.py` (9, fake gliner model), `test_hnsw_linker.py` (6, fake NELIndex), `test_nel_index.py` (8), `test_config_in_code.py` (8), `test_nel_loader.py` (9), `test_facade_ingest.py` (5), `test_facade_embed.py` (8), `test_storage_init.py` (6), `test_entity_store.py` (7), `test_facade_build_entities.py` (9). Existing facade / annotate / config tests updated for the new contracts.
+- Notebook rebuilt to 4 happy-path sections (`configure → init+ingest → embed → entities → inspect`) + a collapsed "Under the hood" appendix for GLiNER+HNSW direct usage.
+
+### Status at end of iteration
+
+- M3 storage milestone done. Production pipeline runs end-to-end against local ES + Neo4j with `pip install -e '.[elastic,neo4j,ontology]'` (and `[annotate]` once vector search is needed). Pre-computed NER/NEL CSVs at `data/foodscholar/ner/*.csv` are loaded without invoking GLiNER.
+- Next per BRIEF §12: Layer A backbone builder, then Layer B (theme clustering — first real consumer of `fs.embed()`'s output), then Layer C (LLM cards) and the §14 retrieval pipeline.
+
+---
+
 ## 2026-05-18 — Iteration 5.0 (M2→agentic): agentic NER, drop SciFoodNER, notebook rebuild
 
 **Goal:** start the agentic-annotation redesign (see `docs/DESIGN_agentic_annotate.md`). This iteration lands the first piece — an LLM-driven NER — drops the proprietary SciFoodNER model, and rebuilds the notebook around self-contained sections.
