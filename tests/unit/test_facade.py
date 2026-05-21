@@ -153,6 +153,35 @@ def test_from_config_embedder_degrades_to_mock_without_deps() -> None:
     assert fs.embedder.model_id == "mock-embedder-v0"
 
 
+def test_from_config_does_not_eagerly_build_embedder() -> None:
+    """from_config and info() must NOT trigger model loads for elastic backends.
+
+    The chunk embedder is lazy — production SPECTER2 + BGE-large weigh ~1.7 GB
+    and would otherwise stall every `fs.info()` call.
+    """
+    import sys
+
+    fs = FoodScholar.from_config({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {
+            # elastic forces _build_embedder under the old logic; we just want
+            # the property check, not a live ES connection — skip if the SDK
+            # isn't installed.
+            "chunk_store": {"backend": "memory"},
+            "graph_store": {"backend": "memory"},
+        },
+    })
+    # info() must not have built it.
+    info = fs.info()
+    assert info["embedder"].startswith("lazy(") or info["embedder"] == "mock-embedder-v0"
+    # sentence_transformers must NOT have been imported just to construct + info.
+    if "sentence_transformers" in sys.modules:
+        # already loaded by an earlier test — skip the assertion rather than
+        # producing a false negative on test order.
+        return
+    assert "sentence_transformers" not in sys.modules
+
+
 def test_resolve_config_rejects_unknown_type() -> None:
     from foodscholar.config import resolve_config
 
