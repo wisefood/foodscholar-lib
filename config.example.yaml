@@ -57,14 +57,51 @@ annotate:
     # nel_metadata_path: data/foodon_hnsw_biolord.meta.json
 
 layer_a:
+  # Global defaults — apply to every facet unless overridden below.
   min_support: 20
   max_depth: 5
   collapse_single_child_chains: true
+  # Discard EntityLinks below this cosine before counting support. Defaults to
+  # the linker's nel_min_sim so projection is no stricter than ingestion.
+  min_link_confidence: 0.70
+  # Static blacklist is intentionally short. The umbrella rule below catches
+  # FoodOn organizational classes (`plant food product`, `vegetable food
+  # product`, `mammal material`, the `* by *` family, ...) by structure — they
+  # have near-zero direct support relative to their lifted support, so they're
+  # detected by the data, not by a name list that goes stale on every FoodOn
+  # release. Keep here only terms that genuinely get linked but a domain
+  # reviewer judges navigationally useless.
   blacklist_terms:
     - material entity
     - physical object
     - manufactured product
+  # Umbrella rule: drop a shelf when almost nobody mentions it directly and
+  # almost all its support came from descendants. Catches FoodOn's
+  # `X food product` and `Y material` organizational axes automatically.
+  #   direct/chunk_count  <  umbrella_direct_share_max  →  ratio of direct mentions
+  #   lifted/chunk_count  >  umbrella_lifted_share_min  →  ratio of lifted mentions
+  # Defaults (0.05 / 0.85) catch `plant food product` (0.033/0.97),
+  # `vegetable food product` (0.023/0.98), `animal food product` (0.005/0.99),
+  # while keeping `food product` (0.10/0.90 — genuinely the foods root).
+  # Set umbrella_direct_share_max: 0.0 to disable.
+  umbrella_direct_share_max: 0.05
+  umbrella_lifted_share_min: 0.85
   facets: [foods, health, sustainability, dietary_patterns, allergies, nutrients]
+  # Per-facet overrides. Every field is optional — None falls back to globals.
+  # Foods is the densest facet; tighten its threshold and add FoodOn's
+  # well-known organizational classes to the blacklist (no user navigates
+  # "food product by packing medium").
+  # facet_overrides:
+  #   foods:
+  #     min_support: 25
+  #     max_depth: 6
+  #     blacklist_terms:
+  #       - food product by packing medium
+  #       - food product by sourcing geography
+  #       - preparation process
+  #     whitelist: []     # term ids that bypass the threshold (manual scaffolds)
+  #   health:
+  #     max_depth: 7      # disease taxonomies are inherently deeper
 
 layer_b:
   min_chunks_per_shelf: 50

@@ -115,12 +115,78 @@ class AnnotateConfig(BaseModel):
     """Chunks processed per NER batch in the annotate runner."""
 
 
+class FacetConfig(BaseModel):
+    """Per-facet override on top of `LayerAConfig` globals.
+
+    Every field is optional — a None value falls back to the matching global.
+    Use this to set tighter thresholds for noisy facets (foods) without changing
+    defaults for sparser ones (allergies, dietary_patterns).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    min_support: int | None = None
+    max_depth: int | None = None
+    collapse_single_child_chains: bool | None = None
+    blacklist_terms: list[str] | None = None
+    whitelist: list[str] = Field(default_factory=list)
+    min_link_confidence: float | None = None
+    umbrella_direct_share_max: float | None = None
+    umbrella_lifted_share_min: float | None = None
+
+
+class _ResolvedFacetConfig(BaseModel):
+    """Fully-resolved per-facet config — every field non-None. Produced by
+    `LayerAConfig.resolve_facet()` so pruner code never reaches back to the
+    globals dict."""
+
+    model_config = ConfigDict(extra="forbid")
+    min_support: int
+    max_depth: int
+    collapse_single_child_chains: bool
+    blacklist_terms: list[str]
+    whitelist: list[str]
+    min_link_confidence: float
+    umbrella_direct_share_max: float
+    umbrella_lifted_share_min: float
+
+
+_DEFAULT_BLACKLIST: list[str] = [
+    # Generic upper-ontology scaffolding that the umbrella rule can't catch
+    # (these get linked rarely enough that direct-share isn't a clean signal).
+    "material entity",
+    "physical object",
+    "manufactured product",
+]
+# Note: FoodOn organizational classes (`food material`, `plant food product`,
+# the `* by *` axes, `mammal material`, …) are NOT in the static blacklist.
+# The umbrella rule (LayerAConfig.umbrella_direct_share_max /
+# umbrella_lifted_share_min) catches them by structure: their direct support
+# is near-zero relative to their lifted support, so the rule drops them
+# automatically. This keeps the blacklist short and stable across FoodOn
+# releases — new organizational classes are caught the same way without YAML
+# changes.
+
+
 class LayerAConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     min_support: int = 20
     max_depth: int = 5
     collapse_single_child_chains: bool = True
-    blacklist_terms: list[str] = Field(default_factory=list)
+    blacklist_terms: list[str] = Field(
+        default_factory=lambda: list(_DEFAULT_BLACKLIST)
+    )
+    min_link_confidence: float = 0.70
+    umbrella_direct_share_max: float = 0.05
+    """Drop a shelf when `direct/chunk_count` is below this AND `lifted_share`
+    is above `umbrella_lifted_share_min` — i.e. almost nobody mentions it
+    directly and almost all its support came from descendants. Catches FoodOn
+    organizational classes (`plant food product`, `vegetable food product`,
+    etc.) by structure rather than by name. Set to 0.0 to disable."""
+    umbrella_lifted_share_min: float = 0.85
+    """Companion threshold for the umbrella rule (above)."""
+    """Discard EntityLinks below this cosine before counting support. Defaults
+    to the linker's `nel_min_sim` so projection is no stricter than ingestion
+    unless the user explicitly tightens it."""
     facets: list[Facet] = Field(
         default_factory=lambda: [
             "foods",
@@ -131,6 +197,48 @@ class LayerAConfig(BaseModel):
             "nutrients",
         ]
     )
+    facet_overrides: dict[Facet, FacetConfig] = Field(default_factory=dict)
+    """Per-facet overrides on top of the globals above. A facet not in this
+    dict uses globals verbatim."""
+
+    def resolve_facet(self, facet: Facet) -> _ResolvedFacetConfig:
+        """Return the fully-resolved (no-None) config for one facet."""
+        override = self.facet_overrides.get(facet)
+        if override is None:
+            return _ResolvedFacetConfig(
+                min_support=self.min_support,
+                max_depth=self.max_depth,
+                collapse_single_child_chains=self.collapse_single_child_chains,
+                blacklist_terms=list(self.blacklist_terms),
+                whitelist=[],
+                min_link_confidence=self.min_link_confidence,
+                umbrella_direct_share_max=self.umbrella_direct_share_max,
+                umbrella_lifted_share_min=self.umbrella_lifted_share_min,
+            )
+        return _ResolvedFacetConfig(
+            min_support=override.min_support
+            if override.min_support is not None
+            else self.min_support,
+            max_depth=override.max_depth
+            if override.max_depth is not None
+            else self.max_depth,
+            collapse_single_child_chains=override.collapse_single_child_chains
+            if override.collapse_single_child_chains is not None
+            else self.collapse_single_child_chains,
+            blacklist_terms=list(override.blacklist_terms)
+            if override.blacklist_terms is not None
+            else list(self.blacklist_terms),
+            whitelist=list(override.whitelist),
+            min_link_confidence=override.min_link_confidence
+            if override.min_link_confidence is not None
+            else self.min_link_confidence,
+            umbrella_direct_share_max=override.umbrella_direct_share_max
+            if override.umbrella_direct_share_max is not None
+            else self.umbrella_direct_share_max,
+            umbrella_lifted_share_min=override.umbrella_lifted_share_min
+            if override.umbrella_lifted_share_min is not None
+            else self.umbrella_lifted_share_min,
+        )
 
 
 class LayerBConfig(BaseModel):

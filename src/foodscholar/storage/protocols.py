@@ -68,6 +68,19 @@ class GraphStore(Protocol):
         ...
 
     def upsert_shelves(self, shelves: list[Shelf]) -> None: ...
+    def clear_layer_a(self) -> None:
+        """Delete every (:Shelf) node and any edges attached to it.
+
+        Called by `build_layer_a` before re-upsert so stale shelves from a
+        previous projection (with a different blacklist / threshold) don't
+        survive as ghosts. Local stores clear their shelf dict; Neo4j runs
+        `MATCH (s:Shelf) DETACH DELETE s`, which kills PARENT_OF, HAS_THEME,
+        HAS_CHUNK, DESCRIBES edges in one shot.
+
+        Idempotent — a no-op when no shelves exist.
+        """
+        ...
+
     def upsert_themes(self, themes: list[Theme]) -> None: ...
     def upsert_cards(self, cards: list[Card]) -> None: ...
     def attach_chunks_to_shelf(self, shelf_id: ShelfId, chunk_ids: list[ChunkId]) -> None: ...

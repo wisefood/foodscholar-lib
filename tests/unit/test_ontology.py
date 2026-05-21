@@ -140,6 +140,18 @@ def test_id_to_descendants(api: FoodOnAPI) -> None:
     assert set(descendants) == {"TEST:0000006", "TEST:0000007", "TEST:0000008"}
 
 
+def test_id_to_children_direct_only(api: FoodOnAPI) -> None:
+    # fruit (TEST:0000004) has apple + olive as direct children, not olive oil.
+    assert set(api.id_to_children("TEST:0000004")) == {"TEST:0000006", "TEST:0000007"}
+    # Leaf with no children.
+    assert api.id_to_children("TEST:0000008") == []
+    # Unknown id.
+    assert api.id_to_children("TEST:9999999") == []
+    # Sorted return for determinism.
+    children = api.id_to_children("TEST:0000004")
+    assert children == sorted(children)
+
+
 def test_is_subclass_of(api: FoodOnAPI) -> None:
     assert api.is_subclass_of("TEST:0000008", "TEST:0000001")  # olive oil ⊑ food product
     assert api.is_subclass_of("TEST:0000008", "TEST:0000008")  # reflexive

@@ -195,6 +195,21 @@ class InMemoryGraphStore:
         for s in shelves:
             self._shelves[s.shelf_id] = s
 
+    def clear_layer_a(self) -> None:
+        """Drop every shelf + the shelf-side of layer-A attachments.
+
+        Mirrors `MATCH (s:Shelf) DETACH DELETE s` on Neo4j: shelves go, the
+        shelf→chunk attachment map goes, and any shelf-target cards go too.
+        Themes and chunks themselves stay.
+        """
+        self._shelves.clear()
+        self._shelf_chunks.clear()
+        self._cards = {
+            key: card
+            for key, card in self._cards.items()
+            if key[1] != "shelf"
+        }
+
     def upsert_themes(self, themes: list[Theme]) -> None:
         for t in themes:
             self._themes[t.theme_id] = t

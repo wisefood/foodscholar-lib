@@ -98,6 +98,14 @@ class Neo4jGraphStore:
 
     # ------------------------------------------------------------------ shelves
 
+    def clear_layer_a(self) -> None:
+        """`DETACH DELETE` every (:Shelf) node — kills PARENT_OF / HAS_THEME /
+        HAS_CHUNK / DESCRIBES edges attached to shelves in one shot. Themes and
+        chunks (kept as separate node types) survive."""
+        with self._driver.session() as session:
+            session.run("MATCH (s:Shelf) DETACH DELETE s")
+        _log.info("neo4j.layer_a_cleared", url=self.url)
+
     def upsert_shelves(self, shelves: list[Shelf]) -> None:
         if not shelves:
             return
@@ -110,6 +118,9 @@ class Neo4jGraphStore:
                 "foodon_id": s.foodon_id,
                 "parent_shelf_id": s.parent_shelf_id,
                 "chunk_count": s.chunk_count,
+                "support_direct": s.support_direct,
+                "support_lifted": s.support_lifted,
+                "see_also": list(s.see_also),
             }
             for s in shelves
         ]
@@ -122,7 +133,10 @@ class Neo4jGraphStore:
                     s.facet = row.facet,
                     s.depth = row.depth,
                     s.foodon_id = row.foodon_id,
-                    s.chunk_count = row.chunk_count
+                    s.chunk_count = row.chunk_count,
+                    s.support_direct = row.support_direct,
+                    s.support_lifted = row.support_lifted,
+                    s.see_also = row.see_also
                 WITH s, row
                 WHERE row.parent_shelf_id IS NOT NULL
                 MERGE (p:Shelf {shelf_id: row.parent_shelf_id})
@@ -428,6 +442,9 @@ def _shelf_from_record(node: Any, parent_shelf_id: str | None) -> Shelf:
         foodon_id=node.get("foodon_id"),
         parent_shelf_id=parent_shelf_id,
         chunk_count=int(node.get("chunk_count") or 0),
+        support_direct=int(node.get("support_direct") or 0),
+        support_lifted=int(node.get("support_lifted") or 0),
+        see_also=list(node.get("see_also") or []),
     )
 
 
