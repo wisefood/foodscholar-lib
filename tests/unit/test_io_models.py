@@ -50,21 +50,37 @@ def test_entity_link_validates_method() -> None:
 
 
 def test_mention_entity_type_defaults_to_other() -> None:
-    # Backward compat: NER impls that don't classify (KeywordNER) omit it.
+    # NER impls that don't classify (or pass an unknown label) leave it as "other".
     m = Mention(text="olive oil", start=0, end=9, score=1.0, ner_model_version="v0")
     assert m.entity_type == "other"
 
 
 def test_mention_entity_type_accepts_valid_value() -> None:
-    m = Mention(
-        text="olive oil",
-        start=0,
-        end=9,
-        score=1.0,
-        ner_model_version="v0",
-        entity_type="food",
-    )
-    assert m.entity_type == "food"
+    for et in (
+        "food",
+        "nutrient",
+        "micronutrient",
+        "macronutrient",
+        "food component",
+        "dietary supplement",
+        "dietary pattern",
+        "medical condition",
+        "biomarker",
+        "Country",
+        "Measurement",
+        "Population",
+        "Time expression",
+        "other",
+    ):
+        m = Mention(
+            text="x",
+            start=0,
+            end=1,
+            score=1.0,
+            ner_model_version="v0",
+            entity_type=et,  # type: ignore[arg-type]
+        )
+        assert m.entity_type == et
 
 
 def test_mention_entity_type_rejects_unknown() -> None:
