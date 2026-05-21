@@ -51,6 +51,7 @@ from foodscholar.versioning import config_hash
 
 if TYPE_CHECKING:
     from foodscholar.evaluation.audit import AuditReport
+    from foodscholar.evaluation.quality import QualityReport
     from foodscholar.io.artifacts import ArtifactMeta
     from foodscholar.io.chunk import Chunk
     from foodscholar.ontology import FoodOnAPI
@@ -937,6 +938,58 @@ class FoodScholar:
             self.chunk_store,
             self.graph_store,
             config_hash=self.config_hash,
+        )
+
+    def quality_report(
+        self,
+        *,
+        facet: str = "foods",
+        top_n: int = 20,
+        sample_size: int = 20,
+        canonical_terms: tuple[str, ...] | None = None,
+        seed: int = 0,
+    ) -> QualityReport:
+        """Produce a domain-expert quality report for one facet of Layer A.
+
+        Pairs with `fs.audit()` but answers a different question: not "is the
+        graph correctly built" (invariants) but "is the graph good"
+        (semantic / coverage). Read-only; the output is a Pydantic
+        `QualityReport` whose `__str__` is Markdown for direct notebook
+        viewing.
+
+        Sections:
+
+        1. Top shelves at a glance — table sorted by chunk_count with
+           direct/lifted split + 3 example chunk snippets per shelf.
+        2. Hierarchy walkthrough — parent chains + sample descendants for
+           the top 5 shelves, so the expert can sanity-check navigation.
+        3. Suspicious shelves — conservative heuristic flags (EFSA-style
+           code prefixes, "datum" labels, collapse-misses, zero-chunk
+           survivors).
+        4. Canonical vocabulary check — checklist of foods/nutrients/
+           conditions an expert would expect, with status per term.
+           Override the default list via `canonical_terms=`.
+        5. Random chunk sample — `sample_size` randomly-chosen attached
+           chunks with their text + attached shelf labels, formatted for
+           hand audit per BRIEF §17. `seed` for reproducibility.
+        """
+        from foodscholar.evaluation.quality import (
+            _DEFAULT_CANONICAL_TERMS,
+        )
+        from foodscholar.evaluation.quality import (
+            quality_report as _quality_report,
+        )
+
+        return _quality_report(
+            self.chunk_store,
+            self.graph_store,
+            self.ontology,
+            config_hash=self.config_hash,
+            facet=facet,  # type: ignore[arg-type]
+            top_n=top_n,
+            sample_size=sample_size,
+            canonical_terms=canonical_terms or _DEFAULT_CANONICAL_TERMS,
+            seed=seed,
         )
 
     def build_layer_b(self) -> None:
