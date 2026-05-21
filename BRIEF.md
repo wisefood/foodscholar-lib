@@ -62,12 +62,15 @@ foodscholar/
         ├── io/              # data contracts
         │   ├── __init__.py
         │   ├── chunk.py     # Chunk, Mention, EntityLink
+        │   ├── entity.py    # Entity (first-class linked entity)
         │   ├── graph.py     # Shelf, Theme, Card
         │   └── artifacts.py
         ├── corpus/
         │   ├── __init__.py
-        │   ├── loader.py    # read chunks.parquet → list[Chunk]
-        │   └── sources.py   # adapters per source_type
+        │   ├── loader.py     # read chunks.parquet/csv/jsonl → list[Chunk]
+        │   ├── csv_reader.py # legacy (chunk_id, chunk_text, type, chunk_metadata) CSV
+        │   ├── nel_loader.py # prototype (chunk_id, chunk_entities_ner, chunk_uri_nel) CSV
+        │   └── sources.py    # adapters per source_type
         ├── annotate/
         │   ├── __init__.py
         │   ├── gliner_ner.py # GLinerNER — GLiNER-bio → list[Mention]
@@ -102,10 +105,11 @@ foodscholar/
         │   └── synthesize.py
         ├── storage/
         │   ├── __init__.py
-        │   ├── protocols.py # Protocol classes
-        │   ├── elastic.py   # ElasticChunkStore
-        │   ├── neo4j.py     # Neo4jGraphStore
-        │   └── memory.py    # InMemoryChunkStore / InMemoryGraphStore (tests)
+        │   ├── protocols.py        # ChunkStore / EntityStore / GraphStore Protocols
+        │   ├── elastic.py          # ElasticChunkStore (chunks)
+        │   ├── elastic_entities.py # ElasticEntityStore (first-class entities)
+        │   ├── neo4j.py            # Neo4jGraphStore (incl. (:Entity) + [:MENTIONS])
+        │   └── memory.py           # InMemoryChunkStore / EntityStore / GraphStore
         ├── cli/
         │   ├── __init__.py
         │   └── main.py      # typer
@@ -136,22 +140,37 @@ answer = fs.query("Is olive oil heart-healthy?")
 fs = FoodScholar.in_memory()
 ```
 
-`FoodScholar` owns four pluggable backends: `chunk_store`, `graph_store`, `embedder`, `llm`. Stores are constructed from `cfg.storage`; embedder/LLM default to mocks for the in-memory case and are pluggable via keyword args to either factory. Methods:
+`FoodScholar` owns five pluggable backends: `chunk_store`, `entity_store`, `graph_store`, `embedder`, `llm`. Stores are constructed from `cfg.storage`; embedder is lazy (built on first access — production SPECTER2+BGE-large weigh ~1.7 GB and we don't load them just to print `info()`); LLM defaults to a mock and is pluggable via keyword args to either factory. Methods (in the order an end user runs them):
 
 | Method | Maps to |
 |---|---|
-| `fs.info()` | dict of version + backends + active models |
-| `fs.load_chunks(path)` | corpus loader → `chunk_store.upsert` |
+| `fs.info()` | dict of version + backends + active models (embedder = `lazy(...)` until first use) |
+| `fs.init()` | provisions all three stores: ES chunk index + ES entity index + Neo4j constraints. No-op for in-memory backends |
+| `fs.ingest(corpus_dir, nel_dir=None)` | **the one-call pipeline.** With `nel_dir`: load chunks → attach precomputed mentions+links → upsert. Without: delegates to `load_and_annotate` (GLiNER+HNSW) |
+| `fs.load_and_annotate(path)` | load → GLiNER + HNSW annotate → upsert → optional parquet snapshot, idempotent |
+| `fs.embed(only_missing=True)` | fill in chunk-text vectors (SPECTER2 / BGE via `SourceTypeRouter`) without touching annotations |
+| `fs.build_entities()` | derive first-class `Entity` records from chunks + ontology; write to entity store + `(:Entity)` graph nodes |
+| `fs.entities` | `.list(prefix=)`, `.get(id)`, `.search(q)`, `.chunks_for(id)` — read view over the entity store |
+| `fs.load_chunks(path)` | corpus loader → `chunk_store.upsert` (raw — no annotations) |
 | `fs.upsert_chunks(chunks)` | direct upsert (notebooks/tests) |
-| `fs.init()` | provisions backing stores (ES index, Neo4j constraints) |
-| `fs.annotate()` | NER + 3-tier linker + embeddings (returns ArtifactMeta) |
-| `fs.ner` / `fs.linker` | lazy-built NER + Linker objects, individually probeable |
+| `fs.annotate()` | NER + linker + embeddings over chunks already in the store (returns `ArtifactMeta`) |
+| `fs.ner` / `fs.linker` | lazy-built `NER` + `Linker` objects, individually probeable |
 | `fs.build_layer_a()` | backbone phase |
 | `fs.attach()` | chunk→shelf attachments + denormalize |
 | `fs.build_layer_b()` | theme discovery phase |
 | `fs.build_layer_c()` | write-up cards phase |
 | `fs.build()` | annotate → layer_a → attach → layer_b → layer_c |
 | `fs.query(text)` | retrieval pipeline (§14) |
+
+The **recommended end-to-end flow** for an end user with pre-computed NER/NEL on disk:
+
+```python
+fs = FoodScholar.from_config({...})   # dict / Path / FoodScholarConfig all accepted
+fs.init()                              # ES indexes + Neo4j constraints
+fs.ingest(corpus_dir, nel_dir=nel_dir) # chunks + annotations
+fs.embed()                             # vectors for kNN search (optional)
+fs.build_entities()                    # first-class entities + (:Entity) nodes
+```
 
 Phase methods that aren't implemented yet raise `NotImplementedError` with a clear message ("phase 'X' is not implemented yet in foodscholar v0.1.0; see BRIEF.md §12"). This keeps the surface complete and discoverable from day one.
 
@@ -189,6 +208,20 @@ fs.graph.summary()                                # {"shelves": N, "themes": M, 
 ```
 
 `ShelfHandle`, `ThemeHandle`, `CardHandle` **wrap** their Pydantic model rather than subclass it — the underlying `Shelf` / `Theme` / `Card` stay serializable and frozen-friendly, while navigation methods live on the handle. The Pydantic model is always reachable via `handle.model`. Handles are lazy: each navigation method routes through the stores, so `fs.graph` stays in lockstep with mutations made by phase modules.
+
+### Entities view (`fs.entities`)
+
+Linked entities are first-class. Each distinct `ontology_id` discovered in the corpus (FOODON, CHEBI, GAZ, PATO, …) becomes an `Entity` record carrying the ontology-resolved label/synonyms/ancestors (for FoodOn) plus corpus-side aggregates: `mention_count`, `chunk_count`, sample `chunk_ids` (capped at 50), `facet_hint` (max-voted from `Mention.entity_type`), `last_seen`. Built by `fs.build_entities()` from chunks already in the chunk store; persisted both to `fs.entity_store` (Elastic — own index, `foodscholar_chunks_entities`) and to `fs.graph_store` as `(:Entity)` nodes connected by `(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)` edges.
+
+```python
+fs.build_entities()                                # one-call: derive + persist + edges
+fs.entities.list(prefix="FOODON", k=20)            # top-k by chunk_count
+fs.entities.get("FOODON:03309927")                 # Entity | None
+fs.entities.search("olive", prefix="FOODON")       # BM25 over label + synonyms
+fs.entities.chunks_for("FOODON:03309927", k=10)    # ES terms-filter on foodon_ids
+```
+
+`fs.entities.chunks_for(id)` takes a fast path against Elastic when the id is `FOODON:*` (terms filter on the denormalized `foodon_ids` array on chunks); other prefixes walk the entity's inline `chunk_ids` sample. `fs.build_entities()` is idempotent — re-running over the same corpus produces identical records; re-running after `fs.ingest`-ing new chunks updates `mention_count` / `chunk_count` / `chunk_ids` in place.
 
 ### Ontology view (`fs.ontology`)
 
@@ -340,6 +373,30 @@ class Chunk(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 ```
 
+### `io/entity.py`
+
+```python
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+
+class Entity(BaseModel):
+    """First-class linked entity. One record per distinct ontology_id across
+    the corpus. Built by fs.build_entities()."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ontology_id: str                  # canonical PREFIX:LOCALID (FOODON:03309927)
+    prefix: str                       # FOODON | CHEBI | GAZ | PATO | UBERON | ...
+    label: str                        # ontology label (FoodOn) or most-frequent surface form
+    synonyms: tuple[str, ...] = ()
+    ancestor_ids: tuple[str, ...] = () # closed transitive set (FoodOn only — empty for other OBO)
+    facet_hint: Facet | None = None    # max-voted mapping from Mention.entity_type
+    mention_count: int = 0
+    chunk_count: int = 0
+    chunk_ids: tuple[str, ...] = ()    # sample, capped at ENTITY_CHUNK_SAMPLE_CAP=50
+    last_seen: datetime = Field(default_factory=datetime.utcnow)
+```
+
 ### `io/graph.py`
 
 ```python
@@ -453,6 +510,22 @@ class GraphStore(Protocol):
     def list_shelves(self) -> list[Shelf]: ...       # full enumeration (GraphView)
     def list_themes(self) -> list[Theme]: ...
 
+    # Entity graph
+    def upsert_entities(self, entities: list[Entity]) -> None: ...
+    def attach_chunks_to_entity(
+        self, ontology_id: str,
+        chunk_links: list[tuple[ChunkId, float, str]],   # (chunk_id, confidence, method)
+    ) -> None: ...
+
+class EntityStore(Protocol):
+    """First-class entities live in their own indexable store."""
+    def upsert(self, entities: Iterable[Entity]) -> None: ...
+    def get(self, ontology_id: str) -> Entity | None: ...
+    def get_many(self, ontology_ids: list[str]) -> list[Entity]: ...
+    def list_by_prefix(self, prefix: str, *, k: int = 100) -> list[Entity]: ...
+    def search(self, query: str, *, prefix: str | None = None, k: int = 10) -> list[Entity]: ...
+    def scan(self) -> list[Entity]: ...
+
 class Embedder(Protocol):
     model_id: str
     @property
@@ -472,17 +545,20 @@ class LLMClient(Protocol):
 ## 6. Neo4j model
 
 ```cypher
-// Constraints — create on first run
-CREATE CONSTRAINT shelf_id  IF NOT EXISTS FOR (s:Shelf)  REQUIRE s.shelf_id  IS UNIQUE;
-CREATE CONSTRAINT theme_id  IF NOT EXISTS FOR (t:Theme)  REQUIRE t.theme_id  IS UNIQUE;
-CREATE CONSTRAINT card_id   IF NOT EXISTS FOR (c:Card)   REQUIRE c.card_id   IS UNIQUE;
-CREATE CONSTRAINT chunk_id  IF NOT EXISTS FOR (n:Chunk)  REQUIRE n.chunk_id  IS UNIQUE;
+// Constraints — create on first run (fs.init() runs these)
+CREATE CONSTRAINT shelf_id  IF NOT EXISTS FOR (s:Shelf)  REQUIRE s.shelf_id    IS UNIQUE;
+CREATE CONSTRAINT theme_id  IF NOT EXISTS FOR (t:Theme)  REQUIRE t.theme_id    IS UNIQUE;
+CREATE CONSTRAINT card_id   IF NOT EXISTS FOR (c:Card)   REQUIRE c.card_id     IS UNIQUE;
+CREATE CONSTRAINT chunk_id  IF NOT EXISTS FOR (n:Chunk)  REQUIRE n.chunk_id    IS UNIQUE;
+CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.ontology_id IS UNIQUE;
 
 // Nodes
 (:Shelf  {shelf_id, label, facet, depth, foodon_id, chunk_count})
 (:Theme  {theme_id, label, parent_theme_id, chunk_count, discovered_by, discovery_version})
 (:Card   {card_id, title, summary, tip, evidence_quality, llm_model, prompt_version, generated_at})
 (:Chunk  {chunk_id})                       // stub only — body lives in Elastic
+(:Entity {ontology_id, prefix, label, synonyms, ancestor_ids, facet_hint,
+          mention_count, chunk_count, last_seen})
 
 // Edges
 (:Shelf)-[:PARENT_OF]->(:Shelf)
@@ -492,9 +568,10 @@ CREATE CONSTRAINT chunk_id  IF NOT EXISTS FOR (n:Chunk)  REQUIRE n.chunk_id  IS 
 (:Shelf)-[:HAS_CHUNK {weight}]->(:Chunk)
 (:Card)-[:DESCRIBES]->(:Shelf|:Theme)
 (:Card)-[:CITES]->(:Chunk)
+(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)
 ```
 
-A theme can be attached to multiple shelves via `HAS_THEME` from each.
+A theme can be attached to multiple shelves via `HAS_THEME` from each. `(:Chunk)-[:MENTIONS]->(:Entity)` edges are written by `fs.build_entities()` and carry the per-mention `confidence` + `method` (`dense` for prototype-derived linking).
 
 ---
 
@@ -525,6 +602,34 @@ A theme can be attached to multiple shelves via `HAS_THEME` from each.
 Dim defaults to 768 (SPECTER2). If using BGE-large, dim is 1024 — split into two indexes or pick one. Recommendation: one index per embedder, alias the active one as `foodscholar_chunks`.
 
 Hybrid retrieval uses Elastic's RRF combining BM25 and kNN, with `shelf_ids` / `theme_ids` as a `filter` clause when those are provided.
+
+The chunk store also ships nested `mentions` + `entity_links` fields and a `foodon_ids: keyword[]` denormalization (set by `fs.ingest`) so callers can `terms`-filter on FoodOn ids without unnesting.
+
+### Entity index (`<chunk_index>_entities`)
+
+`fs.build_entities()` writes a sibling index for first-class linked entities. Index name is derived from the chunk index by appending `_entities` (so a `foodscholar_chunks` chunk index pairs with a `foodscholar_chunks_entities` entity index).
+
+```json
+{
+  "settings": { "index": { "number_of_shards": 1, "number_of_replicas": 0 } },
+  "mappings": {
+    "dynamic": "false",
+    "properties": {
+      "ontology_id":   { "type": "keyword" },
+      "prefix":        { "type": "keyword" },
+      "label":         { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+      "synonyms":      { "type": "text" },
+      "ancestor_ids":  { "type": "keyword" },
+      "facet_hint":    { "type": "keyword" },
+      "mention_count": { "type": "integer" },
+      "chunk_count":   { "type": "integer" },
+      "last_seen":     { "type": "date" }
+    }
+  }
+}
+```
+
+Entity search uses `multi_match` over `label^2` + `synonyms` with an optional `prefix` term filter. `fs.entities.list_by_prefix(...)` sorts by `chunk_count` descending.
 
 ---
 
