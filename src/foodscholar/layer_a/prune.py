@@ -50,6 +50,7 @@ def prune(
     # threshold. Whitelist bypasses all three.
     direct_share_max = config.umbrella_direct_share_max
     lifted_share_min = config.umbrella_lifted_share_min
+    umbrella_min_count = config.umbrella_min_count
     umbrella_enabled = direct_share_max > 0.0
 
     survivors: set[str] = set()
@@ -60,7 +61,10 @@ def prune(
             continue
         if not _is_allowed(term_id, ontology.id_to_label(term_id), blocked_labels):
             continue
-        if umbrella_enabled and count_wd > 0:
+        if umbrella_enabled and count_wd >= umbrella_min_count:
+            # min_count guard: skip umbrella detection on small shelves where
+            # direct_share is unstable due to low denominators. Threshold pass
+            # below handles those.
             direct = support.direct.get(term_id, 0)
             lifted = max(count_wd - direct, 0)
             direct_share = direct / count_wd

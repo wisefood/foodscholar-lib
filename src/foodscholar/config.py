@@ -132,6 +132,7 @@ class FacetConfig(BaseModel):
     min_link_confidence: float | None = None
     umbrella_direct_share_max: float | None = None
     umbrella_lifted_share_min: float | None = None
+    umbrella_min_count: int | None = None
 
 
 class _ResolvedFacetConfig(BaseModel):
@@ -148,6 +149,7 @@ class _ResolvedFacetConfig(BaseModel):
     min_link_confidence: float
     umbrella_direct_share_max: float
     umbrella_lifted_share_min: float
+    umbrella_min_count: int
 
 
 _DEFAULT_BLACKLIST: list[str] = [
@@ -176,14 +178,19 @@ class LayerAConfig(BaseModel):
         default_factory=lambda: list(_DEFAULT_BLACKLIST)
     )
     min_link_confidence: float = 0.70
-    umbrella_direct_share_max: float = 0.05
+    umbrella_direct_share_max: float = 0.10
     """Drop a shelf when `direct/chunk_count` is below this AND `lifted_share`
-    is above `umbrella_lifted_share_min` — i.e. almost nobody mentions it
-    directly and almost all its support came from descendants. Catches FoodOn
-    organizational classes (`plant food product`, `vegetable food product`,
-    etc.) by structure rather than by name. Set to 0.0 to disable."""
+    is above `umbrella_lifted_share_min` AND `chunk_count >= umbrella_min_count`.
+    The first two conditions identify FoodOn organizational classes (almost
+    nobody mentions them directly, almost all support is from descendants);
+    the third guards against catching small niche shelves where direct_share
+    is unstable due to low denominators. Set to 0.0 to disable."""
     umbrella_lifted_share_min: float = 0.85
     """Companion threshold for the umbrella rule (above)."""
+    umbrella_min_count: int = 100
+    """Minimum chunk_count for the umbrella rule to apply. Below this, the
+    threshold pass alone decides. Prevents the rule from chewing into small
+    niche shelves where direct_share has high variance."""
     """Discard EntityLinks below this cosine before counting support. Defaults
     to the linker's `nel_min_sim` so projection is no stricter than ingestion
     unless the user explicitly tightens it."""
@@ -214,6 +221,7 @@ class LayerAConfig(BaseModel):
                 min_link_confidence=self.min_link_confidence,
                 umbrella_direct_share_max=self.umbrella_direct_share_max,
                 umbrella_lifted_share_min=self.umbrella_lifted_share_min,
+                umbrella_min_count=self.umbrella_min_count,
             )
         return _ResolvedFacetConfig(
             min_support=override.min_support
@@ -238,6 +246,9 @@ class LayerAConfig(BaseModel):
             umbrella_lifted_share_min=override.umbrella_lifted_share_min
             if override.umbrella_lifted_share_min is not None
             else self.umbrella_lifted_share_min,
+            umbrella_min_count=override.umbrella_min_count
+            if override.umbrella_min_count is not None
+            else self.umbrella_min_count,
         )
 
 
