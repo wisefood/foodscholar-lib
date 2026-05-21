@@ -80,12 +80,18 @@ layer_a:
   # `X food product` and `Y material` organizational axes automatically.
   #   direct/chunk_count  <  umbrella_direct_share_max  →  ratio of direct mentions
   #   lifted/chunk_count  >  umbrella_lifted_share_min  →  ratio of lifted mentions
-  # Defaults (0.05 / 0.85) catch `plant food product` (0.033/0.97),
-  # `vegetable food product` (0.023/0.98), `animal food product` (0.005/0.99),
-  # while keeping `food product` (0.10/0.90 — genuinely the foods root).
+  #   chunk_count         >= umbrella_min_count         →  size guard, see below
+  # Validated on a real corpus: catches `food by meal type` (0.051/0.95),
+  # `plant food product` (0.033/0.97), `vegetable food product` (0.023/0.98),
+  # `animal food product` (0.005/0.99), while keeping `food product`
+  # (0.102/0.90 — genuinely the foods root) and small niche shelves.
   # Set umbrella_direct_share_max: 0.0 to disable.
-  umbrella_direct_share_max: 0.05
+  umbrella_direct_share_max: 0.10
   umbrella_lifted_share_min: 0.85
+  # umbrella_min_count = min_support means "every threshold-survivor is
+  # umbrella-eligible" — the typical configuration. Raise above min_support
+  # only if you want to spare small niche shelves from umbrella detection.
+  umbrella_min_count: 25
   facets: [foods, health, sustainability, dietary_patterns, allergies, nutrients]
   # Per-facet overrides. Every field is optional — None falls back to globals.
   # Foods is the densest facet; tighten its threshold and add FoodOn's

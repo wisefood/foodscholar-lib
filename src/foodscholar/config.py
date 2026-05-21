@@ -187,12 +187,17 @@ class LayerAConfig(BaseModel):
     is unstable due to low denominators. Set to 0.0 to disable."""
     umbrella_lifted_share_min: float = 0.85
     """Companion threshold for the umbrella rule (above)."""
-    umbrella_min_count: int = 50
+    umbrella_min_count: int = 25
     """Minimum chunk_count for the umbrella rule to apply. Below this, the
     threshold pass alone decides. Prevents the rule from chewing into small
     niche shelves where direct_share has high variance. The min_support
     threshold (default 20-25) is the lower guard; this floor sits above it
-    so the umbrella rule has a stable denominator."""
+    so the umbrella rule has a stable denominator.
+
+    When `umbrella_min_count <= min_support` the guard is a no-op (every
+    threshold-survivor is also umbrella-eligible) — that's the default
+    configuration. Raise this above min_support only if a corpus has small
+    legitimate niche shelves you want spared from umbrella detection."""
     """Discard EntityLinks below this cosine before counting support. Defaults
     to the linker's `nel_min_sim` so projection is no stricter than ingestion
     unless the user explicitly tightens it."""

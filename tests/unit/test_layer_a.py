@@ -472,9 +472,12 @@ def test_umbrella_rule_disabled_when_direct_share_max_is_zero() -> None:
 
 
 def test_umbrella_min_count_guard_protects_small_shelves() -> None:
-    # With default umbrella_min_count=100, a small shelf that matches
-    # direct-share + lifted-share is left alone — variance is too high at
-    # that scale to confidently call it an umbrella.
+    # When `umbrella_min_count` is raised above `min_support`, a small shelf
+    # that matches direct-share + lifted-share is left alone — variance is
+    # too high at that scale to confidently call it an umbrella. The default
+    # is `umbrella_min_count = min_support` (== threshold survivors are all
+    # umbrella-eligible), but this test forces the guard to fire by setting
+    # min_count = 100 above the fixture's small chunk counts.
     store = InMemoryChunkStore()
     store.upsert(
         [
@@ -490,7 +493,7 @@ def test_umbrella_min_count_guard_protects_small_shelves() -> None:
         max_depth=10,
         collapse_single_child_chains=False,
         facets=["foods"],
-        umbrella_min_count=100,  # default — plant food (count=5) won't qualify
+        umbrella_min_count=100,  # forces guard ABOVE the fixture's counts
     )
     shelves = build_shelves(store, _mini_foodon(), cfg)
     by_id = {s.shelf_id: s for s in shelves}
