@@ -115,7 +115,13 @@ def collect_support(
 
     A chunk's `foodon_ids` denormalization is honored for the foods facet only:
     if `chunk.foodon_ids` is populated and `facet == 'foods'`, those ids count
-    too (this is the cheap path the prototype's nel_loader produces).
+    too — but ONLY for terms the chunk has no `entity_link` for. When a term is
+    in both, the `entity_links` loop is authoritative (it applies the
+    confidence floor and the blocklist); re-adding it from the bare-id
+    `foodon_ids` list would silently undo a blocklist skip, since `foodon_ids`
+    carries no surface text to match against. The `foodon_ids` path therefore
+    only fills the gap it was designed for: prototype chunks whose terms have
+    no per-mention `entity_link` at all.
     """
     table = SupportTable()
     # Indexed for O(1) lookup; case-insensitive on the surface side.
@@ -128,6 +134,11 @@ def collect_support(
     for chunk in chunks:
         # Per-chunk dedupe set: each term contributes at most one direct count.
         seen_direct: set[str] = set()
+
+        # Terms the chunk carries an entity_link for (any confidence/facet) —
+        # the entity_links loop is the authority on these, so the foodon_ids
+        # path below must not second-guess its filtering.
+        linked_terms = {link.ontology_id for link in chunk.entity_links}
 
         for link in chunk.entity_links:
             if link.confidence < min_link_confidence:
@@ -144,9 +155,13 @@ def collect_support(
         # `foodon_ids` is the denormalized list set by ingest. The
         # pre-computed-NEL path drops it onto chunks without an EntityLink
         # (since the prototype CSV has no per-mention metadata), so we have to
-        # read it directly to populate the foods facet from that corpus.
+        # read it directly to populate the foods facet from that corpus. Skip
+        # terms already covered by an entity_link: those were decided above,
+        # blocklist included.
         if facet == "foods":
             for term_id in chunk.foodon_ids:
+                if term_id in linked_terms:
+                    continue
                 if term_id in ontology:
                     seen_direct.add(term_id)
 

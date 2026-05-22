@@ -697,6 +697,60 @@ def test_link_blocklist_ontology_id_is_specific() -> None:
     assert shelf_id_for_foodon("TEST:0000008") in by_id
 
 
+def _chunk_links_and_denorm(
+    chunk_id: str,
+    links: list[tuple[str, float, str]],
+    *,
+    surface: str,
+) -> Chunk:
+    """Chunk where the term is in BOTH entity_links AND the foodon_ids denorm —
+    the real-corpus shape (the nel_loader path mirrors every link into
+    foodon_ids)."""
+    base = _chunk_with_links_text(chunk_id, links, surface=surface)
+    return base.model_copy(
+        update={"foodon_ids": [oid for oid, _conf, _et in links]}
+    )
+
+
+def test_link_blocklist_not_bypassed_by_foodon_ids_denorm() -> None:
+    # Regression: a blocklisted term that ALSO sits in chunk.foodon_ids must
+    # still be filtered. The foodon_ids path used to re-add it unconditionally,
+    # silently undoing the blocklist (this was the 'food product' dumping
+    # ground on the real corpus). entity_links is now authoritative for any
+    # term it covers.
+    store = InMemoryChunkStore()
+    store.upsert(
+        [
+            _chunk_links_and_denorm("c1", [("TEST:0000009", 0.9, "food")], surface="fish"),
+            _chunk_links_and_denorm("c2", [("TEST:0000009", 0.9, "food")], surface="fish"),
+            _chunk_links_and_denorm("c3", [("TEST:0000009", 0.9, "food")], surface="fish"),
+        ]
+    )
+    cfg = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+        link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    by_id = {s.shelf_id: s for s in shelves}
+    # Blocklisted via entity_links → must NOT be resurrected by foodon_ids.
+    assert shelf_id_for_foodon("TEST:0000009") not in by_id
+
+
+def test_foodon_ids_still_counts_terms_without_an_entity_link() -> None:
+    # The foodon_ids path must still work for its designed case: a term present
+    # ONLY in foodon_ids (no per-mention entity_link), e.g. prototype CSV data.
+    store = InMemoryChunkStore()
+    store.upsert([_chunk("c1", ["TEST:0000009"])])  # foodon_ids only, no links
+    cfg = LayerAConfig(
+        min_support=1, max_depth=10, facets=["foods"],
+        umbrella_min_count=1, collapse_single_child_chains=False,
+    )
+    shelves = build_shelves(store, _mini_foodon(), cfg)
+    by_id = {s.shelf_id: s for s in shelves}
+    assert shelf_id_for_foodon("TEST:0000009") in by_id
+
+
 def test_build_layer_a_clears_stale_shelves_on_rerun() -> None:
     # First run with a narrow blacklist — `plant food` survives.
     from foodscholar import FoodScholar
