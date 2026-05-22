@@ -6,6 +6,53 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-22 — Iteration 8.0 (M4): semantic consolidation + Layer A tuning; Layer A declared done
+
+**Goal:** add the semantic-consolidation pass (catch duplicate shelves lexical rules miss), then validate Layer A is a sound foundation for Layer B and close out Layer A.
+
+### What landed (two commits)
+
+**`32ee313` — `fs.semantic_consolidate()` (LLM-as-judge).** New package [src/foodscholar/layer_a/semantic_consolidation/](src/foodscholar/layer_a/semantic_consolidation/) (models, embed, candidates, cluster, judge, prompts, apply, orchestrator). Runs as a standalone phase **after `fs.attach()`** so the judge can ground on real sample chunks. Pipeline: embed each shelf (label + FoodOn synonyms) → cosine candidate pairs → cluster into connected components (size-capped, weakest-edge split) → **one LLM call per cluster** returning `merge_groups`/`keep_alone` by index → enforce a permanent block-list → apply confirmed N-way merges via `see_also` (which the next `attach` re-homes). Off by default (`layer_a.semantic_consolidation.enabled`); `dry_run=True` returns the full `ConsolidationArtifact` for inspection without persisting. Reuses `fs.embedder` (BGE-large) and `fs.llm`. Config knobs: `cosine_threshold` (0.94), `max_cluster_size` (12), `auto_merge_confidence` (0.80), `subtype_patterns`, `permanent_block_list` (FoodOn-id pairs), `use_few_shot`, `exclude_scaffolding` + `classifier_suffixes`. Also hardened `GroqClient.generate_json` to fall back to a plain-text parse when strict `json_object` mode returns empty/truncated output.
+
+**`f15425d` — projection fix: `foodon_ids` denorm no longer bypasses the `link_blocklist`.** [collect_support](src/foodscholar/layer_a/propagate.py) counted foods-facet support from both `entity_links` and the `foodon_ids` denorm list. When a term sat in both (the real-corpus shape — the nel_loader mirrors every link into `foodon_ids`), the `entity_links` loop would *skip* a blocklisted `(surface, id)` pair, then the `foodon_ids` loop *re-added* the bare id — silently undoing the blocklist (`foodon_ids` carries no surface text to match). Fix: `entity_links` is authoritative for any term it covers; the `foodon_ids` path only contributes terms with no `entity_link` (its designed role). +2 regression tests.
+
+### Tuning learned on the real corpus (config-side, in the notebook — NOT committed library changes)
+
+- **Judge precision is the hard part.** v1 prompt over-merged badly (apple+pear, fish+marine-fish, cow-milk fat variants) because it judged on "same category / co-occurs in chunks." Fixed with a v3 **identity-only** prompt (`PROMPT_VERSION = v3.0-identity`): merge ONLY if labels name the same food (spelling/synonym/processing variant); explicitly forbid category-vs-member and co-occurrence merging; chunks demoted to *confirm-identity-only*. Few-shot balanced and drawn from observed failures.
+- **Cluster discipline matters.** At cosine 0.88 the candidate graph chained into one ~197-shelf hairball that blew groq's JSON budget. Raising to 0.94 + the cluster-size cap (weakest-edge split) keeps clusters tight and judgeable.
+- **Scaffolding filter.** FoodOn organizational umbrellas ('food product', 'food consumer group', 'food modification process') have no synonyms + a classifier-suffix label; they're now excluded from consolidation candidates so they don't pollute clusters.
+- **`food product` dumping ground (10% of chunks).** Diagnosed: it survived the umbrella rule by a whisker (`direct_share` 0.102 vs 0.10 cutoff) because the linker mapped generic mentions ('foods', 'whole foods', …) onto `FOODON:00001002`. The `link_blocklist` (+ the `f15425d` fix) drops those → umbrella rule fires → `food product` removed.
+
+### Layer A readiness for Layer B — investigated and CLOSED
+
+Added notebook diagnostics (§6e readiness, §6f/§6g/§6h orphan analysis) — exploratory, uncommitted. Findings on the real foods facet:
+
+- **Structurally GO:** `fs.audit().passed == True` (single root, no cycles/dangling, ≥95% coverage, ≥99% attach integrity).
+- **~116 shelves clusterable** (≥ `min_chunks_per_shelf`=50), ~113 too small (skipped), 0 empty. ~23.8k chunks attached. Solid Layer B input.
+- **Synthetic-root orphans ~18%.** Removing `food product` sent its lifted chunks to the synthetic root (no surviving mid-level parent). Investigated thoroughly:
+  - Orphans split into NEL junk (`food calorie datum`, `edible food`, `processed food`) — blocklistable — and a genuine **rare-food long-tail** (kiwifruit, mackerel, flaxseed) that clears `min_support` but whose only ancestors are umbrellas the umbrella rule kills.
+  - **`min_support` is the wrong lever** (the rare foods already clear it). The right lever is whitelisting specific mid-level FoodOn categories — but the specificity-ranked recommender found no clean win: only 2 categories adopt ≥3 orphans, the rest are +1 each (39/70 have no good parent). **FoodOn's structure simply lacks navigable mid-level food shelves that survive the umbrella rule.**
+  - **Decision: accept the ~18% as the 'unclassified' bucket Layer B skips.** Further Layer A tuning is diminishing returns.
+
+### Status at end of iteration — Layer A is DONE
+
+`fs.audit().passed`, 116 clusterable shelves, orphan tail understood and accepted. Semantic consolidation committed and ready (dedup pass, opt-in). **Next milestone: Layer B (theme discovery).** See the Layer B handoff note below.
+
+### Layer B handoff (start here next session)
+
+- **Hard blocker first:** run `fs.embed()` — attached chunks currently have **no embeddings** (`embedding=None`); Leiden/HDBSCAN need vectors. This is the one prerequisite.
+- **Layer B clusters chunks *within* each shelf** into themes. Read per-shelf chunks via `graph_store.list_chunk_shelf_attachments()` (invert chunk→shelves to shelf→chunks) and fetch vectors via `chunk_store.get_many(chunk_ids)`; gate on `LayerBConfig.min_chunks_per_shelf` (50).
+- **Skip the synthetic facet root (`facet:foods`)** — it's the ~18% unclassified bucket, not a coherent topic; clustering it would be noise.
+- Stub exists: [src/foodscholar/layer_b/](src/foodscholar/layer_b/), `fs.build_layer_b()` currently `NotImplementedError`. `LayerBConfig` (algorithm=leiden, resolution, recurse_threshold) and the `Theme` model ([io/graph.py](src/foodscholar/io/graph.py)) are in place.
+- **Optionally run consolidation first** (`fs.semantic_consolidate(dry_run=False)` with `enabled=True`) to dedup shelves before clustering — independent of the orphan question.
+- §17 sanity gate after Layer B: 20 random themes inspected, labels readable, min-chunk thresholds respected.
+
+### Notebook state (uncommitted)
+
+[notebooks/build_graph.ipynb](notebooks/build_graph.ipynb) carries the consolidation cells (§6d), Layer-B readiness (§6e), and the orphan diagnostics (§6f–6h), plus a `link_blocklist` of generic surfaces in the config cell. These are exploratory/tuning aids — keep or prune as desired; none are required by the committed library code.
+
+---
+
 ## 2026-05-21 — Iteration 7.0 (M4): Layer A backbone — full projection
 
 **Goal:** the previous M3 builder at [src/foodscholar/layer_a/builder.py](src/foodscholar/layer_a/builder.py) was a foods-only stub — raw chunk counts, no single-child collapse (the flag existed in config but the logic was absent), no facet routing. This iteration implements the full projection per BRIEF §12 step 10 and the user's pruning spec: ordered passes (blacklist → whitelist → threshold → depth cap → single-child collapse), per-facet config, lifting on depth cap (not dropping), confidence-floored support, and provenance diagnostics (`support_direct`/`support_lifted`/`see_also`).
