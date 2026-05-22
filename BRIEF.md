@@ -782,6 +782,14 @@ foodscholar = "foodscholar.cli.main:app"
 
 ## 12. First-week implementation plan
 
+> **Current status (2026-05-22):** scaffold + annotate + **Layer A are done** —
+> projection, `fs.attach()`, `fs.audit()`, `fs.quality_report()`, and
+> `fs.semantic_consolidate()` (LLM-as-judge dedup) have all landed. Layer A is
+> validated as a Layer B foundation (audit passes, ~116 clusterable foods
+> shelves; the ~18% synthetic-root orphans are an accepted long-tail). **Next
+> milestone: Layer B (theme discovery).** Full history + the Layer B handoff
+> note is in [PROGRESS.md](PROGRESS.md) (newest entry on top).
+
 Strict order. Do not skip ahead.
 
 1. **Scaffold the package.** `pyproject.toml`, package layout, empty modules, `README.md`, `config.example.yaml`. Set up `ruff` and `mypy`.
