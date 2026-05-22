@@ -26,6 +26,7 @@ password is unset, it falls back to `$NEO4J_PASSWORD`. URL defaults to
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Literal
 
 from foodscholar.io.chunk import ChunkId
@@ -257,6 +258,33 @@ class Neo4jGraphStore:
                 """,
             )
             return [_theme_from_record(r["t"], r["shelf_ids"]) for r in result]
+
+    def list_chunk_shelf_attachments(self) -> dict[ChunkId, set[str]]:
+        out: dict[ChunkId, set[str]] = defaultdict(set)
+        with self._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (c:Chunk)-[:ATTACHED_TO]->(s:Shelf)
+                RETURN c.chunk_id AS chunk_id, s.shelf_id AS shelf_id
+                """,
+            )
+            for r in result:
+                out[r["chunk_id"]].add(r["shelf_id"])
+        return dict(out)
+
+    def list_chunk_foodon_mentions(self) -> dict[ChunkId, set[str]]:
+        out: dict[ChunkId, set[str]] = defaultdict(set)
+        with self._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (c:Chunk)-[:MENTIONS]->(e:Entity)
+                WHERE e.ontology_id STARTS WITH 'FOODON:'
+                RETURN c.chunk_id AS chunk_id, e.ontology_id AS ontology_id
+                """,
+            )
+            for r in result:
+                out[r["chunk_id"]].add(r["ontology_id"])
+        return dict(out)
 
     def get_chunks_for_theme(self, theme_id: ThemeId) -> list[ChunkId]:
         with self._driver.session() as session:
