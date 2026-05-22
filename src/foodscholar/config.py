@@ -193,6 +193,113 @@ _DEFAULT_BLACKLIST: list[str] = [
 # changes.
 
 
+class SemanticConsolidationConfig(BaseModel):
+    """Semantic shelf consolidation — embedding + LLM-as-judge merge pass.
+
+    Runs as a standalone phase *after* `fs.attach()` (so the judge can ground
+    on real sample chunks). Catches semantic-duplicate shelves that share
+    meaning but not lexical stem — invisible to the structural single-child
+    collapse in `prune.py`. Off by default; opt in per config. See
+    CONSOLIDATION.md for the full design.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    """Master switch. When False, `fs.semantic_consolidate()` still runs on
+    demand but the pipeline never invokes it automatically."""
+    facets: list[Facet] = Field(default_factory=lambda: ["foods"])
+    """Facets to consolidate. Each is processed independently — pairs never
+    cross a facet boundary."""
+    cosine_threshold: float = 0.94
+    """Minimum cosine similarity for a pair to become a candidate. On a real
+    BGE-embedded foods facet, 0.88 chains into one giant hairball and even 0.92
+    groups merely-related foods (apple/pear/rice in one cluster). 0.94 keeps
+    clusters tight — near-identical labels only — which is what the identity
+    judge needs. Use the notebook sweep to retune per corpus; expect
+    0.93-0.96."""
+    max_candidates_per_shelf: int = 5
+    """Cap on candidate pairs touching any single shelf, to bound LLM cost."""
+    max_cluster_size: int = 12
+    """Hard cap on shelves judged in one LLM call. A connected component larger
+    than this is split — weakest cosine edges dropped first — until every piece
+    fits. Prevents a transitive hairball from (a) blowing the model's JSON
+    output budget and (b) asking the judge to reason over dozens of unrelated
+    shelves at once."""
+    subtype_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "canadian",
+            "turkey",
+            "beef",
+            "imitation",
+            "red",
+            "white",
+            "green",
+            "silken",
+            "extra firm",
+            "soft",
+            "firm",
+        ]
+    )
+    """Subtype-prefix safety net. If exactly one label of a pair starts with a
+    listed word, the pair is excluded — they're parallel siblings (e.g.
+    'turkey bacon' vs 'bacon'), never duplicates."""
+    exclude_scaffolding: bool = True
+    """Drop FoodOn organizational umbrella terms from consolidation entirely.
+    These ('food product', 'food consumer group', 'food modification process',
+    'dietary supplement') cluster together at high cosine because they're all
+    abstract food-ish classes — but none should ever merge; they're navigation
+    scaffolding, not duplicate foods. A shelf is treated as scaffolding when it
+    has NO FoodOn synonyms AND its label ends in a classifier word
+    (`classifier_suffixes`). Real foods almost always carry synonyms, so this
+    rarely touches them."""
+    classifier_suffixes: list[str] = Field(
+        default_factory=lambda: [
+            "product",
+            "products",
+            "process",
+            "group",
+            "form",
+            "analog",
+            "analogue",
+            "supplement",
+            "food",
+            "foods",
+            "ingredient",
+            "ingredients",
+            "substance",
+            "material",
+        ]
+    )
+    """Trailing words that mark an organizational class rather than a food.
+    Used only for the scaffolding filter (combined with the no-synonym test)."""
+    judge_enabled: bool = True
+    """When False, stop after candidate generation — no LLM calls. Useful for a
+    zero-cost candidate preview before trusting the judge."""
+    auto_merge_confidence: float = 0.80
+    """A shelf placed in a merge group below this confidence is logged as
+    'uncertain' and NOT auto-applied. Set to 0.80 because instruct-tuned models
+    (e.g. Llama) report bimodal confidence — 0.80 is their 'yes', not a
+    marginal score — so a 0.85 gate silently drops obvious merges."""
+    include_related_synonyms: bool = False
+    """Whether to fold RELATED (not just EXACT) synonyms into the embedding
+    text."""
+    max_synonyms: int = 5
+    """Cap synonyms per shelf in the embedding text to avoid label bloat."""
+    sample_chunks_per_shelf: int = 3
+    """How many sample chunks to pull per shelf as judge grounding."""
+    permanent_block_list: list[tuple[str, str]] = Field(default_factory=list)
+    """Pairs of FoodOn ids (matching `shelf.foodon_id`, e.g.
+    'FOODON:03310387') that must NEVER merge, regardless of what the judge
+    says. Catches systematic polysemy traps the embedder + LLM both fall for
+    (oil/fat, olive-oil/vegetable-oil). Order-independent. Grow it whenever a
+    bad merge slips through."""
+    use_few_shot: bool = True
+    """Prepend calibration examples to the judge prompt. Cheap (~300 tokens)
+    and the most reliable lever for fixing an over-merging judge — it anchors
+    the model on what counts as a meaningful distinction (whole vs skim milk,
+    oil vs fat) versus a true duplicate (yoghurt vs yogurt)."""
+
+
 class LayerAConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     min_support: int = 20
@@ -253,6 +360,11 @@ class LayerAConfig(BaseModel):
     facet_overrides: dict[Facet, FacetConfig] = Field(default_factory=dict)
     """Per-facet overrides on top of the globals above. A facet not in this
     dict uses globals verbatim."""
+    semantic_consolidation: SemanticConsolidationConfig = Field(
+        default_factory=SemanticConsolidationConfig
+    )
+    """Embedding + LLM-as-judge merge pass. Off by default; runs as a separate
+    phase after attach. See `SemanticConsolidationConfig`."""
 
     def resolve_facet(self, facet: Facet) -> _ResolvedFacetConfig:
         """Return the fully-resolved (no-None) config for one facet."""
