@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from foodscholar.evaluation.quality import QualityReport
     from foodscholar.io.artifacts import ArtifactMeta
     from foodscholar.io.chunk import Chunk
+    from foodscholar.layer_a.semantic_consolidation import ConsolidationArtifact
     from foodscholar.ontology import FoodOnAPI
     from foodscholar.retrieval import Answer
 
@@ -922,6 +923,65 @@ class FoodScholar:
             self.ontology,
             full_config=self.config,
         )
+
+    def semantic_consolidate(
+        self, *, facet: str = "foods", dry_run: bool = True
+    ) -> ConsolidationArtifact:
+        """Embed shelves, find near-duplicate pairs, and merge via an LLM judge.
+
+        Runs *after* `fs.attach()` so the judge can ground each decision on
+        real sample chunks (it reads `chunk.shelf_ids`, written by attach).
+
+        - `dry_run=True` (default): read-only. Returns the
+          `ConsolidationArtifact` — candidates, decisions, and what the
+          pre-LLM filters dropped — for inspection. Nothing is persisted.
+        - `dry_run=False`: applies confirmed merges (above
+          `auto_merge_confidence`), re-persists the shelf set, and re-runs
+          `fs.attach()` so the merged-away shelves' chunks re-home onto the
+          surviving canonical shelf.
+
+        Set `layer_a.semantic_consolidation.judge_enabled=False` for a
+        zero-cost candidate preview (no LLM calls).
+        """
+        from foodscholar.layer_a.semantic_consolidation import consolidate
+
+        cfg = self.config.layer_a.semantic_consolidation
+        shelves = self.graph_store.list_shelves()
+        facet_shelves = [s for s in shelves if s.facet == facet]
+
+        merged, artifact = consolidate(
+            facet_shelves,
+            self.chunk_store,
+            self.ontology,
+            self.embedder,
+            self.llm,
+            cfg,
+            self.config_hash,
+            facet=facet,
+            dry_run=dry_run,
+        )
+
+        if not dry_run and len(merged) != len(facet_shelves):
+            keep = [s for s in shelves if s.facet != facet]
+            all_shelves = sorted(
+                keep + merged,
+                key=lambda s: (s.facet, s.depth, s.label.lower(), s.shelf_id),
+            )
+            self.graph_store.clear_layer_a()
+            self.graph_store.upsert_shelves(all_shelves)
+            # Repair denormalized shelf_ids: merged losers' chunks re-home onto
+            # the canonical via attach's see_also routing.
+            self.attach()
+
+        self._log.info(
+            "semantic_consolidate.done",
+            facet=facet,
+            dry_run=dry_run,
+            applied_groups=len(artifact.applied_groups),
+            shelves_removed=artifact.shelves_removed,
+            config_hash=self.config_hash,
+        )
+        return artifact
 
     def audit(self) -> AuditReport:
         """Run cross-store invariant checks and return a structured report.

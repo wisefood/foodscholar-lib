@@ -239,6 +239,41 @@ def test_provider_config_accepts_api_key_field() -> None:
     assert cfg.api_key == "secret-123"
 
 
+def test_groq_generate_json_falls_back_on_empty() -> None:
+    """When groq's json_object mode returns empty content, GroqClient retries
+    as a plain completion and parses the JSON from text."""
+    from foodscholar.llm.providers import GroqClient
+
+    class _Msg:
+        def __init__(self, content: str | None) -> None:
+            self.message = type("M", (), {"content": content})()
+
+    class _Resp:
+        def __init__(self, content: str | None) -> None:
+            self.choices = [_Msg(content)]
+
+    class _Completions:
+        def __init__(self) -> None:
+            self.calls: list[bool] = []  # records whether response_format was set
+
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            structured = "response_format" in kwargs
+            self.calls.append(structured)
+            # Structured mode returns empty (the failure we're hardening against);
+            # the plain retry returns valid JSON wrapped in prose.
+            content = "" if structured else 'Here you go: {"merge_groups": [], "keep_alone": [1]}'
+            return _Resp(content)
+
+    client = object.__new__(GroqClient)  # bypass __init__ (no SDK / key needed)
+    client.model_id = "llama-test"
+    completions = _Completions()
+    client._client = type("C", (), {"chat": type("Ch", (), {"completions": completions})()})()
+
+    out = client.generate_json("judge this", {"type": "object"}, max_tokens=512)
+    assert out == {"merge_groups": [], "keep_alone": [1]}
+    assert completions.calls == [True, False]  # structured first, then plain retry
+
+
 def test_factory_forwards_api_key_to_provider() -> None:
     """build_llm must pass cfg.llm.primary.api_key down to the client."""
     captured: dict[str, object] = {}

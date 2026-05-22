@@ -175,13 +175,27 @@ class GroqClient:
         self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
     ) -> dict[str, object]:
         full = f"{prompt}\n\nRespond with JSON matching this schema:\n{json.dumps(schema)}"
-        resp = self._client.chat.completions.create(
-            model=self.model_id,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": full}],
-            response_format={"type": "json_object"},
+        # Groq's strict `json_object` mode sometimes returns an empty or
+        # truncated body (HTTP 400 `json_validate_failed`, or empty content)
+        # on large schemas / long outputs. Fall back to a plain completion and
+        # parse the {...} out of the text — instruct-tuned models still emit
+        # valid JSON when simply asked to.
+        try:
+            resp = self._client.chat.completions.create(
+                model=self.model_id,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": full}],
+                response_format={"type": "json_object"},
+            )
+            content = resp.choices[0].message.content or ""
+            if content.strip():
+                return _parse_json_object(content)
+        except Exception:
+            pass  # fall through to the unconstrained retry
+        text = self.generate(
+            f"{full}\n\nOutput ONLY the JSON object, no prose.", max_tokens=max_tokens
         )
-        return _parse_json_object(resp.choices[0].message.content or "")
+        return _parse_json_object(text)
 
 
 class GeminiClient:
