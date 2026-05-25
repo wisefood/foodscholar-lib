@@ -1,0 +1,62 @@
+corpus:
+  chunks_path: tests/fixtures/sample_chunks.jsonl
+ontology:
+  foodon_path: data/foodon.owl
+  cache_path: data/foodon_cache.parquet
+  include_imports: false
+  prefix_filter:
+  - 'FOODON:'
+annotate:
+  ner: gliner
+  gliner:
+    model_id: urchade/gliner_large_bio-v0.1
+    threshold: 0.4
+    flat_ner: true
+    batch_size: 16
+  scientific_embedder: allenai/specter2_base
+  general_embedder: BAAI/bge-large-en-v1.5
+  batch_size: 16
+  linker:
+    nel_backend: hnsw
+    nel_encoder: biolord
+    nel_top_k: 1
+    nel_min_sim: 0.70
+layer_a:
+  min_support: 20
+  max_depth: 5
+  collapse_single_child_chains: true
+  blacklist_terms:
+  - material entity
+  - physical object
+  - manufactured product
+  facets:
+  - foods
+  - health
+  - sustainability
+  - dietary_patterns
+  - allergies
+  - nutrients
+layer_b:
+  min_chunks_per_shelf: 50
+layer_c:
+  llm_model: claude-sonnet-4-6
+  prompt_version: v1
+  sample_size: 12
+  grounding_check: strict
+  safety_sensitive_facets:
+  - allergies
+llm:
+  primary:
+    provider: groq
+    model: llama-3.3-70b-versatile
+  fallbacks:
+  - provider: ollama
+    model: llama3.1
+    host: http://localhost:11434
+  timeout_s: 30
+  max_retries: 2
+storage:
+  chunk_store:
+    backend: memory
+  graph_store:
+    backend: memory

@@ -414,12 +414,108 @@ class LayerAConfig(BaseModel):
         )
 
 
+class SimilarityConfig(BaseModel):
+    """Pass 1 (similarity) graph + algorithm knobs.
+
+    `algorithm` is restricted to `"leiden"` in v1 — HDBSCAN is documented as
+    a fallback in the brief but cut from v1 per the implementation plan."""
+
+    model_config = ConfigDict(extra="forbid")
+    knn_k: int = 15
+    edge_threshold: float = 0.55
+    require_mutual: bool = True
+    algorithm: Literal["leiden"] = "leiden"
+
+
+class RelatednessConfig(BaseModel):
+    """Pass 2 (relatedness) graph knobs.
+
+    - `tau_strict`: minimum entity-link confidence to participate in edges.
+    - `min_shared_ids`: edge created iff >= this many shared FoodOn IDs.
+    - `max_doc_frequency`: entities appearing in > this fraction of the
+      shelf's chunks are dropped (they carry no discriminative signal).
+    - `always_exclude_iris`: never-edge-creators. The umbrella class
+      FOODON:00001002 ('food product') is the default exclusion — it
+      survived Layer A and gets ancestor-propagated onto almost every chunk.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    tau_strict: float = 0.80
+    min_shared_ids: int = 2
+    max_doc_frequency: float = 0.40
+    algorithm: Literal["leiden"] = "leiden"
+    always_exclude_iris: list[str] = Field(
+        default_factory=lambda: ["FOODON:00001002"]
+    )
+
+
+class LeidenConfig(BaseModel):
+    """Shared by both passes. `random_state` is the determinism contract —
+    same chunks + same seed = identical theme assignment across runs."""
+
+    model_config = ConfigDict(extra="forbid")
+    resolution: float = 1.0
+    n_iterations: int = 10
+    min_community_size: int = 15
+    random_state: int = 42
+
+
+class MergeConfig(BaseModel):
+    """Greedy pair-assignment merge. `combined_similarity =
+    chunk_weight * J(chunks) + entity_weight * J(entities)` per
+    (sim_i, rel_j); pairs at or above `dedupe_threshold` collapse into
+    `discovery_pass="merged"` themes."""
+
+    model_config = ConfigDict(extra="forbid")
+    chunk_weight: float = 0.6
+    entity_weight: float = 0.4
+    dedupe_threshold: float = 0.70
+
+
+class LabelingConfig(BaseModel):
+    """Theme labeling. `"llm"` is v1 default — navigation labels need to read
+    well and per-run cost is ~$0.60. `"keyword"` (pure c-TF-IDF) is a free
+    deterministic fallback. c-TF-IDF is always computed and fed to the LLM
+    as keyword context."""
+
+    model_config = ConfigDict(extra="forbid")
+    strategy: Literal["keyword", "llm"] = "llm"
+    top_keywords: int = 5
+    llm_max_tokens: int = 32  # 3-5 word labels
+
+
+class LayerBAuditConfig(BaseModel):
+    """WARN-level gates emitted by `audit_layer_b()`. None of these flip
+    `LayerBAuditReport.passed` (which only checks CRITICAL invariants); they
+    surface in the notebook to drive tuning."""
+
+    model_config = ConfigDict(extra="forbid")
+    target_themes_per_shelf_min: int = 3
+    target_themes_per_shelf_max: int = 12
+    merged_rate_min: float = 0.20
+    merged_rate_max: float = 0.80
+
+
 class LayerBConfig(BaseModel):
+    """Layer B (theme discovery) — dual-pass + merge per the brief.
+
+    See `layer_b_construction_brief.md` §5 for the full knob list and the
+    accompanying plan for the v1 decisions (Leiden-only, LLM labels by
+    default, embedded-fraction gate, etc.).
+    """
+
     model_config = ConfigDict(extra="forbid")
     min_chunks_per_shelf: int = 50
-    algorithm: Literal["leiden", "hdbscan", "bertopic"] = "leiden"
-    resolution: float = 1.0
-    recurse_threshold: int = 200
+    min_embedded_fraction: float = 0.80
+    """Skip shelves where < this fraction of chunks have embeddings —
+    clustering a biased subsample is worse than not clustering at all."""
+
+    similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
+    relatedness: RelatednessConfig = Field(default_factory=RelatednessConfig)
+    leiden: LeidenConfig = Field(default_factory=LeidenConfig)
+    merge: MergeConfig = Field(default_factory=MergeConfig)
+    labeling: LabelingConfig = Field(default_factory=LabelingConfig)
+    audit: LayerBAuditConfig = Field(default_factory=LayerBAuditConfig)
 
 
 class LayerCConfig(BaseModel):
