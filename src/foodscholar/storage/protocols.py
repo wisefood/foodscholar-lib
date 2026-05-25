@@ -83,6 +83,35 @@ class ChunkStore(Protocol):
         in-memory ones.
         """
         ...
+    def update_embeddings_bulk(
+        self,
+        items: list[tuple[ChunkId, list[float], str]],
+    ) -> None:
+        """Bulk variant of `update_embedding`. Each item is
+        `(chunk_id, embedding, embedding_model)`. Implementations should
+        coalesce into a single network round-trip on remote backends — this
+        is the hot path for `fs.embed()` over a tunneled cluster, where
+        per-doc updates are network-bound.
+        """
+        ...
+    def bulk_set_theme_ids(
+        self,
+        items: list[tuple[ChunkId, list[ThemeId]]],
+    ) -> None:
+        """Set `theme_ids` on many chunks without touching `shelf_ids`.
+
+        Layer B's persist path uses this instead of `bulk_update_attachments`
+        to avoid a read-then-overwrite race: if a separate writer (e.g., a
+        concurrent `fs.attach()`) updates `shelf_ids` between the persist
+        read and the persist write, the bulk-update would clobber the new
+        shelf attachments. `bulk_set_theme_ids` only touches `theme_ids`, so
+        it's safe under any `shelf_ids` writer.
+
+        Passing `theme_ids=[]` is the explicit 'remove all themes from this
+        chunk' signal — used by clear-and-rebuild Layer B runs. Items
+        targeting a missing `chunk_id` are silently skipped.
+        """
+        ...
     def scan(self) -> list[Chunk]: ...
     def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
 
@@ -138,6 +167,36 @@ class GraphStore(Protocol):
         ...
 
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None: ...
+
+    def attach_chunks_to_themes_bulk(
+        self,
+        items: list[tuple[ChunkId, ThemeId, bool, float]],
+    ) -> None:
+        """Wire `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges in bulk.
+
+        Each tuple is `(chunk_id, theme_id, primary, weight)`. `primary`
+        marks the per-shelf primary theme for a chunk (used by retrieval
+        ranking); `weight` is a continuous score (centroid-distance for
+        similarity themes, edge-degree for relatedness, max-of-both for
+        merged). One network round-trip per call on remote backends —
+        the hot path for Layer B persistence on a tunneled Neo4j.
+
+        Idempotent — re-running with the same `(chunk_id, theme_id)` pair
+        overwrites `primary` + `weight`.
+        """
+        ...
+
+    def clear_themes(self) -> None:
+        """Delete every `(:Theme)` node along with its `HAS_THEME` and
+        `THEME_OF` edges.
+
+        `fs.build_layer_b()` calls this at the start so a re-run with a
+        different config doesn't leave ghost themes. Shelves and chunks
+        survive (they're Layer A artifacts); chunk-side `theme_ids` denorm
+        is the caller's responsibility via `chunk_store.bulk_set_theme_ids`.
+        Idempotent — a no-op when no themes exist.
+        """
+        ...
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None: ...
     def get_themes_for_shelf(self, shelf_id: ShelfId) -> list[Theme]: ...
     def get_chunks_for_theme(self, theme_id: ThemeId) -> list[ChunkId]: ...

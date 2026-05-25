@@ -174,6 +174,40 @@ class InMemoryChunkStore:
             update={"embedding": list(embedding), "embedding_model": embedding_model}
         )
 
+    def update_embeddings_bulk(
+        self,
+        items: list[tuple[ChunkId, list[float], str]],
+    ) -> None:
+        # Inlined rather than looping over `update_embedding` so tests can
+        # assert the bulk path is taken without spying on the single-call
+        # method (and so the in-memory contract stays a faithful mirror of
+        # the Elastic adapter: one logical write per call).
+        for chunk_id, embedding, embedding_model in items:
+            c = self._chunks.get(chunk_id)
+            if c is None:
+                continue
+            self._chunks[chunk_id] = c.model_copy(
+                update={
+                    "embedding": list(embedding),
+                    "embedding_model": embedding_model,
+                }
+            )
+
+    def bulk_set_theme_ids(
+        self,
+        items: list[tuple[ChunkId, list[ThemeId]]],
+    ) -> None:
+        # Touches `theme_ids` only — `shelf_ids` are preserved verbatim. This
+        # is the safe path for Layer B persistence: a concurrent `fs.attach()`
+        # writing `shelf_ids` won't collide.
+        for chunk_id, theme_ids in items:
+            c = self._chunks.get(chunk_id)
+            if c is None:
+                continue
+            self._chunks[chunk_id] = c.model_copy(
+                update={"theme_ids": list(theme_ids)}
+            )
+
     def scan(self) -> list[Chunk]:
         return list(self._chunks.values())
 
@@ -200,6 +234,12 @@ class InMemoryGraphStore:
         # means "direct" (chunk linked to the shelf's own foodon_id).
         self._shelf_chunks: dict[ShelfId, dict[ChunkId, list[str]]] = defaultdict(dict)
         self._theme_chunks: dict[ThemeId, set[ChunkId]] = defaultdict(set)
+        # Layer B per-edge metadata: (chunk_id, theme_id) -> (primary, weight).
+        # Lives in a side dict so the legacy `attach_chunks_to_theme` (no
+        # metadata) keeps working for tests/notebooks that pre-date the bulk
+        # method. Queries always read this dict first; missing edges default
+        # to (False, 0.0).
+        self._theme_edge_meta: dict[tuple[ChunkId, ThemeId], tuple[bool, float]] = {}
         # First-class entities (mirrors the Neo4j Entity graph). Each entity
         # gets a Pydantic record plus a chunk_id → (confidence, method) map
         # so re-attaching the same chunk updates rather than duplicates.
@@ -254,6 +294,35 @@ class InMemoryGraphStore:
 
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None:
         self._theme_chunks[theme_id].update(chunk_ids)
+
+    def attach_chunks_to_themes_bulk(
+        self,
+        items: list[tuple[ChunkId, ThemeId, bool, float]],
+    ) -> None:
+        # Mirrors the Neo4j adapter's UNWIND-driven bulk write: one logical
+        # call covers many (chunk, theme, primary, weight) tuples. The
+        # in-memory implementation stores the metadata in a side dict.
+        for chunk_id, theme_id, primary, weight in items:
+            self._theme_chunks[theme_id].add(chunk_id)
+            self._theme_edge_meta[(chunk_id, theme_id)] = (primary, float(weight))
+
+    def clear_themes(self) -> None:
+        """Drop every theme node + its chunk attachments + per-edge metadata.
+
+        Shelves and the chunk store survive. Chunk-side `theme_ids` denorm
+        is the caller's responsibility — `build_layer_b()` always pairs this
+        with `chunk_store.bulk_set_theme_ids([(cid, []) ...])` for the same
+        set of chunks.
+        """
+        self._themes.clear()
+        self._theme_chunks.clear()
+        self._theme_edge_meta.clear()
+        # Theme-target cards become orphans; drop them too.
+        self._cards = {
+            key: card
+            for key, card in self._cards.items()
+            if key[1] != "theme"
+        }
 
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None:
         return self._shelves.get(shelf_id)

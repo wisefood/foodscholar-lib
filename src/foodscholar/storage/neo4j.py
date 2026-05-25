@@ -287,11 +287,15 @@ class Neo4jGraphStore:
         return dict(out)
 
     def get_chunks_for_theme(self, theme_id: ThemeId) -> list[ChunkId]:
+        # Reads either edge label so legacy `attach_chunks_to_theme` writes
+        # (`ATTACHED_TO`) and new Layer B `attach_chunks_to_themes_bulk`
+        # writes (`THEME_OF` with `primary` + `weight` properties) both
+        # surface here. New code should use the bulk method.
         with self._driver.session() as session:
             result = session.run(
                 """
-                MATCH (c:Chunk)-[:ATTACHED_TO]->(t:Theme {theme_id: $theme_id})
-                RETURN c.chunk_id AS chunk_id
+                MATCH (c:Chunk)-[r:ATTACHED_TO|THEME_OF]->(t:Theme {theme_id: $theme_id})
+                RETURN DISTINCT c.chunk_id AS chunk_id
                 """,
                 theme_id=theme_id,
             )
@@ -440,6 +444,52 @@ class Neo4jGraphStore:
                 theme_id=theme_id,
                 chunk_ids=chunk_ids,
             )
+
+    def attach_chunks_to_themes_bulk(
+        self,
+        items: list[tuple[ChunkId, ThemeId, bool, float]],
+    ) -> None:
+        """Bulk write `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges.
+
+        Layer B's persist path. One UNWIND-driven session.run per call covers
+        the whole batch — single network round-trip on Neo4j.
+        """
+        if not items:
+            return
+        rows = [
+            {
+                "chunk_id": chunk_id,
+                "theme_id": theme_id,
+                "primary": bool(primary),
+                "weight": float(weight),
+            }
+            for chunk_id, theme_id, primary, weight in items
+        ]
+        with self._driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (c:Chunk {chunk_id: row.chunk_id})
+                MERGE (t:Theme {theme_id: row.theme_id})
+                MERGE (c)-[r:THEME_OF]->(t)
+                SET r.primary = row.primary,
+                    r.weight = row.weight
+                """,
+                rows=rows,
+            )
+
+    def clear_themes(self) -> None:
+        """`DETACH DELETE` every `(:Theme)` node — kills HAS_THEME (from
+        shelves), THEME_OF / ATTACHED_TO (from chunks), and DESCRIBES (from
+        theme-target cards) in one shot.
+
+        `build_layer_b()` calls this at the start so re-runs with a different
+        config don't leave ghost themes. Shelves and chunks survive. Cards
+        with `target_type='shelf'` survive (they live on shelves, not themes).
+        """
+        with self._driver.session() as session:
+            session.run("MATCH (t:Theme) DETACH DELETE t")
+        _log.info("neo4j.themes_cleared", url=self.url)
 
     # ------------------------------------------------------------------ entities
 

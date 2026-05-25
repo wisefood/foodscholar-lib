@@ -342,6 +342,63 @@ class ElasticChunkStore:
             refresh="wait_for",
         )
 
+    def update_embeddings_bulk(
+        self,
+        items: list[tuple[ChunkId, list[float], str]],
+    ) -> None:
+        """Bulk partial-doc update — one `_bulk` HTTP request per call
+        instead of one `_update` per chunk. Hot path for tunneled embed runs
+        where per-doc latency dominates GPU time.
+
+        `refresh=False` (no `wait_for`) — we don't need each embedding
+        searchable mid-run; the run as a whole finishes with a final
+        no-op refresh, and `fs.embed()` is typically followed by other
+        bulk phases that already trigger refreshes.
+        """
+        if not items:
+            return
+        from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        actions = [
+            {
+                "_op_type": "update",
+                "_index": self.index,
+                "_id": chunk_id,
+                "doc": {
+                    "embedding": list(embedding),
+                    "embedding_model": embedding_model,
+                },
+            }
+            for chunk_id, embedding, embedding_model in items
+        ]
+        bulk(self._es, actions, refresh=False)
+
+    def bulk_set_theme_ids(
+        self,
+        items: list[tuple[ChunkId, list[ThemeId]]],
+    ) -> None:
+        """Set `theme_ids` only — leave `shelf_ids` untouched.
+
+        One `_bulk` round-trip per call. Used by Layer B persist so a
+        concurrent `fs.attach()` writing `shelf_ids` doesn't race against
+        our read-then-overwrite. `refresh=False` — Layer B's caller drives
+        the final refresh.
+        """
+        if not items:
+            return
+        from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        actions = [
+            {
+                "_op_type": "update",
+                "_index": self.index,
+                "_id": chunk_id,
+                "doc": {"theme_ids": list(theme_ids)},
+            }
+            for chunk_id, theme_ids in items
+        ]
+        bulk(self._es, actions, refresh=False)
+
     # ------------------------------------------------------------------ reads
 
     def get(self, chunk_id: ChunkId) -> Chunk | None:
