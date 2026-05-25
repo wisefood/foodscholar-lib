@@ -630,26 +630,49 @@ class FoodScholar:
         n_seen = 0
         n_embedded = 0
         n_skipped = 0
-        pending_texts: list[str] = []
         pending_chunks: list = []
 
         def _flush() -> None:
+            """Encode the pending batch and bulk-write the results.
+
+            With a router in play, chunks can route to different backends
+            (SPECTER2 for abstracts, BGE-large for textbook/guide) with
+            different vector dimensions. We split the pending batch by
+            backend, run ONE encode per backend (the T4 amortization win),
+            then issue ONE bulk write covering all results in the batch
+            (the network round-trip win).
+            """
             nonlocal n_embedded
             if not pending_chunks:
                 return
+
+            updates: list[tuple[str, list[float], str]] = []
             if router is not None:
-                for chunk in pending_chunks:
-                    vec, model_id = router.embed_chunk(chunk.text, chunk.source_type)
-                    self.chunk_store.update_embedding(chunk.chunk_id, vec, model_id)
-                    n_embedded += 1
-            else:
-                vecs = embedder.embed(pending_texts)
-                for chunk, vec in zip(pending_chunks, vecs, strict=True):
-                    self.chunk_store.update_embedding(
-                        chunk.chunk_id, vec, embedder.model_id
+                sci_chunks = [c for c in pending_chunks if c.source_type == "abstract"]
+                gen_chunks = [c for c in pending_chunks if c.source_type != "abstract"]
+                if sci_chunks:
+                    vecs = router._scientific.embed([c.text for c in sci_chunks])
+                    model_id = router._scientific.model_id
+                    updates.extend(
+                        (c.chunk_id, v, model_id)
+                        for c, v in zip(sci_chunks, vecs, strict=True)
                     )
-                    n_embedded += 1
-            pending_texts.clear()
+                if gen_chunks:
+                    vecs = router._general.embed([c.text for c in gen_chunks])
+                    model_id = router._general.model_id
+                    updates.extend(
+                        (c.chunk_id, v, model_id)
+                        for c, v in zip(gen_chunks, vecs, strict=True)
+                    )
+            else:
+                vecs = embedder.embed([c.text for c in pending_chunks])
+                updates.extend(
+                    (c.chunk_id, v, embedder.model_id)
+                    for c, v in zip(pending_chunks, vecs, strict=True)
+                )
+
+            self.chunk_store.update_embeddings_bulk(updates)
+            n_embedded += len(updates)
             pending_chunks.clear()
 
         for batch in self.chunk_store.iter_chunks(batch_size=batch_size):
@@ -659,7 +682,6 @@ class FoodScholar:
                     n_skipped += 1
                     continue
                 pending_chunks.append(chunk)
-                pending_texts.append(chunk.text)
                 if len(pending_chunks) >= batch_size:
                     _flush()
         _flush()
@@ -1052,8 +1074,41 @@ class FoodScholar:
             seed=seed,
         )
 
-    def build_layer_b(self) -> None:
-        raise _deferred("build-layer-b")
+    def build_layer_b(
+        self,
+        *,
+        facet: str = "foods",
+        dry_run: bool = False,
+    ):
+        """Build Layer B themes for `facet`.
+
+        For each shelf with `≥ cfg.layer_b.min_chunks_per_shelf` attached
+        chunks whose embedded-fraction clears `cfg.layer_b.min_embedded_fraction`,
+        runs the dual-pass pipeline (similarity + relatedness), merges
+        candidates greedily, labels themes (c-TF-IDF + LLM polish when
+        `cfg.layer_b.labeling.strategy == "llm"`), picks a per-pass-aware
+        primary chunk, and persists:
+          - `(:Theme)` nodes + `(:Shelf)-[:IN_SHELF...]->(:Theme)` edges
+          - `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges
+          - ES `theme_ids` denorm via `bulk_set_theme_ids` (preserves
+            `shelf_ids`)
+
+        Skips the synthetic facet root (`facet:foods` etc.) — that's the
+        iteration-8 unclassified bucket.
+
+        `dry_run=True` runs the full pipeline but skips all writes. Useful
+        for `n_themes` estimates and audit-decision inspection without
+        modifying the stores.
+
+        Returns a `LayerBArtifact` summarizing the run (themed/skipped
+        shelf counts, total themes, per-pass distribution, leiden seed,
+        timestamps).
+
+        See `layer_b_construction_brief.md` for the full architecture.
+        """
+        from foodscholar.layer_b.builder import build_layer_b as _build_layer_b
+
+        return _build_layer_b(self, facet=facet, dry_run=dry_run)
 
     def build_layer_c(self) -> None:
         raise _deferred("build-layer-c")
