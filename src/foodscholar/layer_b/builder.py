@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from foodscholar.layer_b.community import run_leiden
 from foodscholar.layer_b.models import ThemeCandidate
+from foodscholar.layer_b.relatedness_graph import build_relatedness_graph
 from foodscholar.layer_b.semantic_graph import build_similarity_graph
 
 if TYPE_CHECKING:
@@ -79,6 +80,58 @@ def build_shelf_similarity_candidates(
                 chunk_ids=chunk_ids,
                 foodon_ids=set(),
                 centroid_embedding=centroid.tolist(),
+                discovered_by="leiden",
+            )
+        )
+    return out
+
+
+def build_shelf_relatedness_candidates(
+    chunks: list[Chunk],
+    cfg: LayerBConfig,
+) -> list[ThemeCandidate]:
+    """Run Pass 2 (relatedness) on a single shelf's chunks.
+
+    Builds the entity-bridge graph and runs Leiden. Unlike Pass 1, this
+    pass does NOT require embeddings — entity coherence can be discovered
+    on any chunk whose `entity_links` cleared the linker's confidence
+    floor. The candidate's `foodon_ids` is the union of high-confidence
+    ontology_ids across its member chunks; this is the entity signature
+    the merge step (Phase 3) computes Jaccard against.
+
+    Empty input / no-edges / no-communities all return [] without
+    surprising the caller.
+    """
+    if not chunks:
+        return []
+
+    g = build_relatedness_graph(chunks, cfg.relatedness)
+    communities = run_leiden(g, cfg.leiden)
+    if not communities:
+        return []
+
+    index_to_id: list[str] = list(g.vs["chunk_id"])
+    chunk_by_id = {c.chunk_id: c for c in chunks}
+
+    out: list[ThemeCandidate] = []
+    for members in communities:
+        chunk_ids = {index_to_id[i] for i in members}
+        foodon_ids: set[str] = set()
+        for cid in chunk_ids:
+            c = chunk_by_id.get(cid)
+            if c is None:
+                continue
+            foodon_ids |= {
+                link.ontology_id
+                for link in c.entity_links
+                if link.confidence >= cfg.relatedness.tau_strict
+            }
+        out.append(
+            ThemeCandidate(
+                pass_name="relatedness",
+                chunk_ids=chunk_ids,
+                foodon_ids=foodon_ids,
+                centroid_embedding=None,  # relatedness pass has no embedding centroid
                 discovered_by="leiden",
             )
         )
