@@ -213,6 +213,13 @@ class Neo4jGraphStore:
                 "chunk_count": t.chunk_count,
                 "discovered_by": t.discovered_by,
                 "discovery_version": t.discovery_version,
+                # Layer B extensions
+                "facet": t.facet,
+                "discovery_pass": t.discovery_pass,
+                "keyword_terms": list(t.keyword_terms),
+                "foodon_id_signature": list(t.foodon_id_signature),
+                "config_hash": t.config_hash,
+                "version": t.version,
             }
             for t in themes
         ]
@@ -225,7 +232,13 @@ class Neo4jGraphStore:
                     t.parent_theme_id = row.parent_theme_id,
                     t.chunk_count = row.chunk_count,
                     t.discovered_by = row.discovered_by,
-                    t.discovery_version = row.discovery_version
+                    t.discovery_version = row.discovery_version,
+                    t.facet = row.facet,
+                    t.discovery_pass = row.discovery_pass,
+                    t.keyword_terms = row.keyword_terms,
+                    t.foodon_id_signature = row.foodon_id_signature,
+                    t.config_hash = row.config_hash,
+                    t.version = row.version
                 WITH t, row
                 UNWIND row.shelf_ids AS sid
                 MERGE (s:Shelf {shelf_id: sid})
