@@ -106,6 +106,8 @@ def test_shelf_theme_card_basic() -> None:
         shelf_ids=[s.shelf_id],
         discovered_by="leiden",
         discovery_version="v0",
+        facet="dietary_patterns",
+        discovery_pass="similarity",
     )
     card = Card(
         card_id="card-1",

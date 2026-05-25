@@ -87,6 +87,8 @@ def test_smoke_end_to_end(mini_chunks, mock_embedder, mock_llm):  # type: ignore
             shelf_ids=["s-med"],
             discovered_by="leiden",
             discovery_version="smoke-v1",
+            facet="dietary_patterns",
+            discovery_pass="similarity",
         ),
         Theme(
             theme_id="t-plant",
@@ -94,6 +96,8 @@ def test_smoke_end_to_end(mini_chunks, mock_embedder, mock_llm):  # type: ignore
             shelf_ids=["s-med"],
             discovered_by="leiden",
             discovery_version="smoke-v1",
+            facet="dietary_patterns",
+            discovery_pass="similarity",
         ),
     ]
     graph_store.upsert_themes(themes)
