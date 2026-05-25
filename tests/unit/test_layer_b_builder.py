@@ -175,3 +175,140 @@ def test_build_shelf_relatedness_candidates_handles_no_edges() -> None:
     cfg.relatedness.min_shared_ids = 2
     cfg.relatedness.max_doc_frequency = 1.0
     assert build_shelf_relatedness_candidates(chunks, cfg) == []
+
+
+# ----------------------------------------------------------------------------
+# build_shelf_themes (Phase 3, end-to-end per-shelf pipeline)
+# ----------------------------------------------------------------------------
+
+from foodscholar.layer_b.builder import build_shelf_themes  # noqa: E402
+
+
+class _StubLLM:
+    """Predictable LLM that returns a fixed label so tests pin behavior
+    without asserting LLM output text."""
+    model_id = "stub-llm"
+
+    def __init__(self, label: str = "Test theme label"):
+        self._label = label
+
+    def generate(self, prompt: str, max_tokens: int = 64) -> str:
+        return self._label
+
+    def generate_json(self, prompt: str, schema: dict, max_tokens: int = 1024) -> dict:
+        raise NotImplementedError
+
+
+def test_build_shelf_themes_emits_labeled_pydantic_themes() -> None:
+    """Full per-shelf pipeline returns Theme records with all the brief's
+    fields populated, plus chunk_assignments ready for persist."""
+    rng = np.random.default_rng(0)
+    chunks: list[Chunk] = []
+    for i in range(4):
+        v = np.zeros(8)
+        v[0] = 1.0
+        v += rng.normal(0, 0.01, 8)
+        v /= np.linalg.norm(v)
+        chunks.append(
+            Chunk(
+                chunk_id=f"a{i}",
+                text="calcium bone density",
+                source_doc_id="d",
+                source_type="abstract",
+                section_type="abstract",
+                embedding=v.tolist(),
+                embedding_model="test",
+                entity_links=[_link("FOODON:CALCIUM"), _link("FOODON:BONE")],
+            )
+        )
+    cfg = LayerBConfig()
+    cfg.leiden.min_community_size = 2
+    cfg.similarity.knn_k = 2
+    cfg.similarity.edge_threshold = 0.5
+    cfg.relatedness.min_shared_ids = 2
+    cfg.relatedness.max_doc_frequency = 1.0
+    cfg.merge.dedupe_threshold = 0.3
+
+    themes, _decisions, assignments = build_shelf_themes(
+        chunks,
+        shelf_id="s-cow-milk",
+        facet="foods",
+        cfg=cfg,
+        llm=_StubLLM("Calcium and bone density"),
+        config_hash="hash-abc",
+        version="v0.1",
+    )
+    assert len(themes) >= 1
+    t = themes[0]
+    assert t.shelf_ids == ["s-cow-milk"]
+    assert t.facet == "foods"
+    assert t.label == "Calcium and bone density"
+    assert t.discovery_pass in {"merged", "similarity", "relatedness"}
+    assert t.config_hash == "hash-abc"
+    assert t.version == "v0.1"
+    assert t.keyword_terms  # non-empty
+    assert t.foodon_id_signature  # non-empty (chunks have high-conf links)
+    # Theme ID is deterministic and slug-cleaned
+    assert t.theme_id.startswith("foods/s_cow_milk/")
+    # Exactly one chunk in the assignment list is marked primary
+    cas = assignments[t.theme_id]
+    primaries = [p for _, p, _ in cas]
+    assert sum(1 for p in primaries if p) == 1
+
+
+def test_build_shelf_themes_empty_chunks_returns_empty_tuple() -> None:
+    cfg = LayerBConfig()
+    themes, decisions, assignments = build_shelf_themes(
+        [],
+        shelf_id="s1",
+        facet="foods",
+        cfg=cfg,
+        llm=None,
+        config_hash="",
+        version="v0.1",
+    )
+    assert themes == []
+    assert decisions == []
+    assert assignments == {}
+
+
+def test_build_shelf_themes_keyword_strategy_skips_llm() -> None:
+    """labeling.strategy='keyword' produces space-separated keyword labels
+    even when llm is provided — explicit keyword choice wins."""
+    rng = np.random.default_rng(1)
+    chunks = []
+    for i in range(3):
+        v = np.zeros(4)
+        v[0] = 1.0
+        v += rng.normal(0, 0.01, 4)
+        v /= np.linalg.norm(v)
+        chunks.append(
+            Chunk(
+                chunk_id=f"c{i}",
+                text="olive oil mediterranean diet",
+                source_doc_id="d",
+                source_type="abstract",
+                section_type="abstract",
+                embedding=v.tolist(),
+                embedding_model="test",
+                entity_links=[],
+            )
+        )
+
+    cfg = LayerBConfig()
+    cfg.leiden.min_community_size = 2
+    cfg.similarity.knn_k = 2
+    cfg.similarity.edge_threshold = 0.5
+    cfg.labeling.strategy = "keyword"
+
+    themes, _, _ = build_shelf_themes(
+        chunks,
+        shelf_id="s-med",
+        facet="foods",
+        cfg=cfg,
+        llm=_StubLLM("WRONG"),  # would be wrong if used
+        config_hash="",
+        version="v0.1",
+    )
+    if themes:
+        assert "WRONG" not in themes[0].label
