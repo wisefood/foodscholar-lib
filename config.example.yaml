@@ -121,9 +121,37 @@ layer_a:
 
 layer_b:
   min_chunks_per_shelf: 50
-  algorithm: leiden
-  resolution: 1.0
-  recurse_threshold: 200
+  min_embedded_fraction: 0.80    # skip shelves where < this fraction has embeddings
+  similarity:
+    knn_k: 15
+    edge_threshold: 0.55
+    require_mutual: true
+    algorithm: leiden            # v1 ships leiden only; hdbscan deferred
+  relatedness:
+    tau_strict: 0.80
+    min_shared_ids: 2
+    max_doc_frequency: 0.40
+    algorithm: leiden
+    always_exclude_iris:
+      - "FOODON:00001002"        # 'food product' umbrella that survives Layer A
+  leiden:
+    resolution: 1.0
+    n_iterations: 10
+    min_community_size: 15
+    random_state: 42             # determinism contract — same seed = same themes
+  merge:
+    chunk_weight: 0.6
+    entity_weight: 0.4
+    dedupe_threshold: 0.70
+  labeling:
+    strategy: llm                # "keyword" | "llm" — LLM is the v1 default
+    top_keywords: 5
+    llm_max_tokens: 32
+  audit:
+    target_themes_per_shelf_min: 3
+    target_themes_per_shelf_max: 12
+    merged_rate_min: 0.20
+    merged_rate_max: 0.80
 
 layer_c:
   llm_model: claude-sonnet-4-6
