@@ -110,7 +110,9 @@ def test_upsert_chunks_routes_to_store() -> None:
 
 def test_deferred_phases_raise_not_implemented() -> None:
     fs = FoodScholar.in_memory()
-    for method in ["build_layer_b", "build_layer_c"]:
+    # build_layer_b is wired as of M5 (Phase 4); only build_layer_c remains
+    # deferred until Layer C lands.
+    for method in ["build_layer_c"]:
         with pytest.raises(NotImplementedError, match="not implemented yet"):
             getattr(fs, method)()
 

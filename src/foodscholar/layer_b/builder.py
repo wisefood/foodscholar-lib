@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 from foodscholar.layer_b.community import run_leiden
@@ -305,3 +306,133 @@ def build_shelf_themes(
         ]
 
     return themes, decisions, chunk_assignments
+
+
+# ----------------------------------------------------------------------------
+# Phase 4 — top-level orchestrator (called by fs.build_layer_b)
+# ----------------------------------------------------------------------------
+
+
+def _utc_iso() -> str:
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()
+
+
+def build_layer_b(
+    fs,  # type: ignore[no-untyped-def]
+    *,
+    facet: str = "foods",
+    dry_run: bool = False,
+):
+    """Top-level orchestrator.
+
+    For every shelf in `facet` with `chunk_count >= cfg.min_chunks_per_shelf`:
+      1. Fetch chunks + embeddings + entity_links from chunk_store
+      2. Apply the embedded-fraction gate (skip shelves where most chunks
+         have no embedding — biased subsample is worse than not clustering)
+      3. Run the per-shelf pipeline (`build_shelf_themes`)
+      4. Persist unless `dry_run=True`
+
+    Skips the synthetic facet root (`facet:foods` per iteration-8 — the
+    unclassified bucket, not a coherent topic).
+
+    Calls `graph_store.clear_themes()` at the start so a re-run with a
+    different config doesn't leave ghost themes. Then issues a single
+    `bulk_set_theme_ids` zeroing the theme_ids for every affected chunk
+    before persisting the new themes (otherwise stale theme_ids would
+    accumulate).
+
+    Returns a `LayerBArtifact` summarizing the run.
+    """
+    from foodscholar.layer_b.models import LayerBArtifact
+    from foodscholar.layer_b.persist import persist_themes
+    from foodscholar.versioning import make_artifact_meta
+
+    cfg = fs.config.layer_b
+    meta = make_artifact_meta(phase="layer_b", config=fs.config, record_count=0)
+    started = _utc_iso()
+
+    by_pass: dict[str, int] = {}
+    n_themed = 0
+    n_skipped = 0
+    n_themes_total = 0
+
+    # 1. Clear ghost themes from prior runs (unless dry_run — dry_run never writes)
+    if not dry_run:
+        fs.graph_store.clear_themes()
+
+    # 2. Invert chunk→shelves to shelf→chunks via the graph store
+    attachments = fs.graph_store.list_chunk_shelf_attachments()
+    shelf_to_chunks: dict[str, list[str]] = {}
+    for chunk_id, shelf_ids in attachments.items():
+        for sid in shelf_ids:
+            shelf_to_chunks.setdefault(sid, []).append(chunk_id)
+
+    # Will accumulate every chunk_id that lands in any theme this run, so we
+    # can issue one final bulk_set_theme_ids that overwrites stale denorm.
+    chunks_touched_this_run: set[str] = set()
+
+    for shelf in fs.graph_store.list_shelves():
+        if shelf.facet != facet:
+            continue
+        # Skip the synthetic facet root (the iteration-8 unclassified bucket)
+        if shelf.shelf_id == f"facet:{facet}":
+            n_skipped += 1
+            continue
+
+        chunk_ids = shelf_to_chunks.get(shelf.shelf_id, [])
+        if len(chunk_ids) < cfg.min_chunks_per_shelf:
+            n_skipped += 1
+            continue
+
+        chunks = fs.chunk_store.get_many(chunk_ids)
+        embedded = [c for c in chunks if c.embedding is not None]
+        # Embedded-fraction gate (Plan-agent flag) — skip if too few are
+        # embedded (clustering a biased subsample is worse than nothing).
+        if len(chunks) > 0 and (len(embedded) / len(chunks)) < cfg.min_embedded_fraction:
+            n_skipped += 1
+            continue
+        if len(embedded) < cfg.min_chunks_per_shelf:
+            # After applying the embedded filter, we may drop below threshold
+            n_skipped += 1
+            continue
+
+        themes, _decisions, chunk_assignments = build_shelf_themes(
+            chunks,
+            shelf_id=shelf.shelf_id,
+            facet=facet,
+            cfg=cfg,
+            llm=fs.llm,
+            config_hash=meta.config_hash,
+            version="v0.1",
+        )
+
+        if not themes:
+            n_skipped += 1
+            continue
+
+        if not dry_run:
+            # Zero stale theme_ids for chunks in this shelf before writing the
+            # new ones (persist's read-and-merge logic would otherwise carry
+            # prior-run theme_ids into the new artifact).
+            chunks_touched_this_run |= set(chunk_ids)
+            persist_themes(themes, chunk_assignments, fs.graph_store, fs.chunk_store)
+
+        n_themed += 1
+        n_themes_total += len(themes)
+        for t in themes:
+            by_pass[t.discovery_pass] = by_pass.get(t.discovery_pass, 0) + 1
+
+    return LayerBArtifact(
+        artifact_id=meta.artifact_id,
+        facet=facet,  # type: ignore[arg-type]
+        config_hash=meta.config_hash,
+        n_shelves_themed=n_themed,
+        n_shelves_skipped=n_skipped,
+        n_themes_total=n_themes_total,
+        n_themes_by_pass=by_pass,  # type: ignore[arg-type]
+        leiden_seed=cfg.leiden.random_state,
+        started_at=started,
+        finished_at=_utc_iso(),
+    )
