@@ -6,6 +6,77 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-25 — Iteration 9.0 (M5): Layer B — dual-pass theme discovery + embed perf patch
+
+**Goal:** land Layer B end-to-end (theme discovery inside each Layer A shelf) per the dual-pass architecture in [layer_b_construction_brief.md](layer_b_construction_brief.md). Bonus: fix the per-doc-update bottleneck blocking the real-corpus embedding run on a Colab T4 over an ngrok tunnel.
+
+### What landed (sub-phase commits)
+
+**Embed perf patch — `7e93f24..9bc91eb`** (a series; see commits before `2edb7f7`). Original `fs.embed()` encoded one chunk at a time and issued one ES `_update` per chunk — under a tunneled ES, throughput collapsed to ~2 chunks/sec on a T4 that should hit 100-300/sec. Two fixes: (1) the `_flush()` path now groups the pending batch by `source_type`, runs ONE `encode()` call per backend (SPECTER2 vs BGE-large) — the T4 amortization win; (2) a new `ChunkStore.update_embeddings_bulk(items)` collapses N `_update`s into one ES `_bulk` POST — the network-side win. New tests in [test_facade_embed.py](tests/unit/test_facade_embed.py) lock the contract ("ONE bulk call per flush", "ONE encode per backend per flush").
+
+**Phase 0 — foundation (4 commits, `2edb7f7..a47ab5b`):**
+- Extended `Theme` Pydantic ([io/graph.py](src/foodscholar/io/graph.py)) with the brief's new fields: `facet`, `discovery_pass`, `keyword_terms`, `foodon_id_signature`, `config_hash`, `version`. `shelf_ids` stays a `list[ShelfId]` (multi-shelf themes are kept open for v2 cross-shelf dedup; v1 builder emits length-1).
+- `ThemeCandidate`, `MergeDecision`, `LayerBArtifact`, `LayerBAuditReport` Pydantic in new [layer_b/models.py](src/foodscholar/layer_b/models.py).
+- Replaced flat `LayerBConfig` ([config.py](src/foodscholar/config.py)) with seven nested blocks: `SimilarityConfig`, `RelatednessConfig`, `LeidenConfig`, `MergeConfig`, `LabelingConfig`, `LayerBAuditConfig` (+ top-level `min_chunks_per_shelf`, `min_embedded_fraction`). `Literal["leiden"]` on per-pass algorithm fields makes HDBSCAN selection raise a Pydantic ValidationError (HDBSCAN cut from v1 per Plan-agent review — the precomputed-distance hack on the relatedness graph wasn't a valid metric).
+- Three new storage protocol methods, implemented on memory + Elastic + Neo4j adapters:
+  - `ChunkStore.bulk_set_theme_ids(items)` — sets `theme_ids` ONLY, leaves `shelf_ids` alone (the load-bearing reason this exists instead of reusing `bulk_update_attachments`, which clobbers shelf_ids under concurrent writes).
+  - `GraphStore.attach_chunks_to_themes_bulk(items)` — writes `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges in one UNWIND-driven session.run on Neo4j. New `THEME_OF` edge label; the legacy `attach_chunks_to_theme` (which writes `ATTACHED_TO`) stays for back-compat. `get_chunks_for_theme` reads either label.
+  - `GraphStore.clear_themes()` — DETACH DELETE every (:Theme); called by `build_layer_b` at the start so re-runs don't leave ghosts.
+
+**Phase 1 — Pass 1 (similarity) (4 commits, `4318df6..7fe5812`):**
+- [semantic_graph.py](src/foodscholar/layer_b/semantic_graph.py) — mutual-kNN over normalized chunk embeddings; cosine via numpy dot product, `argpartition` for top-k. Defensive normalization in case input vectors aren't unit-norm.
+- [community.py](src/foodscholar/layer_b/community.py) — `run_leiden(graph, cfg)` using `leidenalg.RBConfigurationVertexPartition` with weighted modularity. Deterministic with fixed `random_state` (the load-bearing audit-parity guarantee). Empty/no-edges graphs short-circuit to `[]`.
+- [label.py](src/foodscholar/layer_b/label.py) — `label_by_keywords` (c-TF-IDF with English stopwords + uni/bigram) and `label_by_llm` (one `LLMClient.generate` call per theme with keywords + 3 sample chunks; strips surrounding quotes; falls back to top keyword if LLM returns blank).
+- [builder.py](src/foodscholar/layer_b/builder.py) — `build_shelf_similarity_candidates`: skips chunks without embeddings, runs kNN+Leiden, emits ThemeCandidate records with normalized-mean centroids.
+
+**Phase 2 — Pass 2 (relatedness) (2 commits, `94157d9..235d650`):**
+- [relatedness_graph.py](src/foodscholar/layer_b/relatedness_graph.py) — entity-bridge graph; edge weight = sum over shared FoodOn IDs of `1 / log(1 + doc_freq[id])`. The three knobs the brief calls make-or-break are exposed: `tau_strict` (link confidence floor), `min_shared_ids` (edge threshold), `max_doc_frequency` (drop ubiquitous entities). `always_exclude_iris=['FOODON:00001002']` is the default permanent kill-list — the 'food product' umbrella that survived Layer A propagates onto every chunk.
+- `build_shelf_relatedness_candidates` — builds the graph, runs Leiden, emits candidates whose `foodon_ids` is the union of high-conf links across members (the entity signature the merge step uses for Jaccard).
+
+**Phase 3 — merge + primary + persist + audit (5 commits, `ac83cb3..9359d7d`):**
+- [merge.py](src/foodscholar/layer_b/merge.py) — greedy pair assignment with deterministic tie-break by `(-combined_similarity, sim_idx, rel_idx)`. Records the full cartesian product as `MergeDecision`s for audit. Greedy not optimal (Hungarian is) — documented; v1 scale (≤30 candidates per shelf) makes greedy sufficient.
+- [primary.py](src/foodscholar/layer_b/primary.py) — per-pass-aware primary picker (Plan-agent flagged lex-first alone as too crude): similarity → closest-to-centroid in embedding space; relatedness → max sum-of-edge-weights to other members in the rel graph; merged → max of both scores per chunk. Lex-first chunk_id is the deterministic tie-breaker.
+- [persist.py](src/foodscholar/layer_b/persist.py) — three writes in lockstep: `upsert_themes` (creates (:Theme) nodes + IN_SHELF edges, with all the new Layer B Theme fields stamped), `attach_chunks_to_themes_bulk` (THEME_OF edges with primary+weight), `bulk_set_theme_ids` (ES denorm, preserves shelf_ids). Merges with pre-existing theme_ids on each chunk (a chunk in two shelves can land in themes in both).
+- [builder.build_shelf_themes](src/foodscholar/layer_b/builder.py) — full per-shelf pipeline (Pass 1 + Pass 2 + merge + label + primary picker). Emits Pydantic Theme records with deterministic theme_ids of the form `{facet}/{shelf_slug}/{label_slug}_{p}{seq}` (p ∈ {s,r,m}; seq is per-shelf-per-pass counter so identical-label themes get `_s1`/`_s2`).
+- [audit.py](src/foodscholar/layer_b/audit.py) — `audit_layer_b(chunk_store, graph_store) -> LayerBAuditReport`. CRITICAL gates (flip `passed`): parity (Neo4j THEME_OF ↔ ES theme_ids agreement = 1.0), no dangling theme_ids, no empty themes. WARN-level reporting for tuning: per-pass theme counts (the brief's "≥ 1 from each pass" canary) and `merged_rate` (1.0 = Pass 2 isn't earning compute; 0.0 with relatedness=0 = entity graph mis-tuned).
+
+**Phase 4 — orchestrator + facade + integration test (`5169f76`):**
+- Top-level `build_layer_b(fs, *, facet, dry_run)` in [builder.py](src/foodscholar/layer_b/builder.py). Iterates shelves in the facet, applies `min_chunks_per_shelf` + `min_embedded_fraction` gates (Plan-agent flag — biased subsamples are worse than not clustering), skips the synthetic facet root (iteration-8 unclassified bucket). Calls `clear_themes()` at start. `dry_run=True` runs the full pipeline but persists nothing.
+- [facade.py:1077](src/foodscholar/facade.py#L1077) `fs.build_layer_b(*, facet="foods", dry_run=False)` is now wired and returns a `LayerBArtifact` with `n_shelves_themed`, `n_themes_total`, `n_themes_by_pass`, `leiden_seed`, timestamps.
+- The existing `foodscholar build-layer-b --config <path>` CLI command at [cli/main.py:83](src/foodscholar/cli/main.py#L83) already routes here via `_run_phase` — no CLI work needed.
+- [tests/integration/test_layer_b_pipeline.py](tests/integration/test_layer_b_pipeline.py) — mini-corpus e2e (2 shelves × 8 chunks each) asserts `n_shelves_themed=2`, `n_themes >= 4`, `audit.passed`. Plus a dry-run test asserting no writes land.
+
+### Design decisions worth remembering
+
+- **Two passes capture different structure, not redundant signal.** Pass 1 finds *topical* clusters (chunks that discuss the same thing in similar prose). Pass 2 finds *entity-anchored* clusters (chunks co-mentioning the same FoodOn IDs even when the prose differs widely). A `discovery_pass="merged"` theme is grounded in *both* — stronger than either alone. Audit canaries: relatedness=0 means Pass 2 mis-tuned; merged_rate=1.0 means Pass 2 isn't earning compute.
+- **`bulk_set_theme_ids` is a deliberate carve-out from `bulk_update_attachments`.** The latter overwrites both `shelf_ids` and `theme_ids` per call; using it from persist would race against any concurrent shelf writer. The new method touches `theme_ids` only — safe under any `shelf_ids` writer.
+- **HDBSCAN cut from v1.** Plan-agent flagged the precomputed-distance hack on the relatedness graph as broken (the normalization isn't a valid metric). Brief defers HDBSCAN; v1 ships Leiden-only on both passes. `cfg.similarity.algorithm = "hdbscan"` raises ValidationError so misconfigurations fail loudly.
+- **LLM labels are v1 default** (`cfg.labeling.strategy = "llm"`). Navigation labels need to read well; ~$0.60/run cost (Haiku) is trivial vs cluster compute. Keyword fallback is always computed and fed to the LLM as context — and stays available via `strategy="keyword"`.
+- **Theme IDs are deterministic.** `{facet}/{shelf_slug}/{label_slug}_{p}{seq}` with per-shelf-per-pass `seq` counter. Audit cross-store parity depends on stable IDs across runs; same chunks + same `random_state` = identical theme membership and IDs.
+
+### Verification
+
+- `ruff check src tests` — clean.
+- `pytest tests/` — **524 passed, 1 skipped** (was 432 before this iteration; +92 new across 8 layer_b_* test files + 2 integration tests). Test count by area: 7 layer_b_models, 3 layer_b_config, 13 layer_b_persist, 7 layer_b_semantic_graph, 5 layer_b_community, 7 layer_b_label, 6 layer_b_relatedness_graph, 9 layer_b_merge, 5 layer_b_primary, 10 layer_b_builder, 7 layer_b_audit, 2 integration.
+- **Local env note:** the broken-openblas numpy in `/mnt/miniconda3/bin/python` made the embed-perf-patch session's local pytest runs skip layer_b tests. The project's actual env is `/mnt/miniconda3/envs/foodscholar/bin/python` (Python 3.11.15) where numpy + igraph + leidenalg + hdbscan + sklearn all work — this iteration's full suite runs green there. The wrong-interpreter confusion is what triggered the embed-perf debugging session in the first place.
+
+### Status at end of iteration — Layer B is DONE (code-side)
+
+- `fs.build_layer_b(facet="foods")` runs end-to-end against any backend (in-memory, ES+Neo4j).
+- All §10 audit gates implemented; CRITICAL invariants enforced via `LayerBAuditReport.passed`.
+- §17 sanity gate (20-theme hand audit against the real corpus) — **deferred to the next session in Colab/notebook** since (a) the embed run on the live ES is still finishing, (b) `fs.attach()` needs to re-run to populate Neo4j HAS_CHUNK edges (the current 6,290 attached chunks in ES carry the denorm but Neo4j has 0 edges — drift surfaced at iteration start).
+
+### Handoff for next session
+
+Run order against the live ES + Neo4j once embedding completes:
+1. `fs.attach()` — rebuild Neo4j HAS_CHUNK edges from the existing ES shelf_ids denorm.
+2. `fs.build_layer_b(facet="foods")` — full Layer B rollout. Expected: ~30-60 themed shelves at min_chunks_per_shelf=50, 100-300 total themes, parity=1.0.
+3. §17 hand audit cell — sample 20 themes random, inspect label + 3 chunk excerpts, target ≥ 75% coherent.
+
+If the per-pass canary fires (relatedness=0 or merged_rate=1.0), the tuning order from the brief is: try `relatedness.min_shared_ids=1`, then `relatedness.max_doc_frequency=0.6`, then inspect the `excluded` set (likely too aggressive).
+
+---
+
 ## 2026-05-22 — Iteration 8.0 (M4): semantic consolidation + Layer A tuning; Layer A declared done
 
 **Goal:** add the semantic-consolidation pass (catch duplicate shelves lexical rules miss), then validate Layer A is a sound foundation for Layer B and close out Layer A.

@@ -782,13 +782,19 @@ foodscholar = "foodscholar.cli.main:app"
 
 ## 12. First-week implementation plan
 
-> **Current status (2026-05-22):** scaffold + annotate + **Layer A are done** —
-> projection, `fs.attach()`, `fs.audit()`, `fs.quality_report()`, and
-> `fs.semantic_consolidate()` (LLM-as-judge dedup) have all landed. Layer A is
-> validated as a Layer B foundation (audit passes, ~116 clusterable foods
-> shelves; the ~18% synthetic-root orphans are an accepted long-tail). **Next
-> milestone: Layer B (theme discovery).** Full history + the Layer B handoff
-> note is in [PROGRESS.md](PROGRESS.md) (newest entry on top).
+> **Current status (2026-05-25):** scaffold + annotate + **Layer A + Layer B
+> are done (code-side)** — Layer A: projection, `fs.attach()`, `fs.audit()`,
+> `fs.quality_report()`, `fs.semantic_consolidate()`. Layer B:
+> `fs.build_layer_b(facet=...)` runs the dual-pass (similarity + relatedness)
+> pipeline per shelf, merges greedily, labels via c-TF-IDF + LLM polish,
+> persists `(:Theme)` + `THEME_OF` edges + ES `theme_ids` denorm,
+> `audit_layer_b()` enforces cross-store parity. Full unit + integration
+> suite passes (524 tests). **Next: §17 sanity gate against the real corpus
+> in the notebook** (deferred from iteration 9 — the embed run was still
+> finishing on Colab T4 and `fs.attach()` needs to re-run first to repair
+> Neo4j drift). Then **Layer C (cards)**. See [layer_b_construction_brief.md](layer_b_construction_brief.md)
+> for the Layer B architecture; full history is in [PROGRESS.md](PROGRESS.md)
+> (newest entry on top).
 
 Strict order. Do not skip ahead.
 
