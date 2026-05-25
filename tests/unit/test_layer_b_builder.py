@@ -11,8 +11,11 @@ pytest.importorskip("igraph")
 pytest.importorskip("leidenalg")
 
 from foodscholar.config import LayerBConfig  # noqa: E402
-from foodscholar.io.chunk import Chunk  # noqa: E402
-from foodscholar.layer_b.builder import build_shelf_similarity_candidates  # noqa: E402
+from foodscholar.io.chunk import Chunk, EntityLink, Mention  # noqa: E402
+from foodscholar.layer_b.builder import (  # noqa: E402
+    build_shelf_relatedness_candidates,
+    build_shelf_similarity_candidates,
+)
 
 
 def _chunk(cid: str, *, text: str = "x", vec=None, source_type: str = "abstract") -> Chunk:
@@ -108,3 +111,67 @@ def test_build_shelf_similarity_candidates_emits_centroid() -> None:
 def test_build_shelf_similarity_candidates_empty_returns_empty() -> None:
     cfg = LayerBConfig()
     assert build_shelf_similarity_candidates([], cfg) == []
+
+
+# ----------------------------------------------------------------------------
+# Pass 2 (relatedness) per-shelf builder
+# ----------------------------------------------------------------------------
+
+
+def _link(oid: str, conf: float = 0.95) -> EntityLink:
+    m = Mention(text="x", start=0, end=1, score=conf, ner_model_version="v")
+    return EntityLink(
+        mention=m, ontology_id=oid, confidence=conf, method="dense", linker_version="v",
+    )
+
+
+def _entity_chunk(cid: str, links: list[EntityLink]) -> Chunk:
+    return Chunk(
+        chunk_id=cid,
+        text=cid,
+        source_doc_id="d",
+        source_type="abstract",
+        section_type="abstract",
+        entity_links=links,
+    )
+
+
+def test_build_shelf_relatedness_candidates_groups_by_shared_entities() -> None:
+    """Chunks a,b,c share FOODON:1+2; d,e,f share FOODON:3+4. Two
+    entity-anchored relatedness candidates expected."""
+    chunks: list[Chunk] = []
+    for cid in ("a", "b", "c"):
+        chunks.append(_entity_chunk(cid, [_link("FOODON:1"), _link("FOODON:2")]))
+    for cid in ("d", "e", "f"):
+        chunks.append(_entity_chunk(cid, [_link("FOODON:3"), _link("FOODON:4")]))
+
+    cfg = LayerBConfig()
+    cfg.leiden.min_community_size = 2
+    cfg.relatedness.min_shared_ids = 2
+    cfg.relatedness.max_doc_frequency = 1.0
+
+    candidates = build_shelf_relatedness_candidates(chunks, cfg)
+    assert len(candidates) == 2
+    for cand in candidates:
+        assert cand.pass_name == "relatedness"
+        # The candidate's foodon_ids = union of high-conf links across members.
+        assert len(cand.foodon_ids) >= 2
+
+
+def test_build_shelf_relatedness_candidates_handles_empty_chunks() -> None:
+    cfg = LayerBConfig()
+    assert build_shelf_relatedness_candidates([], cfg) == []
+
+
+def test_build_shelf_relatedness_candidates_handles_no_edges() -> None:
+    """Chunks with no shared entities → no edges → no communities → []."""
+    chunks = [
+        _entity_chunk("a", [_link("FOODON:1"), _link("FOODON:2")]),
+        _entity_chunk("b", [_link("FOODON:3"), _link("FOODON:4")]),
+        _entity_chunk("c", [_link("FOODON:5"), _link("FOODON:6")]),
+    ]
+    cfg = LayerBConfig()
+    cfg.leiden.min_community_size = 2
+    cfg.relatedness.min_shared_ids = 2
+    cfg.relatedness.max_doc_frequency = 1.0
+    assert build_shelf_relatedness_candidates(chunks, cfg) == []
