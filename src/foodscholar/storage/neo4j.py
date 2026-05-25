@@ -531,6 +531,13 @@ def _theme_from_record(node: Any, shelf_ids: list[str]) -> Theme:
         chunk_count=int(node.get("chunk_count") or 0),
         discovered_by=node["discovered_by"],
         discovery_version=node["discovery_version"],
+        # Layer B extensions — old theme nodes may not carry these yet.
+        facet=node.get("facet") or "foods",
+        discovery_pass=node.get("discovery_pass") or "similarity",
+        keyword_terms=list(node.get("keyword_terms") or []),
+        foodon_id_signature=list(node.get("foodon_id_signature") or []),
+        config_hash=node.get("config_hash") or "",
+        version=node.get("version") or "",
     )
 
 

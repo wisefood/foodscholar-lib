@@ -103,6 +103,8 @@ def test_graph_store_theme_chunk_attachment() -> None:
         shelf_ids=["s-med"],
         discovered_by="leiden",
         discovery_version="v0",
+        facet="dietary_patterns",
+        discovery_pass="similarity",
     )
     g.upsert_shelves([s])
     g.upsert_themes([t])

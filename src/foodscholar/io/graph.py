@@ -43,6 +43,13 @@ class Theme(BaseModel):
     chunk_count: int = 0
     discovered_by: Literal["leiden", "hdbscan", "bertopic"]
     discovery_version: str
+    # Layer B extensions (per layer_b_construction_brief.md §3)
+    facet: Facet
+    discovery_pass: Literal["similarity", "relatedness", "merged"]
+    keyword_terms: list[str] = Field(default_factory=list)
+    foodon_id_signature: list[str] = Field(default_factory=list)
+    config_hash: str = ""
+    version: str = ""
 
 
 class Card(BaseModel):

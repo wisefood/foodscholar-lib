@@ -130,6 +130,8 @@ def test_theme_navigation(fs: FoodScholar) -> None:
         shelf_ids=["s-med"],
         discovered_by="leiden",
         discovery_version="v0",
+        facet="dietary_patterns",
+        discovery_pass="similarity",
     )
     fs.upsert_chunks(
         [
