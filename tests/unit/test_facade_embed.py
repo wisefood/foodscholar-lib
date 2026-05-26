@@ -194,3 +194,112 @@ def test_embed_returns_zero_when_store_empty() -> None:
     fs = _fs()
     meta = fs.embed()
     assert meta.record_count == 0
+
+
+# --------------------------------------------------------------------- bulk path
+
+
+def test_memory_store_update_embeddings_bulk_round_trips() -> None:
+    """update_embeddings_bulk is the new hot path for fs.embed() over a tunneled
+    cluster. The in-memory implementation is a simple loop — verify the contract."""
+    fs = _fs()
+    fs.upsert_chunks([_chunk("c1"), _chunk("c2"), _chunk("c3")])
+    fs.chunk_store.update_embeddings_bulk(
+        [
+            ("c1", [0.1] * 8, "test-model"),
+            ("c2", [0.2] * 8, "test-model"),
+            ("c3", [0.3] * 8, "other-model"),
+        ]
+    )
+    assert fs.chunk_store.get("c1").embedding == [0.1] * 8  # type: ignore[union-attr]
+    assert fs.chunk_store.get("c1").embedding_model == "test-model"  # type: ignore[union-attr]
+    assert fs.chunk_store.get("c3").embedding_model == "other-model"  # type: ignore[union-attr]
+
+
+def test_memory_store_update_embeddings_bulk_empty_is_noop() -> None:
+    fs = _fs()
+    fs.upsert_chunks([_chunk("c1")])
+    fs.chunk_store.update_embeddings_bulk([])
+    assert fs.chunk_store.get("c1").embedding is None  # type: ignore[union-attr]
+
+
+def test_embed_uses_bulk_writeback_one_call_per_flush() -> None:
+    """fs.embed() should call update_embeddings_bulk ONCE per flush — not N
+    times via per-doc update_embedding. This is the network-side win on a
+    tunneled ES."""
+    fs = _fs()
+    fs.upsert_chunks([_chunk(f"c{i}") for i in range(10)])
+
+    bulk_calls: list[int] = []
+    single_calls: list[str] = []
+    original_bulk = fs.chunk_store.update_embeddings_bulk
+    original_single = fs.chunk_store.update_embedding
+
+    def spy_bulk(items):  # type: ignore[no-untyped-def]
+        bulk_calls.append(len(items))
+        return original_bulk(items)
+
+    def spy_single(chunk_id, embedding, embedding_model):  # type: ignore[no-untyped-def]
+        single_calls.append(chunk_id)
+        return original_single(chunk_id, embedding, embedding_model)
+
+    fs.chunk_store.update_embeddings_bulk = spy_bulk  # type: ignore[method-assign]
+    fs.chunk_store.update_embedding = spy_single  # type: ignore[method-assign]
+
+    # batch_size=4 → expect 3 flushes (4, 4, 2)
+    fs.embed(batch_size=4)
+
+    assert bulk_calls == [4, 4, 2], f"expected three flushes, got {bulk_calls}"
+    assert single_calls == [], "fs.embed() must not fall back to per-doc updates"
+
+
+def test_embed_router_batches_per_backend_one_encode_call_each() -> None:
+    """With a router, fs.embed() should issue ONE encode call per backend
+    per flush — not one encode per chunk. This is the GPU-side win that
+    lets a batched accelerator amortize kernel launch overhead."""
+    from foodscholar.annotate.embedder import HashEmbedder, SourceTypeRouter
+
+    class CountingEmbedder(HashEmbedder):
+        def __init__(self, *, dim: int, model_id: str) -> None:
+            super().__init__(dim=dim)
+            self.model_id = model_id  # type: ignore[misc]
+            self.calls: list[int] = []
+
+        def embed(self, texts):  # type: ignore[no-untyped-def]
+            self.calls.append(len(texts))
+            return super().embed(texts)
+
+    scientific = CountingEmbedder(dim=8, model_id="fake-specter")
+    general = CountingEmbedder(dim=12, model_id="fake-bge")
+    router = SourceTypeRouter(scientific=scientific, general=general)
+
+    fs = FoodScholar.in_memory()
+    fs.embedder = router
+
+    # 3 abstracts + 5 guides — must produce ONE encode per backend in one flush
+    chunks: list[Chunk] = []
+    for i in range(3):
+        chunks.append(
+            Chunk(
+                chunk_id=f"abs{i}",
+                text=f"abstract {i}",
+                source_doc_id="d",
+                source_type="abstract",
+                section_type="abstract",
+            )
+        )
+    for i in range(5):
+        chunks.append(
+            Chunk(
+                chunk_id=f"gd{i}",
+                text=f"guide {i}",
+                source_doc_id="d",
+                source_type="guide",
+                section_type="guideline",
+            )
+        )
+    fs.upsert_chunks(chunks)
+    fs.embed(batch_size=16)  # one flush
+
+    assert scientific.calls == [3], f"scientific got {scientific.calls}"
+    assert general.calls == [5], f"general got {general.calls}"
