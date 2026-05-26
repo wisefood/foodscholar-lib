@@ -2,7 +2,7 @@
 
 Marked @pytest.mark.slow — opt-in via `pytest -m slow`. First run downloads:
 
-  - SPECTER2 (~440MB), BioLORD (~440MB), SapBERT (~440MB)
+  - BGE-base (~440MB), BioLORD (~440MB), SapBERT (~440MB)
   - GLiNER bio-v0.1 (~1.5GB)
 
 into ~/.cache/huggingface; subsequent runs use the cache. Real-provider
@@ -25,10 +25,10 @@ sentence_transformers = pytest.importorskip("sentence_transformers")
 
 
 @pytest.mark.slow
-def test_hf_embedder_specter2_round_trip() -> None:
+def test_hf_embedder_bge_base_round_trip() -> None:
     from foodscholar.annotate.embedder import HFEmbedder
 
-    e = HFEmbedder("allenai/specter2_base")
+    e = HFEmbedder("BAAI/bge-base-en-v1.5")
     [vec] = e.embed(["A study of the Mediterranean diet."])
     assert e.dim == 768
     assert len(vec) == 768

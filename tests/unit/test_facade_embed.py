@@ -38,9 +38,8 @@ def _fs(**overrides) -> FoodScholar:  # type: ignore[no-untyped-def]
 
 
 def test_is_real_embedding_helper() -> None:
-    assert _is_real_embedding("allenai/specter2_base") is True
+    assert _is_real_embedding("BAAI/bge-base-en-v1.5") is True
     assert _is_real_embedding("BAAI/bge-large-en-v1.5") is True
-    assert _is_real_embedding("router(scientific=specter2;general=bge)") is True
     assert _is_real_embedding("mock-embedder-v0") is False
     assert _is_real_embedding("hash-embedder-v0") is False
     assert _is_real_embedding(None) is False
@@ -68,7 +67,7 @@ def test_embed_only_missing_default_skips_already_embedded() -> None:
     fs = _fs()
     fs.upsert_chunks(
         [
-            _chunk("c1", embedding=[0.1, 0.2], model="allenai/specter2_base"),
+            _chunk("c1", embedding=[0.1, 0.2], model="BAAI/bge-base-en-v1.5"),
             _chunk("c2"),
         ]
     )
@@ -78,7 +77,7 @@ def test_embed_only_missing_default_skips_already_embedded() -> None:
     c1 = fs.chunk_store.get("c1")
     assert c1 is not None
     assert c1.embedding == [0.1, 0.2]
-    assert c1.embedding_model == "allenai/specter2_base"
+    assert c1.embedding_model == "BAAI/bge-base-en-v1.5"
 
     c2 = fs.chunk_store.get("c2")
     assert c2 is not None
@@ -89,7 +88,7 @@ def test_embed_only_missing_default_skips_already_embedded() -> None:
 def test_embed_force_overwrites_when_only_missing_false() -> None:
     fs = _fs()
     fs.upsert_chunks(
-        [_chunk("c1", embedding=[0.9, 0.8], model="allenai/specter2_base")]
+        [_chunk("c1", embedding=[0.9, 0.8], model="BAAI/bge-base-en-v1.5")]
     )
     fs.embed(only_missing=False)
     c1 = fs.chunk_store.get("c1")
@@ -109,47 +108,6 @@ def test_embed_overwrites_mock_under_default_only_missing() -> None:
     c1 = fs.chunk_store.get("c1")
     assert c1 is not None
     assert c1.embedding_model == "mock-embedder-v0"
-
-
-def test_embed_uses_source_type_router_when_present() -> None:
-    """A SourceTypeRouter on fs.embedder routes per chunk.source_type."""
-    from foodscholar.annotate.embedder import HashEmbedder, SourceTypeRouter
-
-    scientific = HashEmbedder(dim=8)
-    scientific.model_id = "fake-specter"  # type: ignore[attr-defined]
-    general = HashEmbedder(dim=12)
-    general.model_id = "fake-bge"  # type: ignore[attr-defined]
-    router = SourceTypeRouter(scientific=scientific, general=general)
-
-    fs = FoodScholar.in_memory()
-    fs.embedder = router  # bypass lazy build
-    fs.upsert_chunks(
-        [
-            Chunk(
-                chunk_id="abs1",
-                text="an abstract chunk",
-                source_doc_id="d",
-                source_type="abstract",
-                section_type="abstract",
-            ),
-            Chunk(
-                chunk_id="gd1",
-                text="a guide chunk",
-                source_doc_id="d",
-                source_type="guide",
-                section_type="guideline",
-            ),
-        ]
-    )
-    fs.embed()
-    abs1 = fs.chunk_store.get("abs1")
-    gd1 = fs.chunk_store.get("gd1")
-    assert abs1 is not None and gd1 is not None
-    assert abs1.embedding_model == "fake-specter"
-    assert gd1.embedding_model == "fake-bge"
-    # dims follow the per-source-type embedder
-    assert len(abs1.embedding or []) == 8
-    assert len(gd1.embedding or []) == 12
 
 
 def test_embed_does_not_touch_annotations() -> None:
@@ -253,11 +211,11 @@ def test_embed_uses_bulk_writeback_one_call_per_flush() -> None:
     assert single_calls == [], "fs.embed() must not fall back to per-doc updates"
 
 
-def test_embed_router_batches_per_backend_one_encode_call_each() -> None:
-    """With a router, fs.embed() should issue ONE encode call per backend
-    per flush — not one encode per chunk. This is the GPU-side win that
-    lets a batched accelerator amortize kernel launch overhead."""
-    from foodscholar.annotate.embedder import HashEmbedder, SourceTypeRouter
+def test_embed_batches_one_encode_call_per_flush() -> None:
+    """fs.embed() should issue ONE encode call per flush — not one encode per
+    chunk. This is the GPU-side win that lets a batched accelerator amortize
+    kernel launch overhead."""
+    from foodscholar.annotate.embedder import HashEmbedder
 
     class CountingEmbedder(HashEmbedder):
         def __init__(self, *, dim: int, model_id: str) -> None:
@@ -269,14 +227,12 @@ def test_embed_router_batches_per_backend_one_encode_call_each() -> None:
             self.calls.append(len(texts))
             return super().embed(texts)
 
-    scientific = CountingEmbedder(dim=8, model_id="fake-specter")
-    general = CountingEmbedder(dim=12, model_id="fake-bge")
-    router = SourceTypeRouter(scientific=scientific, general=general)
+    embedder = CountingEmbedder(dim=8, model_id="fake-bge")
 
     fs = FoodScholar.in_memory()
-    fs.embedder = router
+    fs.embedder = embedder
 
-    # 3 abstracts + 5 guides — must produce ONE encode per backend in one flush
+    # 8 chunks in a single flush — must produce ONE encode call of size 8.
     chunks: list[Chunk] = []
     for i in range(3):
         chunks.append(
@@ -301,5 +257,4 @@ def test_embed_router_batches_per_backend_one_encode_call_each() -> None:
     fs.upsert_chunks(chunks)
     fs.embed(batch_size=16)  # one flush
 
-    assert scientific.calls == [3], f"scientific got {scientific.calls}"
-    assert general.calls == [5], f"general got {general.calls}"
+    assert embedder.calls == [8], f"embedder got {embedder.calls}"

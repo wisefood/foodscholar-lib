@@ -63,7 +63,7 @@ ConfigSource = str | Path | dict[str, Any] | FoodScholarConfig
 # Model ids that don't count as "real" embeddings — used by fs.embed() to
 # decide whether a chunk needs encoding under `only_missing=True`. The list
 # is small on purpose: anything outside it is treated as a real production
-# embedder so we don't accidentally re-encode SPECTER2/BGE vectors.
+# embedder so we don't accidentally re-encode BGE vectors.
 _MOCK_EMBEDDING_MODELS: frozenset[str] = frozenset(
     {"mock-embedder-v0", "hash-embedder-v0"}
 )
@@ -143,9 +143,9 @@ class FoodScholar:
         self.config = cfg
         self.chunk_store = chunk_store
         self.graph_store = graph_store
-        # Embedder is built lazily on first access — production embedders
-        # (SPECTER2 + BGE-large via SourceTypeRouter) cost ~1.7 GB of model
-        # weights to load, which we don't want to pay just to print info().
+        # Embedder is built lazily on first access — the production BGE-base
+        # embedder costs ~440 MB of model weights to load, which we don't want
+        # to pay just to print info().
         self._embedder: Embedder | None = embedder
         self.llm: LLMClient = llm or _MockLLM()
         # First-class entity store. Mirrors the chunk-store backend (memory ↔
@@ -171,11 +171,10 @@ class FoodScholar:
         """Lazily-built chunk embedder.
 
         For `memory` backends or when the `[annotate]` extra is missing, this
-        is `_MockEmbedder()`. For production it is a
-        `SourceTypeRouter(HFEmbedder("allenai/specter2_base"),
-        HFEmbedder("BAAI/bge-large-en-v1.5"))` — SPECTER2 for abstracts,
-        BGE-large for textbook / guide chunks (BRIEF §2). First access pays
-        the model-load cost; subsequent accesses are free.
+        is `_MockEmbedder()`. For production it is
+        `HFEmbedder("BAAI/bge-base-en-v1.5")` (BRIEF §2 — single embedder
+        across source types). First access pays the model-load cost;
+        subsequent accesses are free.
         """
         if self._embedder is None:
             chunk_backend = self.config.storage.chunk_store.backend
@@ -286,9 +285,9 @@ class FoodScholar:
             llm = build_llm(cfg.llm)
 
         # The chunk embedder is built lazily on first access (the `embedder`
-        # property on the facade), so a 1.7 GB SPECTER2 + BGE-large load does
-        # NOT happen here just for fs.info() or fs.init(). An explicit
-        # `embedder=` kwarg still wins — it skips the lazy build entirely.
+        # property on the facade), so the ~440 MB BGE-base load does NOT
+        # happen here just for fs.info() or fs.init(). An explicit `embedder=`
+        # kwarg still wins — it skips the lazy build entirely.
 
         return cls(
             config=cfg,
@@ -303,12 +302,9 @@ class FoodScholar:
     def _build_embedder(cfg: FoodScholarConfig) -> Embedder | None:
         log = get_logger("foodscholar")
         try:
-            from foodscholar.annotate.embedder import HFEmbedder, SourceTypeRouter
+            from foodscholar.annotate.embedder import HFEmbedder
 
-            return SourceTypeRouter(
-                scientific=HFEmbedder(cfg.annotate.scientific_embedder),
-                general=HFEmbedder(cfg.annotate.general_embedder),
-            )
+            return HFEmbedder(cfg.annotate.embedder)
         except Exception as e:
             log.warning(
                 "embedder.unavailable",
@@ -330,10 +326,7 @@ class FoodScholar:
         elif self.config.storage.chunk_store.backend == "memory":
             embedder = "lazy(mock)"
         else:
-            embedder = (
-                f"lazy(router:{self.config.annotate.scientific_embedder}"
-                f",{self.config.annotate.general_embedder})"
-            )
+            embedder = f"lazy({self.config.annotate.embedder})"
         return {
             "foodscholar": __version__,
             "config_hash": self.config_hash,
@@ -434,7 +427,7 @@ class FoodScholar:
 
         - ``nel_dir`` **omitted** → falls back to `load_and_annotate(corpus_dir)`
           which runs GLiNER + HNSW from scratch (this path does embed, since
-          the runner has the SPECTER2/BGE router already loaded).
+          the runner has the BGE-base embedder already loaded).
 
         ``snapshot_path`` (or `cfg.corpus.annotated_snapshot_path`) writes a
         parquet snapshot of the annotated chunks after ingest. If the snapshot
@@ -476,14 +469,13 @@ class FoodScholar:
         # (`fs.embed()`). Reasons:
         #   - The prototype's `nel_*.csv` files carry mentions + linked URIs
         #     only, not chunk vectors. There is nothing to attach beyond text.
-        #   - Production chunk embedders (SPECTER2 + BGE-large via
-        #     SourceTypeRouter) cost ~1.7 GB of model load + per-chunk
-        #     encoding; making that mandatory at ingest forces users to wait
-        #     for vector machinery they may not need (BM25 + filtered search
-        #     work without it).
+        #   - The production chunk embedder (BGE-base) costs ~440 MB of model
+        #     load + per-chunk encoding; making that mandatory at ingest forces
+        #     users to wait for vector machinery they may not need (BM25 +
+        #     filtered search work without it).
         #   - Iterating on annotations should be cheap. Keeping embed as its
         #     own step means re-ingesting after a NEL refresh doesn't redo
-        #     the SPECTER2/BGE pass.
+        #     the BGE-base pass.
         from foodscholar.annotate.runner import ENRICHMENT_VERSION
         from foodscholar.versioning import make_artifact_meta
 
@@ -606,11 +598,11 @@ class FoodScholar:
     ) -> ArtifactMeta:
         """Fill in chunk-text embeddings for chunks already in `fs.chunk_store`.
 
-        Walks the store, encodes each chunk with the source-type-routed
-        embedder (SPECTER2 for abstracts, BGE-large for textbook / guide
-        chunks — BRIEF §2/§7), and writes back only the `embedding` +
-        `embedding_model` fields via `chunk_store.update_embedding`. Mentions,
-        links, and other annotations are untouched.
+        Walks the store, encodes each chunk with the configured embedder
+        (BGE-base for production — BRIEF §2/§7), and writes back only the
+        `embedding` + `embedding_model` fields via
+        `chunk_store.update_embeddings_bulk`. Mentions, links, and other
+        annotations are untouched.
 
         - `only_missing=True` (default): skip chunks whose `embedding_model`
           is already a real model id (anything that isn't the deterministic
@@ -619,13 +611,11 @@ class FoodScholar:
           after swapping the configured embedder.
 
         Builds the production embedder lazily on first call — that is the
-        ~1.7 GB SPECTER2 + BGE-large load, paid once per process.
+        ~440 MB BGE-base load, paid once per process.
         """
-        from foodscholar.annotate.embedder import SourceTypeRouter
         from foodscholar.versioning import make_artifact_meta
 
         embedder = self.embedder  # lazy build happens here on first call
-        router = embedder if isinstance(embedder, SourceTypeRouter) else None
 
         n_seen = 0
         n_embedded = 0
@@ -635,41 +625,18 @@ class FoodScholar:
         def _flush() -> None:
             """Encode the pending batch and bulk-write the results.
 
-            With a router in play, chunks can route to different backends
-            (SPECTER2 for abstracts, BGE-large for textbook/guide) with
-            different vector dimensions. We split the pending batch by
-            backend, run ONE encode per backend (the T4 amortization win),
-            then issue ONE bulk write covering all results in the batch
-            (the network round-trip win).
+            ONE encode call over the batch (the T4 amortization win) followed
+            by ONE bulk write covering all results (the network round-trip win).
             """
             nonlocal n_embedded
             if not pending_chunks:
                 return
 
-            updates: list[tuple[str, list[float], str]] = []
-            if router is not None:
-                sci_chunks = [c for c in pending_chunks if c.source_type == "abstract"]
-                gen_chunks = [c for c in pending_chunks if c.source_type != "abstract"]
-                if sci_chunks:
-                    vecs = router._scientific.embed([c.text for c in sci_chunks])
-                    model_id = router._scientific.model_id
-                    updates.extend(
-                        (c.chunk_id, v, model_id)
-                        for c, v in zip(sci_chunks, vecs, strict=True)
-                    )
-                if gen_chunks:
-                    vecs = router._general.embed([c.text for c in gen_chunks])
-                    model_id = router._general.model_id
-                    updates.extend(
-                        (c.chunk_id, v, model_id)
-                        for c, v in zip(gen_chunks, vecs, strict=True)
-                    )
-            else:
-                vecs = embedder.embed([c.text for c in pending_chunks])
-                updates.extend(
-                    (c.chunk_id, v, embedder.model_id)
-                    for c, v in zip(pending_chunks, vecs, strict=True)
-                )
+            vecs = embedder.embed([c.text for c in pending_chunks])
+            updates = [
+                (c.chunk_id, v, embedder.model_id)
+                for c, v in zip(pending_chunks, vecs, strict=True)
+            ]
 
             self.chunk_store.update_embeddings_bulk(updates)
             n_embedded += len(updates)
