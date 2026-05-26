@@ -6,6 +6,46 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-26 — Iteration 9.1: drop SPECTER + collapse to single BGE-base embedder, fix ES `_source` round-trip
+
+**Goal:** unblock Layer B Pass 1, which was reporting `with embeddings: 0/868` on every shelf even though the chunk store held 13,344 ES docs all stamped with a real `embedding_model`. Root cause turned out to be a vector-mapping change in ES 9.x — the dispatch architecture also stopped being justified, so collapsed it in the same pass.
+
+### Root cause (the load-bearing investigation)
+
+[ElasticChunkStore.init()](src/foodscholar/storage/elastic.py) declared the mapping with `dense_vector(type=dense_vector, index=true, similarity=cosine)` and no explicit `index_options`. ES 9.4 silently picks **`bbq_hnsw`** as the default index_options, which stores a binary-quantized vector in the HNSW segment and **drops the raw vector from `_source`**. So:
+
+- index-wide `_count` with `exists: embedding` → 13,344/13,344 (the indexed field is there)
+- `_mget` of those same ids → `_source` keys are `['chunk_id', 'created_at', 'embedding_model', ...]` — **no `embedding` key**
+- `_doc_to_chunk` → Pydantic builds `Chunk(embedding=None)` (the default)
+- Layer B Pass 1 → `[c for c in chunks if c.embedding is not None]` → 0 chunks → 0 candidates
+
+Same data, two views, only one of which the Python side could see. The OOM that came up in the same session was a red herring on top of this — Docker `OOMKilled: true` because no JVM heap cap was set; the index data on the named volume is fine.
+
+### What landed
+
+**Mapping fix ([src/foodscholar/storage/elastic.py](src/foodscholar/storage/elastic.py)).** Embedding field is now declared explicitly with `dims: 768`, `similarity: cosine`, and `index_options: {type: hnsw, m: 16, ef_construction: 100}` — plain `hnsw`, not `bbq_hnsw`, so `_source` preserves the raw vector that Pydantic round-trips through `Chunk.embedding`. The cost is irrelevant at our scale: 13k chunks × 768 dims × 4 bytes ≈ 40 MB. The existing index has `bbq_hnsw` baked in — a `DELETE foodscholar_chunks` + re-run of `fs.embed()` is required to apply the fix (vectors are recoverable from chunk text, ~minutes on the T4).
+
+**Drop SPECTER, single BGE-base embedder.** The `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` dispatch was producing two index widths (768 vs 1024) that BRIEF §7 papered over with "one index per embedder". With a single embedder there's exactly one index and one width.
+
+- [src/foodscholar/config.py](src/foodscholar/config.py) — collapsed `scientific_embedder` + `general_embedder` (two keys) to a single `embedder: str = "BAAI/bge-base-en-v1.5"` on `AnnotateConfig`.
+- [src/foodscholar/annotate/embedder.py](src/foodscholar/annotate/embedder.py) — deleted `SourceTypeRouter` entirely; `HFEmbedder` default flipped to BGE-base.
+- [src/foodscholar/annotate/runner.py](src/foodscholar/annotate/runner.py) — dropped the `isinstance(embedder, SourceTypeRouter)` branch and replaced the per-chunk `router.embed_chunk(text, source_type)` loop with a single batched `embedder.embed([c.text for c in batch])` call. Side benefit: N forward passes per batch → 1 forward pass per batch.
+- [src/foodscholar/facade.py](src/foodscholar/facade.py) — `_build_embedder` returns a plain `HFEmbedder(cfg.annotate.embedder)`; `fs.embed()._flush()` collapsed from "split by source_type, encode per backend, merge results" to a single batched encode; `info()` lazy banner reports the configured embedder instead of "router:…,…".
+- Tests rewired: deleted the four `SourceTypeRouter` unit tests in [tests/unit/test_embedder.py](tests/unit/test_embedder.py); deleted `test_embed_uses_source_type_router_when_present` and rewrote `test_embed_router_batches_per_backend_one_encode_call_each` as `test_embed_batches_one_encode_call_per_flush` (asserts ONE encode per flush, no backend split) in [tests/unit/test_facade_embed.py](tests/unit/test_facade_embed.py).
+- Config YAMLs ([config.example.yaml](config.example.yaml), [config.local.yaml](config.local.yaml), [config.gate.yaml](config.gate.yaml)) — collapsed to a single `embedder: BAAI/bge-base-en-v1.5` line.
+- [BRIEF.md](BRIEF.md) — §2 architecture table row, §4 file-tree comment, §6 facade table + lazy-load paragraph, §7 ingest description + embedder description + dim-defaults paragraph, §11 example config: all retargeted to BGE-base-only.
+
+### What this unblocks
+
+After re-creating the ES index and re-running `fs.embed()`, the Layer B preview cell in [notebooks/build_graph.ipynb](notebooks/build_graph.ipynb) should report `with embeddings: N/N (100.0%)` instead of `0/868`, and Pass 1 similarity candidates should come back non-empty. Pass 2 (relatedness, entity-coherence based) was always working — it never touched vectors.
+
+### Out of scope, deliberately
+
+- The ES OOMKill on startup. Separate issue; the host has 16 GiB / 0 swap with Neo4j + Kibana competing. Documented in the debugging session; needs an explicit `ES_JAVA_OPTS=-Xms2g -Xmx2g` + `-m 4g` when the container is recreated. Not committing changes for it here since the container isn't managed from this repo.
+- [CONSOLIDATION.md](CONSOLIDATION.md) still mentions BGE-large in the spec for the (future) semantic-consolidation embedder. That's a separate component spec, not the chunk embedder — left for a deliberate decision later.
+
+---
+
 ## 2026-05-25 — Iteration 9.0 (M5): Layer B — dual-pass theme discovery + embed perf patch
 
 **Goal:** land Layer B end-to-end (theme discovery inside each Layer A shelf) per the dual-pass architecture in [layer_b_construction_brief.md](layer_b_construction_brief.md). Bonus: fix the per-doc-update bottleneck blocking the real-corpus embedding run on a Colab T4 over an ngrok tunnel.

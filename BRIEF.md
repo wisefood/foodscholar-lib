@@ -28,7 +28,7 @@ Chunks attach to multiple Layer A shelves (multi-label, propagated through ontol
 | Ontology v1 | **FoodOn only**, loaded with `pronto` and `import_depth=0`. MONDO and ChEBI deferred to v2. |
 | Food NER | **GLiNER bio** (`urchade/gliner_large_bio-v0.1`). Deterministic, batched, runs locally. *(Deviation: the brief originally specified SciFoodNER. Agentic-LLM NER was tried as an interim and dropped — see §3.5.)* |
 | Entity linking | **HNSW kNN over BioLORD embeddings** of every FoodOn term (`hnswlib` `ip` index, built on first use and cached to disk). Encoder pluggable via `cfg.annotate.linker.nel_encoder ∈ {biolord, sapbert, minilm, mpnet}`. Elastic `dense_vector` backend opt-in. |
-| Embeddings | **SPECTER2** for scientific abstract chunks, **BGE-large** (`BAAI/bge-large-en-v1.5`) for textbook / guide chunks |
+| Embeddings | **BGE-base** (`BAAI/bge-base-en-v1.5`, 768 dims) for all chunk types — single embedder, single ES dense_vector index |
 | Clustering | **Leiden / hierarchical Leiden** primary, **HDBSCAN** fallback. BERTopic acceptable for fast prototyping. |
 | LLM (Layer C + linker `llm` tier) | Provider-agnostic — `anthropic`, `openai`, `groq`, `gemini`, `ollama`, configured via `cfg.llm` with an ordered fallback chain. `config.example.yaml` default: Groq `llama-3.3-70b-versatile`, fallback local Ollama. Tests use a mock client. |
 | Package mgmt | `pyproject.toml` with `hatch`. Optional extras for stage-specific deps. |
@@ -76,7 +76,7 @@ foodscholar/
         │   ├── gliner_ner.py # GLinerNER — GLiNER-bio → list[Mention]
         │   ├── nel_index.py  # NELIndex protocol + HNSWNELIndex / ElasticNELIndex
         │   ├── linker.py     # HNSWLinker: mention → ontology_id (dense kNN)
-        │   └── embedder.py   # SPECTER2 / BGE / SapBERT wrappers
+        │   └── embedder.py   # BGE-base + SapBERT wrappers
         ├── ontology/
         │   ├── __init__.py
         │   ├── foodon.py    # pronto loader + cache
@@ -140,7 +140,7 @@ answer = fs.query("Is olive oil heart-healthy?")
 fs = FoodScholar.in_memory()
 ```
 
-`FoodScholar` owns five pluggable backends: `chunk_store`, `entity_store`, `graph_store`, `embedder`, `llm`. Stores are constructed from `cfg.storage`; embedder is lazy (built on first access — production SPECTER2+BGE-large weigh ~1.7 GB and we don't load them just to print `info()`); LLM defaults to a mock and is pluggable via keyword args to either factory. Methods (in the order an end user runs them):
+`FoodScholar` owns five pluggable backends: `chunk_store`, `entity_store`, `graph_store`, `embedder`, `llm`. Stores are constructed from `cfg.storage`; embedder is lazy (built on first access — the production BGE-base load is ~440 MB and we don't load it just to print `info()`); LLM defaults to a mock and is pluggable via keyword args to either factory. Methods (in the order an end user runs them):
 
 | Method | Maps to |
 |---|---|
@@ -148,7 +148,7 @@ fs = FoodScholar.in_memory()
 | `fs.init()` | provisions all three stores: ES chunk index + ES entity index + Neo4j constraints. No-op for in-memory backends |
 | `fs.ingest(corpus_dir, nel_dir=None)` | **the one-call pipeline.** With `nel_dir`: load chunks → attach precomputed mentions+links → upsert. Without: delegates to `load_and_annotate` (GLiNER+HNSW) |
 | `fs.load_and_annotate(path)` | load → GLiNER + HNSW annotate → upsert → optional parquet snapshot, idempotent |
-| `fs.embed(only_missing=True)` | fill in chunk-text vectors (SPECTER2 / BGE via `SourceTypeRouter`) without touching annotations |
+| `fs.embed(only_missing=True)` | fill in chunk-text vectors (BGE-base, 768 dims) without touching annotations |
 | `fs.build_entities()` | derive first-class `Entity` records from chunks + ontology; write to entity store + `(:Entity)` graph nodes |
 | `fs.entities` | `.list(prefix=)`, `.get(id)`, `.search(q)`, `.chunks_for(id)` — read view over the entity store |
 | `fs.load_chunks(path)` | corpus loader → `chunk_store.upsert` (raw — no annotations) |
@@ -255,10 +255,10 @@ fs.ingest("data/foodscholar/corpus")
 `fs.ingest` reads every CSV / parquet / JSONL chunk file in the directory,
 attaches annotations (from the supplied `nel_dir` CSVs in the prototype's
 `(chunk_id, chunk_entities_ner, chunk_uri_nel)` shape, or via GLiNER + HNSW
-when the directory is omitted), embeds each chunk via the source-type router,
-and upserts everything to the configured `chunk_store`. A parquet snapshot
-lands at `cfg.corpus.annotated_snapshot_path` when set; an existing
-non-empty snapshot short-circuits the whole call.
+when the directory is omitted), embeds each chunk with the configured
+embedder (BGE-base by default), and upserts everything to the configured
+`chunk_store`. A parquet snapshot lands at `cfg.corpus.annotated_snapshot_path`
+when set; an existing non-empty snapshot short-circuits the whole call.
 
 The phase pieces remain inspectable for tests and debugging:
 
@@ -276,7 +276,7 @@ Defaults:
 - **Linker** — `HNSWLinker` over a `NELIndex`. The default backend is `HNSWNELIndex`: every non-obsolete FoodOn term is encoded once with a sentence-transformer (BioLORD by default; SapBERT / MiniLM / MPNet selectable via `cfg.annotate.linker.nel_encoder`) and inserted into an `hnswlib` `ip` index built on first use and cached to disk (key derives from encoder model id + a content hash of the term set, so a re-encode happens iff the ontology or encoder changes). At link time the surface form is encoded with the same model, top-1 kNN is taken, and the hit is accepted iff cosine ≥ `nel_min_sim`. `link_many(mentions)` batches every surface form in a chunk batch through a single encode + single kNN call — the path the runner uses. A surface-form cache on the index instance amortizes repeats across chunks. Every accepted link records `method = "dense"` and the cosine score as `confidence`.
 
   An `ElasticNELIndex` backend (same `NELIndex` protocol) is opt-in via `cfg.annotate.linker.nel_backend: elastic`; it queries an ES `dense_vector` index. Stub today — implementation lands with the storage milestone.
-- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("allenai/specter2_base")`, `SapBERTEmbedder` (also available as a `nel_encoder` choice), or `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` for production. The router dispatches per `chunk.source_type` — `abstract` → scientific; `textbook`/`guide` → general — per BRIEF §2.
+- **Embedder** — `HashEmbedder` for in-memory; `HFEmbedder("BAAI/bge-base-en-v1.5")` for production (single embedder across all source types per BRIEF §2). `SapBERTEmbedder` is available for entity-linking workflows (also exposed as a `nel_encoder` choice).
 
 Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by passing `embedder=...` to either factory.
 
@@ -599,7 +599,7 @@ A theme can be attached to multiple shelves via `HAS_THEME` from each. `(:Chunk)
 }
 ```
 
-Dim defaults to 768 (SPECTER2). If using BGE-large, dim is 1024 — split into two indexes or pick one. Recommendation: one index per embedder, alias the active one as `foodscholar_chunks`.
+Vector dim is pinned to 768 (BGE-base, the sole production embedder). The mapping uses plain `hnsw` index_options — the ES 9.x `dense_vector` default of `bbq_hnsw` drops the raw vector from `_source`, which Pydantic round-trips need for `Chunk.embedding`.
 
 Hybrid retrieval uses Elastic's RRF combining BM25 and kNN, with `shelf_ids` / `theme_ids` as a `filter` clause when those are provided.
 
@@ -655,8 +655,7 @@ annotate:
     model_id: urchade/gliner_large_bio-v0.1
     threshold: 0.4
     batch_size: 16
-  scientific_embedder: allenai/specter2_base
-  general_embedder: BAAI/bge-large-en-v1.5
+  embedder: BAAI/bge-base-en-v1.5  # 768 dims; single embedder across source types
   batch_size: 16
   linker:
     nel_backend: hnsw              # hnsw | elastic

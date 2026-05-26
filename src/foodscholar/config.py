@@ -108,8 +108,7 @@ class AnnotateConfig(BaseModel):
     library switched to GLiNER + HNSW + BioLORD."""
 
     gliner: GLinerConfig = Field(default_factory=GLinerConfig)
-    scientific_embedder: str = "allenai/specter2_base"
-    general_embedder: str = "BAAI/bge-large-en-v1.5"
+    embedder: str = "BAAI/bge-base-en-v1.5"
     linker: LinkerConfig = Field(default_factory=LinkerConfig)
     batch_size: int = 16
     """Chunks processed per NER batch in the annotate runner."""

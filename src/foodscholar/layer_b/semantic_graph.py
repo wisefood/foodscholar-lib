@@ -4,7 +4,7 @@ Mutual-kNN weighted undirected graph: each chunk has an edge to its top-k
 cosine neighbors, filtered by `edge_threshold` and (optionally) by the
 mutual-neighbor requirement. Per `layer_b_construction_brief.md` §4.1.
 
-Embeddings flow in already L2-normalized (the BGE/SPECTER2 router returns
+Embeddings flow in already L2-normalized (BGE-base via `HFEmbedder` returns
 normalized vectors), so cosine similarity = dot product. The implementation
 re-normalizes defensively so an unnormalized input doesn't silently produce
 wrong weights.

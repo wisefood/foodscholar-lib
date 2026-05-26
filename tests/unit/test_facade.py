@@ -158,8 +158,8 @@ def test_from_config_embedder_degrades_to_mock_without_deps() -> None:
 def test_from_config_does_not_eagerly_build_embedder() -> None:
     """from_config and info() must NOT trigger model loads for elastic backends.
 
-    The chunk embedder is lazy — production SPECTER2 + BGE-large weigh ~1.7 GB
-    and would otherwise stall every `fs.info()` call.
+    The chunk embedder is lazy — the production BGE-base load is ~440 MB and
+    would otherwise stall every `fs.info()` call.
     """
     import sys
 

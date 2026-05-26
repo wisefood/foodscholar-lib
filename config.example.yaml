@@ -40,8 +40,7 @@ annotate:
     #   - Measurement
     #   - Population
     #   - Time expression
-  scientific_embedder: allenai/specter2_base
-  general_embedder: BAAI/bge-large-en-v1.5
+  embedder: BAAI/bge-base-en-v1.5
   batch_size: 16
   linker:
     # Vector NEL backend. `hnsw` (default) builds a local hnswlib index from

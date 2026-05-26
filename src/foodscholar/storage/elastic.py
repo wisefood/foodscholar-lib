@@ -9,7 +9,7 @@ Index layout:
     `section_type`         keyword
   - `year`                 integer
   - `source_metadata`      flattened
-  - `embedding`            dense_vector(dynamic dim, cosine)
+  - `embedding`            dense_vector(dims=768, cosine, hnsw)
   - `embedding_model`      keyword
   - `mentions`,
     `entity_links`         nested
@@ -19,10 +19,10 @@ Index layout:
   - `enrichment_version`,
     `created_at`           keyword / date
 
-`init()` creates the index with this mapping if it's missing. `dense_vector`
-mapping uses dynamic templates so the first document's embedding length sets
-the dimension (BGE-large = 1024, SPECTER2 = 768 — the source-type router
-stamps which one).
+`init()` creates the index with this mapping if it's missing. The vector field
+is pinned to 768 dims (BGE-base, the sole production embedder) and uses plain
+`hnsw` index_options — the ES 9.x default of `bbq_hnsw` would drop the raw
+vector from `_source`, which Pydantic round-trips need for `Chunk.embedding`.
 
 This is a hot path of foodscholar production runs, so the implementation
 sticks to the boring choices: bulk-helpers for writes, point-in-time +
@@ -125,8 +125,14 @@ class ElasticChunkStore:
                         "source_metadata": {"type": "flattened"},
                         "embedding": {
                             "type": "dense_vector",
+                            "dims": 768,
                             "index": True,
                             "similarity": "cosine",
+                            "index_options": {
+                                "type": "hnsw",
+                                "m": 16,
+                                "ef_construction": 100,
+                            },
                         },
                         "embedding_model": {"type": "keyword"},
                         "mentions": {

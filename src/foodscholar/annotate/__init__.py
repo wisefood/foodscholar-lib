@@ -1,12 +1,11 @@
 """NER + entity linking + embedding phase.
 
 Public surface:
-  GLinerNER                            — `NER` protocol implementation
-  HNSWLinker                           — `Linker` protocol implementation
-  HNSWNELIndex / ElasticNELIndex       — NEL index backends
-  HashEmbedder / HFEmbedder /
-    SapBERTEmbedder / SourceTypeRouter — Embedder implementations
-  run / dry_run                        — phase orchestration
+  GLinerNER                                  — `NER` protocol implementation
+  HNSWLinker                                 — `Linker` protocol implementation
+  HNSWNELIndex / ElasticNELIndex             — NEL index backends
+  HashEmbedder / HFEmbedder / SapBERTEmbedder — Embedder implementations
+  run / dry_run                              — phase orchestration
 
 Most users do not import from here directly — `fs.annotate()` and friends on
 the FoodScholar facade are the canonical entry points.
@@ -16,7 +15,6 @@ from foodscholar.annotate.embedder import (
     HashEmbedder,
     HFEmbedder,
     SapBERTEmbedder,
-    SourceTypeRouter,
 )
 from foodscholar.annotate.gliner_ner import GLinerNER
 from foodscholar.annotate.linker import HNSWLinker
@@ -38,7 +36,6 @@ __all__ = [
     "HashEmbedder",
     "NELIndex",
     "SapBERTEmbedder",
-    "SourceTypeRouter",
     "dry_run",
     "run",
 ]
