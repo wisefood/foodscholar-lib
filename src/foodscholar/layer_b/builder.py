@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from datetime import UTC
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from foodscholar.layer_b.community import run_leiden
 from foodscholar.layer_b.label import label_by_keywords, label_by_llm
@@ -104,6 +104,58 @@ def build_shelf_similarity_candidates(
             ThemeCandidate(
                 pass_name="similarity",
                 chunk_ids=chunk_ids,
+                foodon_ids=set(),
+                centroid_embedding=centroid.tolist(),
+                discovered_by="leiden",
+            )
+        )
+    return out
+
+
+def build_global_similarity_candidates(
+    chunk_ids: list[str],
+    chunk_store: Any,
+    cfg: LayerBConfig,
+) -> list[ThemeCandidate]:
+    """Run Pass 1 (similarity) across the WHOLE attached corpus."""
+    import numpy as np
+
+    from foodscholar.layer_b.community import run_leiden
+    from foodscholar.layer_b.semantic_graph import build_global_similarity_graph
+
+    if not chunk_ids:
+        return []
+
+    g = build_global_similarity_graph(chunk_ids, chunk_store, cfg.similarity)
+    communities = run_leiden(g, cfg.leiden)
+    if not communities:
+        return []
+
+    chunks = chunk_store.get_many(chunk_ids)
+    embeddings: dict[str, np.ndarray] = {
+        c.chunk_id: np.asarray(c.embedding, dtype=np.float32)
+        for c in chunks
+        if c.embedding is not None
+    }
+
+    index_to_id: list[str] = list(g.vs["chunk_id"])
+    out: list[ThemeCandidate] = []
+    for members in communities:
+        member_ids = {index_to_id[i] for i in members if index_to_id[i] in embeddings}
+        if not member_ids:
+            continue
+        member_vecs = np.stack([embeddings[cid] for cid in member_ids])
+        norms = np.linalg.norm(member_vecs, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        normed = member_vecs / norms
+        centroid = normed.mean(axis=0)
+        cn = np.linalg.norm(centroid)
+        if cn > 0:
+            centroid = centroid / cn
+        out.append(
+            ThemeCandidate(
+                pass_name="global_similarity",
+                chunk_ids=member_ids,
                 foodon_ids=set(),
                 centroid_embedding=centroid.tolist(),
                 discovered_by="leiden",

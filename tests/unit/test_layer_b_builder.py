@@ -13,9 +13,11 @@ pytest.importorskip("leidenalg")
 from foodscholar.config import LayerBConfig  # noqa: E402
 from foodscholar.io.chunk import Chunk, EntityLink, Mention  # noqa: E402
 from foodscholar.layer_b.builder import (  # noqa: E402
+    build_global_similarity_candidates,
     build_shelf_relatedness_candidates,
     build_shelf_similarity_candidates,
 )
+from foodscholar.storage.memory import InMemoryChunkStore  # noqa: E402
 
 
 def _chunk(cid: str, *, text: str = "x", vec=None, source_type: str = "abstract") -> Chunk:
@@ -312,3 +314,83 @@ def test_build_shelf_themes_keyword_strategy_skips_llm() -> None:
     )
     if themes:
         assert "WRONG" not in themes[0].label
+
+
+# ----------------------------------------------------------------------------
+# build_global_similarity_candidates (Task 7)
+# ----------------------------------------------------------------------------
+
+
+def _global_store(cluster_vecs: list[tuple[str, list[float]]]) -> tuple[InMemoryChunkStore, list[str]]:
+    """Helper: build an InMemoryChunkStore from (chunk_id, vec) pairs."""
+    store = InMemoryChunkStore()
+    chunks = [
+        Chunk(
+            chunk_id=cid,
+            text=f"text {cid}",
+            source_doc_id="d",
+            source_type="abstract",
+            section_type="other",
+            embedding=vec,
+            embedding_model="m",
+        )
+        for cid, vec in cluster_vecs
+    ]
+    store.upsert(chunks)
+    chunk_ids = [cid for cid, _ in cluster_vecs]
+    return store, chunk_ids
+
+
+def test_build_global_similarity_candidates_returns_themecandidate_records() -> None:
+    """6 chunks in 2 well-separated clusters → at least 1 ThemeCandidate with
+    pass_name='global_similarity', centroid_embedding set, foodon_ids empty."""
+    rng = np.random.default_rng(42)
+
+    cluster_vecs: list[tuple[str, list[float]]] = []
+    for i in range(3):
+        v = np.zeros(8)
+        v[0] = 1.0
+        v += rng.normal(0, 0.01, 8)
+        v /= np.linalg.norm(v)
+        cluster_vecs.append((f"a{i}", v.tolist()))
+    for i in range(3):
+        v = np.zeros(8)
+        v[1] = 1.0
+        v += rng.normal(0, 0.01, 8)
+        v /= np.linalg.norm(v)
+        cluster_vecs.append((f"b{i}", v.tolist()))
+
+    store, chunk_ids = _global_store(cluster_vecs)
+
+    cfg = LayerBConfig()
+    cfg.leiden.min_community_size = 2
+    cfg.similarity.knn_k = 3
+    cfg.similarity.edge_threshold = 0.5
+    cfg.similarity.require_mutual = False
+
+    candidates = build_global_similarity_candidates(chunk_ids, store, cfg)
+
+    assert len(candidates) >= 1
+    for cand in candidates:
+        assert cand.pass_name == "global_similarity"
+        assert cand.centroid_embedding is not None
+        assert len(cand.centroid_embedding) == 8
+        assert cand.foodon_ids == set()
+
+
+def test_build_global_similarity_candidates_returns_empty_when_no_embeddings() -> None:
+    """Chunks with embedding=None → graph has no edges → no communities → []."""
+    store = InMemoryChunkStore()
+    store.upsert([
+        Chunk(
+            chunk_id="x",
+            text="no vec",
+            source_doc_id="d",
+            source_type="abstract",
+            section_type="other",
+            embedding=None,
+        )
+    ])
+    cfg = LayerBConfig()
+    candidates = build_global_similarity_candidates(["x"], store, cfg)
+    assert candidates == []
