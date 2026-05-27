@@ -10,7 +10,7 @@ np = pytest.importorskip("numpy")
 pytest.importorskip("igraph")
 pytest.importorskip("leidenalg")
 
-from foodscholar.config import LayerBConfig  # noqa: E402
+from foodscholar.config import FoodScholarConfig, LayerBConfig  # noqa: E402
 from foodscholar.io.chunk import Chunk, EntityLink, Mention  # noqa: E402
 from foodscholar.layer_b.builder import (  # noqa: E402
     build_global_similarity_candidates,
@@ -394,3 +394,103 @@ def test_build_global_similarity_candidates_returns_empty_when_no_embeddings() -
     cfg = LayerBConfig()
     candidates = build_global_similarity_candidates(["x"], store, cfg)
     assert candidates == []
+
+
+# ----------------------------------------------------------------------------
+# build_layer_b — hybrid global/per-shelf orchestrator (Task 9)
+# ----------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cross_shelf_fs():
+    """FoodScholar in-memory fixture with 6 chunks split across two shelves.
+
+    Chunks c0-c2 → shelf:fat; c3-c5 → shelf:meat. All 6 share a tight
+    embedding cluster (near [1, 0, 0]) so the global similarity pass should
+    group them into one cross-shelf community. The per-shelf relatedness
+    pass has no entity links so produces nothing — the outcome is a single
+    global_similarity theme spanning both shelves.
+    """
+    from foodscholar import FoodScholar
+    from foodscholar.config import FoodScholarConfig, LayerBConfig
+    from foodscholar.io.graph import Shelf
+    from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+
+    chunk_store = InMemoryChunkStore()
+    graph_store = InMemoryGraphStore()
+
+    # Two shelves under 'foods'.
+    graph_store.upsert_shelves([
+        Shelf(shelf_id="shelf:fat", label="fat", facet="foods", depth=1, chunk_count=3),
+        Shelf(shelf_id="shelf:meat", label="meat", facet="foods", depth=1, chunk_count=3),
+    ])
+
+    # 6 chunks — all near [1, 0, 0] so global similarity groups them together.
+    def jitter(i: int) -> list[float]:
+        v = [1.0 - 0.01 * i, 0.01 * i, 0.0]
+        norm = sum(x * x for x in v) ** 0.5
+        return [x / norm for x in v]
+
+    chunks = [
+        Chunk(
+            chunk_id=f"c{i}",
+            text=f"chunk {i} nutrition food",
+            source_doc_id="d",
+            source_type="textbook",
+            section_type="other",
+            embedding=jitter(i),
+            embedding_model="m",
+        )
+        for i in range(6)
+    ]
+    chunk_store.upsert(chunks)
+
+    # Attach c0-c2 to shelf:fat and c3-c5 to shelf:meat using the singular API.
+    graph_store.attach_chunks_to_shelf("shelf:fat", [(f"c{i}", []) for i in range(3)])
+    graph_store.attach_chunks_to_shelf("shelf:meat", [(f"c{i}", []) for i in range(3, 6)])
+
+    cfg = FoodScholarConfig.model_validate({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {
+            "chunk_store": {"backend": "memory"},
+            "graph_store": {"backend": "memory"},
+        },
+        "layer_b": {
+            "min_chunks_per_shelf": 2,
+            "min_embedded_fraction": 0.0,
+            "similarity": {"knn_k": 5, "edge_threshold": 0.5},
+            "leiden": {"min_community_size": 2},
+        },
+    })
+
+    return FoodScholar(cfg, chunk_store=chunk_store, graph_store=graph_store)
+
+
+def test_build_layer_b_emits_cross_shelf_themes_when_global_finds_them(
+    cross_shelf_fs,
+) -> None:
+    """Global similarity pass discovers 6 tightly-clustered chunks split
+    across two shelves → the resulting Theme has both shelves in shelf_ids.
+
+    The old per-shelf orchestrator would only see shelf-local clusters and
+    could never emit a theme spanning both shelves. This test documents the
+    new v0.2 contract.
+    """
+    fs = cross_shelf_fs
+    artifact = fs.build_layer_b(facet="foods", dry_run=False)
+
+    themes = fs.graph_store.list_themes()
+    assert themes, "expected at least one theme from the global similarity pass"
+
+    cross_shelf = [t for t in themes if len(t.shelf_ids) >= 2]
+    assert cross_shelf, (
+        f"expected ≥1 cross-shelf theme; got themes={[(t.label, t.shelf_ids) for t in themes]}"
+    )
+    # Every theme must reference at least one shelf.
+    assert all(len(t.shelf_ids) >= 1 for t in themes)
+    # discovery_version must be the new v0.2.
+    for t in themes:
+        assert t.discovery_version == "v0.2", f"unexpected version on {t.theme_id}: {t.discovery_version}"
+    # Artifact reflects the global pass.
+    assert artifact.n_themes_total >= 1
+    assert "global_similarity" in artifact.n_themes_by_pass
