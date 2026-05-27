@@ -137,3 +137,63 @@ def test_merge_uses_both_chunk_and_entity_weights() -> None:
     assert d.chunk_jaccard == 0.0
     assert d.entity_jaccard == 1.0
     assert d.merged is True
+
+
+def test_merge_global_and_local_returns_themes_with_union_shelf_ids() -> None:
+    """A global similarity candidate that overlaps a per-shelf relatedness
+    candidate produces a merged theme whose source shelves = union of both."""
+    from foodscholar.layer_b.merge import merge_global_and_local_candidates
+
+    global_cands = [
+        ThemeCandidate(
+            pass_name="global_similarity",
+            chunk_ids={"c1", "c2", "c3", "c4"},
+            foodon_ids=set(),
+            centroid_embedding=[0.1] * 3,
+        ),
+    ]
+    rel_cands_by_shelf = {
+        "shelf:fat": [
+            ThemeCandidate(
+                pass_name="relatedness",
+                chunk_ids={"c1", "c2"},
+                foodon_ids={"FOODON:1"},
+            ),
+        ],
+        "shelf:meat": [
+            ThemeCandidate(
+                pass_name="relatedness",
+                chunk_ids={"c3", "c4"},
+                foodon_ids={"FOODON:2"},
+            ),
+        ],
+    }
+    # Lower threshold so both per-shelf rel-cands merge with the global cand.
+    # global {c1,c2,c3,c4} vs shelf:fat {c1,c2}: J=0.5, combined=0.5*1.0=0.5
+    # global {c1,c2,c3,c4} vs shelf:meat {c3,c4}: J=0.5, combined=0.5
+    cfg = MergeConfig(chunk_weight=1.0, entity_weight=0.0, dedupe_threshold=0.4)
+    themes, decisions = merge_global_and_local_candidates(
+        global_cands, rel_cands_by_shelf, cfg,
+    )
+    merged = [t for t in themes if t["discovery_pass"] == "merged"]
+    assert any(set(t["shelf_ids"]) == {"shelf:fat", "shelf:meat"} for t in merged)
+
+
+def test_merge_global_and_local_unmerged_global_keeps_empty_shelf_ids() -> None:
+    """A global similarity theme that didn't merge with any relatedness
+    candidate returns shelf_ids=[] so the orchestrator can backfill."""
+    from foodscholar.layer_b.merge import merge_global_and_local_candidates
+
+    global_cands = [
+        ThemeCandidate(
+            pass_name="global_similarity",
+            chunk_ids={"c100", "c101"},
+            foodon_ids=set(),
+            centroid_embedding=[0.1] * 3,
+        ),
+    ]
+    cfg = MergeConfig()
+    themes, _ = merge_global_and_local_candidates(global_cands, {}, cfg)
+    glob = [t for t in themes if t["discovery_pass"] == "global_similarity"]
+    assert len(glob) == 1
+    assert glob[0]["shelf_ids"] == []

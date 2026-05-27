@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from foodscholar.layer_b.models import ThemeCandidate
 
 
+
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 0.0
@@ -108,7 +109,9 @@ def merge_candidates(
                 "discovered_by": s.discovered_by,  # tie-break: sim wins
             }
         )
-    # 2. Sim-only themes
+    # 2. Sim-only themes — propagate the source candidate's pass_name so that
+    #    global_similarity candidates keep their pass_name rather than being
+    #    relabelled "similarity".
     for i, s in enumerate(sim_cands):
         if i in used_sim:
             continue
@@ -116,7 +119,7 @@ def merge_candidates(
             {
                 "chunk_ids": s.chunk_ids,
                 "foodon_ids": s.foodon_ids,
-                "discovery_pass": "similarity",
+                "discovery_pass": s.pass_name,
                 "discovered_by": s.discovered_by,
             }
         )
@@ -133,3 +136,56 @@ def merge_candidates(
             }
         )
     return themes, decisions
+
+
+def merge_global_and_local_candidates(
+    global_sim_cands: list[ThemeCandidate],
+    rel_cands_by_shelf: dict[str, list[ThemeCandidate]],
+    cfg: MergeConfig,
+) -> tuple[list[dict], list[MergeDecision]]:
+    """Merge one global similarity-candidate set against per-shelf relatedness
+    candidates, producing theme dicts with ``shelf_ids: list[str]``.
+
+    Algorithm:
+      1. Flatten rel_cands_by_shelf, remembering origin shelf per candidate.
+      2. Reuse existing ``merge_candidates(global_sim_cands, flat_rel, cfg)``.
+      3. For each emitted theme:
+         - merged: shelf_ids = union of contributing rel-cands' origin shelves
+         - global_similarity (unmerged): shelf_ids = [] (orchestrator backfills)
+         - relatedness (unmerged): shelf_ids = [origin_shelf]
+    """
+    flat_rel: list[ThemeCandidate] = []
+    rel_origin_shelf: list[str] = []  # parallel to flat_rel
+    for shelf_id, cands in rel_cands_by_shelf.items():
+        for c in cands:
+            flat_rel.append(c)
+            rel_origin_shelf.append(shelf_id)
+
+    themes, decisions = merge_candidates(global_sim_cands, flat_rel, cfg)
+
+    out: list[dict] = []
+    for t in themes:
+        pass_kind = t["discovery_pass"]
+        if pass_kind == "merged":
+            # Find contributing rel-cands: their chunk_ids must be a subset of
+            # the merged theme's chunk_ids (merge unions them).
+            theme_chunks = set(t["chunk_ids"])
+            contributing_shelves = {
+                rel_origin_shelf[i]
+                for i, rc in enumerate(flat_rel)
+                if rc.chunk_ids and rc.chunk_ids.issubset(theme_chunks)
+            }
+            t = {**t, "shelf_ids": sorted(contributing_shelves)}
+        elif pass_kind in ("similarity", "global_similarity"):
+            t = {**t, "shelf_ids": []}
+        elif pass_kind == "relatedness":
+            # Match by exact chunk_ids to find origin shelf
+            origin = None
+            t_chunks = set(t["chunk_ids"])
+            for i, rc in enumerate(flat_rel):
+                if rc.chunk_ids == t_chunks:
+                    origin = rel_origin_shelf[i]
+                    break
+            t = {**t, "shelf_ids": [origin] if origin else []}
+        out.append(t)
+    return out, decisions
