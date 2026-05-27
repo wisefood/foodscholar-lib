@@ -112,6 +112,25 @@ class ChunkStore(Protocol):
         targeting a missing `chunk_id` are silently skipped.
         """
         ...
+    def knn_search_chunks(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[ChunkId] | None = None,
+        candidate_ids: list[ChunkId] | None = None,
+    ) -> list[tuple[ChunkId, float]]:
+        """Return the top-k cosine-nearest chunks to `query_vector`.
+
+        - `exclude_ids`: chunks to omit from the result (typically `[query_id]`).
+        - `candidate_ids`: if provided, restrict the search to these ids
+          (used to constrain the global similarity pass to attached chunks).
+
+        Returns `[(chunk_id, cosine_score), ...]` sorted by score descending.
+        Implementations may skip the score sort if their backend returns it
+        unordered (callers re-sort).
+        """
+        ...
     def scan(self) -> list[Chunk]: ...
     def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
 
