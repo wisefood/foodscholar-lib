@@ -79,8 +79,10 @@ class LayerBAuditReport(BaseModel):
     Elastic `theme_ids` denorm. `dangling_edges` counts `theme_ids` on
     chunks that reference a theme_id with no corresponding `(:Theme)` node.
     `empty_themes` counts themes with `chunk_count > 0` but zero attached
-    chunks at audit time. `passed` is True iff all three CRITICAL gates pass
-    (parity == 1.0, no dangling, no empty).
+    chunks at audit time. `orphan_themes` counts themes with `shelf_ids=[]`
+    — these themes are unreachable from any shelf in the UI.
+    `passed` is True iff all four CRITICAL gates pass (parity == 1.0, no
+    dangling, no empty, no orphan themes).
 
     The WARN gates (target_themes_per_shelf range, both passes contribute
     something, merged-rate inside band) live on the report as informational
@@ -93,6 +95,8 @@ class LayerBAuditReport(BaseModel):
     parity: float = 0.0
     dangling_edges: int = 0
     empty_themes: int = 0
+    orphan_themes: int = 0
+    """Themes with shelf_ids=[] — unreachable from any shelf in the UI."""
     n_themes: int = 0
     n_themed_shelves: int = 0
     by_pass: dict[str, int] = Field(default_factory=dict)
@@ -104,4 +108,5 @@ class LayerBAuditReport(BaseModel):
             self.parity == 1.0
             and self.dangling_edges == 0
             and self.empty_themes == 0
+            and self.orphan_themes == 0
         )
