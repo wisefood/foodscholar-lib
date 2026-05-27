@@ -143,3 +143,54 @@ def test_audit_empty_stores_is_vacuously_pass() -> None:
     report = audit_layer_b(fs.chunk_store, fs.graph_store)
     assert report.passed is True
     assert report.n_themes == 0
+
+
+def test_audit_cross_shelf_theme_does_not_fail() -> None:
+    """A theme belonging to two shelves (shelf_ids length >= 2) is valid and
+    must not fail any CRITICAL gate."""
+    fs = FoodScholar.in_memory()
+    fs.upsert_chunks([_chunk("c1", theme_ids=["t-multi"])])
+    # Build theme directly with two shelf_ids
+    multi_shelf_theme = Theme(
+        theme_id="t-multi",
+        label="t-multi",
+        shelf_ids=["s1", "s2"],
+        chunk_count=1,
+        discovered_by="leiden",
+        discovery_version="v0.1",
+        facet="foods",
+        discovery_pass="global_similarity",
+    )
+    fs.graph_store.upsert_themes([multi_shelf_theme])
+    fs.graph_store.attach_chunks_to_themes_bulk([("c1", "t-multi", True, 0.9)])
+    fs.chunk_store.bulk_set_theme_ids([("c1", ["t-multi"])])
+    report = audit_layer_b(fs.chunk_store, fs.graph_store)
+    assert report.passed is True
+    assert report.orphan_themes == 0
+    # Both shelves should appear in themed_shelves count
+    assert report.n_themed_shelves == 2
+
+
+def test_audit_orphan_theme_fails() -> None:
+    """A theme with shelf_ids=[] is unreachable from any shelf and must fail
+    the audit via orphan_themes > 0."""
+    fs = FoodScholar.in_memory()
+    fs.upsert_chunks([_chunk("c1", theme_ids=["t-orphan"])])
+    orphan_theme = Theme(
+        theme_id="t-orphan",
+        label="t-orphan",
+        shelf_ids=[],
+        chunk_count=1,
+        discovered_by="leiden",
+        discovery_version="v0.1",
+        facet="foods",
+        discovery_pass="similarity",
+    )
+    fs.graph_store.upsert_themes([orphan_theme])
+    fs.graph_store.attach_chunks_to_themes_bulk([("c1", "t-orphan", True, 0.9)])
+    fs.chunk_store.bulk_set_theme_ids([("c1", ["t-orphan"])])
+    report = audit_layer_b(fs.chunk_store, fs.graph_store)
+    assert report.orphan_themes == 1
+    assert report.passed is False
+    # An orphan theme contributes 0 to themed_shelves
+    assert report.n_themed_shelves == 0

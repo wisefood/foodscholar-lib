@@ -44,15 +44,19 @@ def audit_layer_b(
     # Graph-side (chunk_id, theme_id) pairs from THEME_OF / ATTACHED_TO edges
     graph_pairs: set[tuple[str, str]] = set()
     empty_themes = 0
+    orphan_themes = 0
     themed_shelves: set[str] = set()
     by_pass: dict[str, int] = {}
     for t in themes:
         chunks_in_theme = graph_store.get_chunks_for_theme(t.theme_id)
         if t.chunk_count > 0 and not chunks_in_theme:
             empty_themes += 1
+        shelf_ids = t.shelf_ids or []
+        if not shelf_ids:
+            orphan_themes += 1
         for cid in chunks_in_theme:
             graph_pairs.add((cid, t.theme_id))
-        for sid in t.shelf_ids:
+        for sid in shelf_ids:
             themed_shelves.add(sid)
         by_pass[t.discovery_pass] = by_pass.get(t.discovery_pass, 0) + 1
 
@@ -76,6 +80,7 @@ def audit_layer_b(
         parity=parity,
         dangling_edges=dangling,
         empty_themes=empty_themes,
+        orphan_themes=orphan_themes,
         n_themes=len(themes),
         n_themed_shelves=len(themed_shelves),
         by_pass=by_pass,

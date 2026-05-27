@@ -147,10 +147,11 @@ def test_layer_b_audit_report_passed_requires_perfect_invariants() -> None:
     from foodscholar.layer_b.models import LayerBAuditReport
 
     # All-green
-    r_pass = LayerBAuditReport(parity=1.0, dangling_edges=0, empty_themes=0)
+    r_pass = LayerBAuditReport(parity=1.0, dangling_edges=0, empty_themes=0, orphan_themes=0)
     assert r_pass.passed is True
 
     # Any non-zero failure flips passed to False
-    assert LayerBAuditReport(parity=0.99, dangling_edges=0, empty_themes=0).passed is False
-    assert LayerBAuditReport(parity=1.0, dangling_edges=1, empty_themes=0).passed is False
-    assert LayerBAuditReport(parity=1.0, dangling_edges=0, empty_themes=1).passed is False
+    assert LayerBAuditReport(parity=0.99, dangling_edges=0, empty_themes=0, orphan_themes=0).passed is False
+    assert LayerBAuditReport(parity=1.0, dangling_edges=1, empty_themes=0, orphan_themes=0).passed is False
+    assert LayerBAuditReport(parity=1.0, dangling_edges=0, empty_themes=1, orphan_themes=0).passed is False
+    assert LayerBAuditReport(parity=1.0, dangling_edges=0, empty_themes=0, orphan_themes=1).passed is False
