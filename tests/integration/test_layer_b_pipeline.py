@@ -147,6 +147,13 @@ def test_build_layer_b_runs_end_to_end_on_in_memory_stores() -> None:
 
     artifact = fs.build_layer_b(facet="foods")
 
+    # Fetch themes and assert shelf reachability
+    themes = fs.graph_store.list_themes()
+    cross_shelf_themes = [t for t in themes if len(t.shelf_ids) >= 2]
+    print(f"cross-shelf themes: {len(cross_shelf_themes)} of {len(themes)}")
+    assert all(len(t.shelf_ids) >= 1 for t in themes), \
+        "every theme must be reachable from at least one shelf"
+
     # Two shelves clusterable, both themed.
     assert artifact.n_shelves_themed == 2, f"got {artifact}"
     # >= 2 themes per shelf x 2 shelves = >= 4 themes total.
