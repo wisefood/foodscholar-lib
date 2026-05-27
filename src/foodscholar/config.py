@@ -515,6 +515,9 @@ class LayerBConfig(BaseModel):
     merge: MergeConfig = Field(default_factory=MergeConfig)
     labeling: LabelingConfig = Field(default_factory=LabelingConfig)
     audit: LayerBAuditConfig = Field(default_factory=LayerBAuditConfig)
+    global_similarity_max_chunks: int = 50_000
+    """Safety cap: if the global similarity pass would see more chunks than this,
+    fall back to per-shelf Pass 1 and emit a warning."""
 
 
 class LayerCConfig(BaseModel):

@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from foodscholar.io.chunk import ChunkId
 from foodscholar.io.graph import Facet
 
-DiscoveryPass = Literal["similarity", "relatedness", "merged"]
+DiscoveryPass = Literal["similarity", "relatedness", "merged", "global_similarity"]
 DiscoveredBy = Literal["leiden", "hdbscan"]
 
 
@@ -31,7 +31,7 @@ class ThemeCandidate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    pass_name: Literal["similarity", "relatedness"]
+    pass_name: Literal["similarity", "relatedness", "global_similarity"]
     chunk_ids: set[ChunkId]
     foodon_ids: set[str] = Field(default_factory=set)
     centroid_embedding: list[float] | None = None
