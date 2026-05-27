@@ -35,7 +35,7 @@ def _theme(tid: str, shelf_id: str, chunks: list[str]) -> Theme:
         discovered_by="leiden",
         discovery_version="v0.1",
         facet="foods",
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
     )
 
 

@@ -105,7 +105,7 @@ def pick_primary(
 
     ids_lex = sorted(chunk_ids)
 
-    if discovery_pass in ("similarity", "global_similarity"):
+    if discovery_pass == "global_similarity":
         scores = _centroid_scores(ids_lex, embeddings, centroid)
     elif discovery_pass == "relatedness":
         scores = _edge_degree_scores(chunk_ids, rel_graph)

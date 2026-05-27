@@ -35,7 +35,7 @@ def test_pick_primary_similarity_chooses_closest_to_centroid() -> None:
     rel_graph = ig.Graph()
     primary = pick_primary(
         chunk_ids=chunk_ids,
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
         embeddings=embeddings,
         centroid=centroid,
         sim_graph=sim_graph,
@@ -109,7 +109,7 @@ def test_pick_primary_lex_first_tie_break() -> None:
     }
     primary = pick_primary(
         chunk_ids=chunk_ids,
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
         embeddings=embeddings,
         centroid=[1.0, 0.0],
         sim_graph=ig.Graph(),
@@ -125,7 +125,7 @@ def test_pick_primary_single_chunk_returns_it() -> None:
     chunk_ids = {"solo"}
     primary = pick_primary(
         chunk_ids=chunk_ids,
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
         embeddings={"solo": np.array([1.0])},
         centroid=[1.0],
         sim_graph=ig.Graph(),

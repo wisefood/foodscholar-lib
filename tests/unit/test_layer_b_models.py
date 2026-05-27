@@ -45,7 +45,7 @@ def test_theme_defaults_for_new_fields() -> None:
         discovered_by="leiden",
         discovery_version="v0.1",
         facet="foods",
-        discovery_pass="similarity",
+        discovery_pass="relatedness",
     )
     assert t.keyword_terms == []
     assert t.foodon_id_signature == []
@@ -63,14 +63,14 @@ def test_theme_candidate_holds_chunks_entities_centroid() -> None:
     from foodscholar.layer_b.models import ThemeCandidate
 
     c = ThemeCandidate(
-        pass_name="similarity",
+        pass_name="global_similarity",
         chunk_ids={"c1", "c2", "c3"},
         foodon_ids={"FOODON:1", "FOODON:2"},
         centroid_embedding=[0.1] * 8,
         discovered_by="leiden",
     )
     assert len(c.chunk_ids) == 3
-    assert c.pass_name == "similarity"
+    assert c.pass_name == "global_similarity"
     assert c.discovered_by == "leiden"
     assert c.foodon_ids == {"FOODON:1", "FOODON:2"}
 

@@ -96,11 +96,11 @@ def test_audit_canary_relatedness_zero_themes_records_pass_distribution() -> Non
     `passed` (it's a WARN, not CRITICAL)."""
     fs = FoodScholar.in_memory()
     fs.upsert_chunks([_chunk("c1"), _chunk("c2")])
-    # Both themes come from similarity pass — relatedness contributed 0
+    # Both themes come from global_similarity pass — relatedness contributed 0
     fs.graph_store.upsert_themes(
         [
-            _theme("t-sim-1", "s1", ["c1"], pass_kind="similarity"),
-            _theme("t-sim-2", "s1", ["c2"], pass_kind="similarity"),
+            _theme("t-sim-1", "s1", ["c1"], pass_kind="global_similarity"),
+            _theme("t-sim-2", "s1", ["c2"], pass_kind="global_similarity"),
         ]
     )
     fs.graph_store.attach_chunks_to_themes_bulk(
@@ -112,7 +112,7 @@ def test_audit_canary_relatedness_zero_themes_records_pass_distribution() -> Non
     report = audit_layer_b(fs.chunk_store, fs.graph_store)
     assert report.passed is True  # CRITICAL invariants still hold
     assert report.by_pass.get("relatedness", 0) == 0
-    assert report.by_pass.get("similarity", 0) == 2
+    assert report.by_pass.get("global_similarity", 0) == 2
     assert report.merged_rate == 0.0
 
 
@@ -184,7 +184,7 @@ def test_audit_orphan_theme_fails() -> None:
         discovered_by="leiden",
         discovery_version="v0.1",
         facet="foods",
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
     )
     fs.graph_store.upsert_themes([orphan_theme])
     fs.graph_store.attach_chunks_to_themes_bulk([("c1", "t-orphan", True, 0.9)])
