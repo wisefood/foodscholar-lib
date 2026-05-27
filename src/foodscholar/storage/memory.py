@@ -208,6 +208,49 @@ class InMemoryChunkStore:
                 update={"theme_ids": list(theme_ids)}
             )
 
+    def knn_search_chunks(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[ChunkId] | None = None,
+        candidate_ids: list[ChunkId] | None = None,
+    ) -> list[tuple[ChunkId, float]]:
+        """Return the top-k cosine-nearest chunks to `query_vector`.
+
+        Uses NumPy for vectorised dot-products. Chunks missing an embedding
+        are silently skipped. `exclude_ids` are dropped before scoring;
+        `candidate_ids` restricts the search universe when provided.
+        """
+        import numpy as np
+
+        exclude = set(exclude_ids or [])
+        if candidate_ids is not None:
+            pool_ids = [cid for cid in candidate_ids if cid in self._chunks]
+        else:
+            pool_ids = list(self._chunks.keys())
+        # Filter to chunks with embeddings, minus exclusions.
+        pool = [
+            (cid, self._chunks[cid].embedding)
+            for cid in pool_ids
+            if cid not in exclude and self._chunks[cid].embedding is not None
+        ]
+        if not pool:
+            return []
+        q = np.asarray(query_vector, dtype=np.float32)
+        qn = float(np.linalg.norm(q))
+        if qn == 0.0:
+            return []
+        q = q / qn
+        ids = [cid for cid, _ in pool]
+        corpus_matrix = np.stack([np.asarray(v, dtype=np.float32) for _, v in pool])
+        norms = np.linalg.norm(corpus_matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        corpus_matrix = corpus_matrix / norms
+        sims = (corpus_matrix @ q).tolist()
+        ranked = sorted(zip(ids, sims), key=lambda x: x[1], reverse=True)
+        return ranked[:k]
+
     def scan(self) -> list[Chunk]:
         return list(self._chunks.values())
 
