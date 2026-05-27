@@ -60,6 +60,26 @@ def test_label_by_keywords_empty_returns_empty() -> None:
     assert label_by_keywords({}, cfg) == {}
 
 
+def test_label_by_keywords_filters_ocr_codes_and_id_leakage() -> None:
+    """OCR codes (`h18567`), ontology-id leakage (`FOODON1234`), and 1-2 char
+    fragments must not surface as keywords — they pollute LLM labels."""
+    theme_chunks = {
+        0: [
+            _chunk("c1", "calcium intake bone density h18567 mg supplementation"),
+            _chunk("c2", "FOODON12345 calcium bone health w x intake"),
+        ],
+    }
+    cfg = LabelingConfig(strategy="keyword", top_keywords=5)
+    labels = label_by_keywords(theme_chunks, cfg)
+    for term in labels[0]:
+        assert "h18567" not in term
+        assert "FOODON" not in term
+        # No single letters or all-uppercase IDs.
+        for tok in term.split():
+            assert len(tok) >= 3
+            assert not (tok.isupper() and len(tok) >= 4)
+
+
 def test_label_by_llm_passes_keywords_and_sample_chunks() -> None:
     """label_by_llm formats a prompt with keywords + sample chunks and
     returns the LLM's stripped single-line label per theme."""
