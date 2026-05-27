@@ -360,6 +360,13 @@ class ElasticChunkStore:
         searchable mid-run; the run as a whole finishes with a final
         no-op refresh, and `fs.embed()` is typically followed by other
         bulk phases that already trigger refreshes.
+
+        Errors handling: `raise_on_error=False` so ES returns per-doc failures
+        instead of `BulkIndexError("N documents failed to index.")` with no
+        visible reasons. Failures are logged with a sample and re-raised as
+        a `RuntimeError` whose message embeds the first few ES error bodies,
+        so a notebook traceback actually shows *why* the writes were rejected
+        (mapping mismatch, doc-not-found, vector dim drift, etc.).
         """
         if not items:
             return
@@ -377,7 +384,30 @@ class ElasticChunkStore:
             }
             for chunk_id, embedding, embedding_model in items
         ]
-        bulk(self._es, actions, refresh=False)
+        success, errors = bulk(
+            self._es,
+            actions,
+            refresh=False,
+            raise_on_error=False,
+            raise_on_exception=False,
+            stats_only=False,
+        )
+        if errors:
+            sample = errors[:3]
+            n_failed = len(errors)
+            _log.error(
+                "elastic.update_embeddings_bulk.partial_failure",
+                index=self.index,
+                attempted=len(actions),
+                succeeded=success,
+                failed=n_failed,
+                first_errors=sample,
+            )
+            raise RuntimeError(
+                f"update_embeddings_bulk lost {n_failed}/{len(actions)} writes "
+                f"on index {self.index!r} (succeeded={success}). "
+                f"First failures: {sample}"
+            )
 
     def bulk_set_theme_ids(
         self,
@@ -414,16 +444,88 @@ class ElasticChunkStore:
             return None
         if not resp.get("found"):
             return None
-        return _doc_to_chunk(resp["_source"])
+        src = resp["_source"]
+        # ES 9.x strips `dense_vector` from `_source` regardless of
+        # `index_options` — fetch the vector via the `fields` API and merge
+        # it back so `Chunk.embedding` round-trips. The `get` API doesn't
+        # accept `fields`; route via a single-hit `search` instead.
+        if "embedding" not in src and src.get("embedding_model"):
+            src = {**src, "embedding": self._fetch_embedding(chunk_id)}
+        return _doc_to_chunk(src)
 
     def get_many(self, chunk_ids: list[ChunkId]) -> list[Chunk]:
         if not chunk_ids:
             return []
+        # Two round-trips, in parallel-spirit (one `_mget` for the source
+        # doc, one `_search` for the vectors). We can't fold this into one
+        # call because `_mget` doesn't honor `fields`. The vectors fetch
+        # is keyed by `_id` term-query so it returns only chunks we asked
+        # for; missing ones are silently absent (matches `_mget` semantics).
         resp = self._es.mget(index=self.index, body={"ids": chunk_ids})
+        docs = [d for d in resp.get("docs", []) if d.get("found")]
+        if not docs:
+            return []
+        embeddings = self._fetch_embeddings_bulk(
+            [d["_id"] for d in docs if d["_source"].get("embedding_model")]
+        )
         out: list[Chunk] = []
-        for doc in resp.get("docs", []):
-            if doc.get("found"):
-                out.append(_doc_to_chunk(doc["_source"]))
+        for d in docs:
+            src = d["_source"]
+            if "embedding" not in src and d["_id"] in embeddings:
+                src = {**src, "embedding": embeddings[d["_id"]]}
+            out.append(_doc_to_chunk(src))
+        return out
+
+    def knn_search_chunks(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[ChunkId] | None = None,
+        candidate_ids: list[ChunkId] | None = None,
+    ) -> list[tuple[ChunkId, float]]:
+        """kNN search using ES ``knn`` query on the ``embedding`` field.
+
+        ``exclude_ids`` becomes a ``must_not.ids`` filter; ``candidate_ids``
+        becomes an ``ids`` filter (the kNN search is restricted to these).
+        ES returns ``_score = (cosine + 1) / 2`` for ``similarity='cosine'``
+        docs; we map back to plain cosine in [-1, 1] so callers see consistent
+        semantics across ChunkStore implementations.
+        """
+        # num_candidates governs HNSW recall — 10x k is conservative.
+        num_candidates = max(50, k * 10)
+
+        filters: list[dict[str, Any]] = []
+        if candidate_ids:
+            filters.append({"ids": {"values": list(candidate_ids)}})
+        must_not: list[dict[str, Any]] = []
+        if exclude_ids:
+            must_not.append({"ids": {"values": list(exclude_ids)}})
+
+        knn_body: dict[str, Any] = {
+            "field": "embedding",
+            "query_vector": list(query_vector),
+            "k": k,
+            "num_candidates": num_candidates,
+        }
+        if filters or must_not:
+            knn_body["filter"] = {
+                "bool": {
+                    "filter": filters,
+                    "must_not": must_not,
+                }
+            }
+        body: dict[str, Any] = {
+            "size": k,
+            "_source": False,
+            "knn": knn_body,
+        }
+        resp = self._es.search(index=self.index, body=body)
+        out: list[tuple[ChunkId, float]] = []
+        for h in resp["hits"]["hits"]:
+            es_score = h["_score"]
+            cosine = (es_score * 2.0) - 1.0
+            out.append((h["_id"], cosine))
         return out
 
     def search(
@@ -525,6 +627,10 @@ class ElasticChunkStore:
                 "size": page,
                 "query": {"match_all": {}},
                 "sort": [{"chunk_id": "asc"}],
+                # `dense_vector` is excluded from `_source` on ES 9.x —
+                # request it explicitly via the `fields` API and merge
+                # it back into the source dict before validation.
+                "fields": ["embedding"],
             }
             if after is not None:
                 body["search_after"] = after
@@ -533,8 +639,59 @@ class ElasticChunkStore:
             if not hits:
                 return
             for h in hits:
-                yield _doc_to_chunk(h["_source"])
+                src = h["_source"]
+                vec = (h.get("fields") or {}).get("embedding")
+                if vec is not None and "embedding" not in src:
+                    src = {**src, "embedding": vec}
+                yield _doc_to_chunk(src)
             after = hits[-1]["sort"]
+
+    def _fetch_embedding(self, chunk_id: ChunkId) -> list[float] | None:
+        """Look up one chunk's vector via the `fields` API."""
+        resp = self._es.search(
+            index=self.index,
+            body={
+                "size": 1,
+                "_source": False,
+                "fields": ["embedding"],
+                "query": {"term": {"_id": chunk_id}},
+            },
+        )
+        hits = resp["hits"]["hits"]
+        if not hits:
+            return None
+        return (hits[0].get("fields") or {}).get("embedding")
+
+    def _fetch_embeddings_bulk(
+        self, chunk_ids: list[ChunkId]
+    ) -> dict[ChunkId, list[float]]:
+        """Batch-fetch `embedding` for `chunk_ids` via the `fields` API.
+
+        ES caps `terms` clauses at `index.max_terms_count` (default 65 536),
+        so we page through `chunk_ids` rather than risk a request-time error
+        on jumbo calls. Returns a `chunk_id → vector` dict; missing ids are
+        simply absent (caller handles the fallback to `embedding=None`).
+        """
+        if not chunk_ids:
+            return {}
+        out: dict[ChunkId, list[float]] = {}
+        page = 1024
+        for start in range(0, len(chunk_ids), page):
+            window = chunk_ids[start : start + page]
+            resp = self._es.search(
+                index=self.index,
+                body={
+                    "size": len(window),
+                    "_source": False,
+                    "fields": ["embedding"],
+                    "query": {"ids": {"values": window}},
+                },
+            )
+            for h in resp["hits"]["hits"]:
+                vec = (h.get("fields") or {}).get("embedding")
+                if vec is not None:
+                    out[h["_id"]] = vec
+        return out
 
 
 # ---------------------------------------------------------------------- helpers
