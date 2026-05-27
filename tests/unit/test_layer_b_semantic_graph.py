@@ -11,10 +11,15 @@ import pytest
 
 np = pytest.importorskip("numpy")
 pytest.importorskip("igraph")
+pytest.importorskip("leidenalg")
 
-from foodscholar.config import SimilarityConfig  # noqa: E402
+from foodscholar.config import LayerBConfig, SimilarityConfig  # noqa: E402
 from foodscholar.io.chunk import Chunk  # noqa: E402
-from foodscholar.layer_b.semantic_graph import build_similarity_graph  # noqa: E402
+from foodscholar.layer_b.semantic_graph import (  # noqa: E402
+    build_global_similarity_graph,
+    build_similarity_graph,
+)
+from foodscholar.storage.memory import InMemoryChunkStore  # noqa: E402
 
 
 def _chunk(cid: str) -> Chunk:
@@ -23,7 +28,7 @@ def _chunk(cid: str) -> Chunk:
         text=f"text {cid}",
         source_doc_id="d",
         source_type="abstract",
-        section_type="abstract",
+        section_type="other",
     )
 
 
@@ -115,3 +120,102 @@ def test_similarity_graph_single_chunk_no_edges() -> None:
     g = build_similarity_graph(chunks, embeddings, cfg)
     assert g.vcount() == 1
     assert g.ecount() == 0
+
+
+# ----------------------------------------------------------------------------
+# build_global_similarity_graph — kNN-backed variant (Task 6)
+# ----------------------------------------------------------------------------
+
+
+def _store_with_chunks(chunk_vecs: dict[str, list[float]]) -> InMemoryChunkStore:
+    store = InMemoryChunkStore()
+    chunks = [
+        Chunk(
+            chunk_id=cid,
+            text=f"text {cid}",
+            source_doc_id="d",
+            source_type="abstract",
+            section_type="other",
+            embedding=vec,
+            embedding_model="m",
+        )
+        for cid, vec in chunk_vecs.items()
+    ]
+    store.upsert(chunks)
+    return store
+
+
+def test_build_global_similarity_graph_uses_chunk_store_knn() -> None:
+    """4 chunks: A & B close (cos~0.99), A & D orthogonal.
+    Edge A-B must exist; edge A-D must not."""
+    chunk_vecs: dict[str, list[float]] = {
+        "A": [1.0, 0.0, 0.0],
+        "B": [0.99, 0.14, 0.0],  # cos(A,B) ≈ 0.99
+        "C": [0.0, 1.0, 0.0],
+        "D": [0.0, 0.0, 1.0],   # orthogonal to A
+    }
+    store = _store_with_chunks(chunk_vecs)
+    chunk_ids = list(chunk_vecs.keys())
+
+    cfg = LayerBConfig()
+    cfg.similarity.knn_k = 2
+    cfg.similarity.edge_threshold = 0.5
+    cfg.similarity.require_mutual = False
+
+    g = build_global_similarity_graph(chunk_ids, store, cfg.similarity)
+
+    assert g.vcount() == 4
+    assert sorted(g.vs["chunk_id"]) == sorted(chunk_ids)
+
+    # Build a set of (min, max) vertex-index pairs for all edges
+    idx = {cid: i for i, cid in enumerate(chunk_ids)}
+    edge_pairs = {
+        (min(e.source, e.target), max(e.source, e.target))
+        for e in g.es
+    }
+    ab_key = (min(idx["A"], idx["B"]), max(idx["A"], idx["B"]))
+    ad_key = (min(idx["A"], idx["D"]), max(idx["A"], idx["D"]))
+    assert ab_key in edge_pairs, "Expected A-B edge for cos~0.99 pair"
+    assert ad_key not in edge_pairs, "Did not expect A-D edge for orthogonal pair"
+
+
+def test_build_global_similarity_graph_empty_input() -> None:
+    """Empty chunk_ids → 0-vertex graph."""
+    store = InMemoryChunkStore()
+    cfg = LayerBConfig()
+    g = build_global_similarity_graph([], store, cfg.similarity)
+    assert g.vcount() == 0
+    assert g.ecount() == 0
+
+
+def test_build_global_similarity_graph_respects_require_mutual() -> None:
+    """With require_mutual=True, asymmetric kNN hits are dropped.
+
+    A's top-1 is B but B's top-1 is C (not A), so the A-B edge should be
+    dropped when require_mutual=True."""
+    # k=1: each chunk keeps only its single nearest neighbor.
+    # A → nearest B; B → nearest C; C → nearest B; D → nearest C.
+    # Only B-C is mutual under k=1 (B picks C, C picks B).
+    chunk_vecs: dict[str, list[float]] = {
+        "A": [1.0, 0.0, 0.0],
+        "B": [0.95, 0.31, 0.0],   # close to A but closer to C than A is to it
+        "C": [0.0, 1.0, 0.0],
+        "D": [0.0, 0.0, 1.0],
+    }
+    store = _store_with_chunks(chunk_vecs)
+    chunk_ids = list(chunk_vecs.keys())
+
+    cfg = LayerBConfig()
+    cfg.similarity.knn_k = 1
+    cfg.similarity.edge_threshold = 0.0
+    cfg.similarity.require_mutual = True
+
+    g_mutual = build_global_similarity_graph(chunk_ids, store, cfg.similarity)
+
+    cfg.similarity.require_mutual = False
+    g_non_mutual = build_global_similarity_graph(chunk_ids, store, cfg.similarity)
+
+    # require_mutual=True must not add edges that aren't present with require_mutual=False
+    assert g_mutual.ecount() <= g_non_mutual.ecount(), (
+        "require_mutual=True should have <= edges than require_mutual=False"
+    )

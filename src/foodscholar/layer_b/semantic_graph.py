@@ -91,3 +91,79 @@ def build_similarity_graph(
         g.add_edges(edge_list)
         g.es["weight"] = [edges[e] for e in edge_list]
     return g
+
+
+def build_global_similarity_graph(
+    chunk_ids: list[ChunkId],
+    chunk_store: Any,  # ChunkStore protocol
+    cfg: SimilarityConfig,
+) -> Any:
+    """Build a similarity graph across `chunk_ids` using ChunkStore.knn_search_chunks.
+
+    Unlike `build_similarity_graph` (per-shelf, in-memory all-pairs), this fans
+    out one kNN call per chunk against the chunk store's HNSW index — meant for
+    ~thousands of chunks where O(n^2) would blow up.
+
+    Output shape matches `build_similarity_graph`: vertices carry `chunk_id`,
+    edges carry `weight = cosine`. Empty input → empty graph. The kNN is
+    restricted to `candidate_ids=chunk_ids` so the global graph stays inside
+    the attached corpus even when the underlying store has more chunks.
+    """
+    import igraph as ig
+
+    g = ig.Graph()
+    if not chunk_ids:
+        return g
+
+    g.add_vertices(len(chunk_ids))
+    g.vs["chunk_id"] = chunk_ids
+
+    if len(chunk_ids) < 2:
+        return g
+
+    chunks = chunk_store.get_many(chunk_ids)
+    qvecs: dict[ChunkId, list[float]] = {
+        c.chunk_id: c.embedding for c in chunks if c.embedding is not None
+    }
+
+    chunk_id_to_idx = {cid: i for i, cid in enumerate(chunk_ids)}
+    candidate_set = list(chunk_ids)
+
+    neighbors: dict[ChunkId, set[ChunkId]] = {}
+    edge_weights: dict[tuple[int, int], float] = {}
+    for cid in chunk_ids:
+        qvec = qvecs.get(cid)
+        if qvec is None:
+            neighbors[cid] = set()
+            continue
+        hits = chunk_store.knn_search_chunks(
+            query_vector=qvec,
+            k=cfg.knn_k,
+            exclude_ids=[cid],
+            candidate_ids=candidate_set,
+        )
+        neighbors[cid] = {nid for nid, _ in hits}
+        for nid, score in hits:
+            if score < cfg.edge_threshold:
+                continue
+            if nid not in chunk_id_to_idx:
+                continue
+            i, j = chunk_id_to_idx[cid], chunk_id_to_idx[nid]
+            key = (i, j) if i < j else (j, i)
+            prev = edge_weights.get(key)
+            if prev is None or score > prev:
+                edge_weights[key] = score
+
+    if cfg.require_mutual:
+        edge_weights = {
+            (i, j): w
+            for (i, j), w in edge_weights.items()
+            if chunk_ids[j] in neighbors.get(chunk_ids[i], set())
+            and chunk_ids[i] in neighbors.get(chunk_ids[j], set())
+        }
+
+    if edge_weights:
+        edge_list = sorted(edge_weights)
+        g.add_edges(edge_list)
+        g.es["weight"] = [edge_weights[e] for e in edge_list]
+    return g
