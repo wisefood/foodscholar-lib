@@ -20,6 +20,7 @@ itself is pure logic + I/O via the injected client.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,17 +29,36 @@ if TYPE_CHECKING:
     from foodscholar.storage.protocols import LLMClient
 
 
-_LABEL_PROMPT = """Given the keyword terms and chunk samples from a theme in a
-nutrition research knowledge graph, write a 3-5 word human-readable label
-for navigation purposes.
+_LABEL_PROMPT = """You are labeling a cluster of related passages in a nutrition
+knowledge graph. The label is used as navigation in a UI — it must read like a
+topic, not like a single word or a code.
 
-Theme keywords: {keywords}
+Rules:
+- Output 2-5 words describing the topic of the passages.
+- Lowercase, no quotes, no punctuation, no explanation.
+- Describe what the chunks are ABOUT (e.g. "hydration and fluid intake",
+  "fiber-rich whole grains", "carbohydrate counting for diabetes").
+- Ignore any keyword that looks like a code or OCR garbage (digits, uppercase
+  IDs, short fragments like "h18567"). Read the chunks to decide the topic.
+- If the keywords contain only a generic word like "cup" or "food", read the
+  chunks and pick a topic phrase that captures the recurring subject matter.
+
+Keywords (filtered): {keywords}
+
 Sample chunks:
 1. {chunk_1}
 2. {chunk_2}
 3. {chunk_3}
 
-Output a single label, no quotes, no explanation."""
+Label:"""
+
+
+# Token regex for c-TF-IDF garbage filtering. Drops:
+#   - tokens containing any digit (OCR codes like "h18567", "1234abc")
+#   - tokens of length < 3 (junk like "a", "of" — though sklearn stopwords
+#     mostly handles these)
+#   - tokens that are pure uppercase length >= 4 (ontology-id leakage)
+_GARBAGE_TOKEN = re.compile(r"\d|^.{1,2}$|^[A-Z0-9]{4,}$")
 
 
 def label_by_keywords(
@@ -68,11 +88,14 @@ def label_by_keywords(
     )
     X = vec.fit_transform(docs)
     terms = vec.get_feature_names_out()
+    # Drop OCR codes / ontology-id leakage / 1-2 char fragments before ranking.
+    keep_mask = [not _GARBAGE_TOKEN.search(t) for t in terms]
     out: dict[int, list[str]] = {}
     for i, tid in enumerate(theme_ids):
         row = X[i].toarray().ravel()
-        order = row.argsort()[::-1][: cfg.top_keywords]
-        out[tid] = [terms[j] for j in order if row[j] > 0]
+        order = row.argsort()[::-1]
+        kept = [j for j in order if keep_mask[j] and row[j] > 0][: cfg.top_keywords]
+        out[tid] = [terms[j] for j in kept]
     return out
 
 
