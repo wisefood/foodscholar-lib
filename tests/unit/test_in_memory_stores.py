@@ -104,7 +104,7 @@ def test_graph_store_theme_chunk_attachment() -> None:
         discovered_by="leiden",
         discovery_version="v0",
         facet="dietary_patterns",
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
     )
     g.upsert_shelves([s])
     g.upsert_themes([t])

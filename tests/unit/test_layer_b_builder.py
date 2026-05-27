@@ -1,6 +1,5 @@
-"""Layer B per-shelf builders (Pass 1, Pass 2, full per-shelf pipeline,
-top-level orchestrator). Tests grow as Phases 1-4 land their respective
-builders."""
+"""Layer B builders: relatedness (per-shelf), global similarity, and
+top-level orchestrator. Tests cover Phases 1-4."""
 
 from __future__ import annotations
 
@@ -15,7 +14,6 @@ from foodscholar.io.chunk import Chunk, EntityLink, Mention  # noqa: E402
 from foodscholar.layer_b.builder import (  # noqa: E402
     build_global_similarity_candidates,
     build_shelf_relatedness_candidates,
-    build_shelf_similarity_candidates,
 )
 from foodscholar.storage.memory import InMemoryChunkStore  # noqa: E402
 
@@ -30,89 +28,6 @@ def _chunk(cid: str, *, text: str = "x", vec=None, source_type: str = "abstract"
         embedding=vec.tolist() if vec is not None else None,
         embedding_model="test" if vec is not None else None,
     )
-
-
-# ----------------------------------------------------------------------------
-# Pass 1 (similarity) per-shelf builder
-# ----------------------------------------------------------------------------
-
-
-def test_build_shelf_similarity_candidates_recovers_two_clusters() -> None:
-    """Two well-separated embedding clusters → two similarity candidates."""
-    rng = np.random.default_rng(42)
-    chunks: list[Chunk] = []
-    for i in range(6):
-        v = np.zeros(8)
-        v[0] = 1.0
-        v += rng.normal(0, 0.01, 8)
-        v /= np.linalg.norm(v)
-        chunks.append(_chunk(f"a{i}", text="calcium bone density", vec=v))
-    for i in range(6):
-        v = np.zeros(8)
-        v[1] = 1.0
-        v += rng.normal(0, 0.01, 8)
-        v /= np.linalg.norm(v)
-        chunks.append(_chunk(f"b{i}", text="cholesterol cardiovascular", vec=v))
-
-    cfg = LayerBConfig()
-    cfg.leiden.min_community_size = 3
-    cfg.similarity.knn_k = 4
-    cfg.similarity.edge_threshold = 0.5
-
-    candidates = build_shelf_similarity_candidates(chunks, cfg)
-    assert len(candidates) == 2
-    cluster_a = {f"a{i}" for i in range(6)}
-    cluster_b = {f"b{i}" for i in range(6)}
-    cand_a, cand_b = candidates
-    if cand_a.chunk_ids.issubset(cluster_a):
-        assert cand_b.chunk_ids.issubset(cluster_b)
-    else:
-        assert cand_a.chunk_ids.issubset(cluster_b)
-        assert cand_b.chunk_ids.issubset(cluster_a)
-
-
-def test_build_shelf_similarity_candidates_skips_chunks_without_embeddings() -> None:
-    """Chunks with embedding=None must be excluded from the graph and absent
-    from output candidates, not crash the builder."""
-    chunk_with_vec = _chunk("a", vec=np.array([1.0, 0.0]))
-    chunk_no_vec = _chunk("b")  # no embedding
-    cfg = LayerBConfig()
-    cfg.leiden.min_community_size = 1
-    cfg.similarity.knn_k = 1
-    candidates = build_shelf_similarity_candidates([chunk_with_vec, chunk_no_vec], cfg)
-    for cand in candidates:
-        assert "b" not in cand.chunk_ids
-
-
-def test_build_shelf_similarity_candidates_emits_centroid() -> None:
-    """Each candidate's centroid_embedding is the mean of its members'
-    normalized vectors — needed by the primary picker for sim themes."""
-    rng = np.random.default_rng(0)
-    chunks = []
-    for i in range(5):
-        v = np.zeros(4)
-        v[0] = 1.0
-        v += rng.normal(0, 0.01, 4)
-        v /= np.linalg.norm(v)
-        chunks.append(_chunk(f"c{i}", vec=v))
-
-    cfg = LayerBConfig()
-    cfg.leiden.min_community_size = 2
-    cfg.similarity.knn_k = 3
-    cfg.similarity.edge_threshold = 0.5
-
-    candidates = build_shelf_similarity_candidates(chunks, cfg)
-    assert candidates
-    for cand in candidates:
-        assert cand.centroid_embedding is not None
-        assert len(cand.centroid_embedding) == 4
-        # All vectors point near +x → centroid should too.
-        assert cand.centroid_embedding[0] > 0.9
-
-
-def test_build_shelf_similarity_candidates_empty_returns_empty() -> None:
-    cfg = LayerBConfig()
-    assert build_shelf_similarity_candidates([], cfg) == []
 
 
 # ----------------------------------------------------------------------------
@@ -177,143 +92,6 @@ def test_build_shelf_relatedness_candidates_handles_no_edges() -> None:
     cfg.relatedness.min_shared_ids = 2
     cfg.relatedness.max_doc_frequency = 1.0
     assert build_shelf_relatedness_candidates(chunks, cfg) == []
-
-
-# ----------------------------------------------------------------------------
-# build_shelf_themes (Phase 3, end-to-end per-shelf pipeline)
-# ----------------------------------------------------------------------------
-
-from foodscholar.layer_b.builder import build_shelf_themes  # noqa: E402
-
-
-class _StubLLM:
-    """Predictable LLM that returns a fixed label so tests pin behavior
-    without asserting LLM output text."""
-    model_id = "stub-llm"
-
-    def __init__(self, label: str = "Test theme label"):
-        self._label = label
-
-    def generate(self, prompt: str, max_tokens: int = 64) -> str:
-        return self._label
-
-    def generate_json(self, prompt: str, schema: dict, max_tokens: int = 1024) -> dict:
-        raise NotImplementedError
-
-
-def test_build_shelf_themes_emits_labeled_pydantic_themes() -> None:
-    """Full per-shelf pipeline returns Theme records with all the brief's
-    fields populated, plus chunk_assignments ready for persist."""
-    rng = np.random.default_rng(0)
-    chunks: list[Chunk] = []
-    for i in range(4):
-        v = np.zeros(8)
-        v[0] = 1.0
-        v += rng.normal(0, 0.01, 8)
-        v /= np.linalg.norm(v)
-        chunks.append(
-            Chunk(
-                chunk_id=f"a{i}",
-                text="calcium bone density",
-                source_doc_id="d",
-                source_type="abstract",
-                section_type="abstract",
-                embedding=v.tolist(),
-                embedding_model="test",
-                entity_links=[_link("FOODON:CALCIUM"), _link("FOODON:BONE")],
-            )
-        )
-    cfg = LayerBConfig()
-    cfg.leiden.min_community_size = 2
-    cfg.similarity.knn_k = 2
-    cfg.similarity.edge_threshold = 0.5
-    cfg.relatedness.min_shared_ids = 2
-    cfg.relatedness.max_doc_frequency = 1.0
-    cfg.merge.dedupe_threshold = 0.3
-
-    themes, _decisions, assignments = build_shelf_themes(
-        chunks,
-        shelf_id="s-cow-milk",
-        facet="foods",
-        cfg=cfg,
-        llm=_StubLLM("Calcium and bone density"),
-        config_hash="hash-abc",
-        version="v0.1",
-    )
-    assert len(themes) >= 1
-    t = themes[0]
-    assert t.shelf_ids == ["s-cow-milk"]
-    assert t.facet == "foods"
-    assert t.label == "Calcium and bone density"
-    assert t.discovery_pass in {"merged", "similarity", "relatedness"}
-    assert t.config_hash == "hash-abc"
-    assert t.version == "v0.1"
-    assert t.keyword_terms  # non-empty
-    assert t.foodon_id_signature  # non-empty (chunks have high-conf links)
-    # Theme ID is deterministic and slug-cleaned
-    assert t.theme_id.startswith("foods/s_cow_milk/")
-    # Exactly one chunk in the assignment list is marked primary
-    cas = assignments[t.theme_id]
-    primaries = [p for _, p, _ in cas]
-    assert sum(1 for p in primaries if p) == 1
-
-
-def test_build_shelf_themes_empty_chunks_returns_empty_tuple() -> None:
-    cfg = LayerBConfig()
-    themes, decisions, assignments = build_shelf_themes(
-        [],
-        shelf_id="s1",
-        facet="foods",
-        cfg=cfg,
-        llm=None,
-        config_hash="",
-        version="v0.1",
-    )
-    assert themes == []
-    assert decisions == []
-    assert assignments == {}
-
-
-def test_build_shelf_themes_keyword_strategy_skips_llm() -> None:
-    """labeling.strategy='keyword' produces space-separated keyword labels
-    even when llm is provided — explicit keyword choice wins."""
-    rng = np.random.default_rng(1)
-    chunks = []
-    for i in range(3):
-        v = np.zeros(4)
-        v[0] = 1.0
-        v += rng.normal(0, 0.01, 4)
-        v /= np.linalg.norm(v)
-        chunks.append(
-            Chunk(
-                chunk_id=f"c{i}",
-                text="olive oil mediterranean diet",
-                source_doc_id="d",
-                source_type="abstract",
-                section_type="abstract",
-                embedding=v.tolist(),
-                embedding_model="test",
-                entity_links=[],
-            )
-        )
-
-    cfg = LayerBConfig()
-    cfg.leiden.min_community_size = 2
-    cfg.similarity.knn_k = 2
-    cfg.similarity.edge_threshold = 0.5
-    cfg.labeling.strategy = "keyword"
-
-    themes, _, _ = build_shelf_themes(
-        chunks,
-        shelf_id="s-med",
-        facet="foods",
-        cfg=cfg,
-        llm=_StubLLM("WRONG"),  # would be wrong if used
-        config_hash="",
-        version="v0.1",
-    )
-    if themes:
-        assert "WRONG" not in themes[0].label
 
 
 # ----------------------------------------------------------------------------

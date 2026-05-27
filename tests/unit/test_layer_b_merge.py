@@ -9,7 +9,7 @@ from foodscholar.layer_b.models import ThemeCandidate
 
 def _sim(chunks: set[str], ents: set[str] | None = None) -> ThemeCandidate:
     return ThemeCandidate(
-        pass_name="similarity", chunk_ids=chunks, foodon_ids=ents or set()
+        pass_name="global_similarity", chunk_ids=chunks, foodon_ids=ents or set()
     )
 
 
@@ -26,7 +26,7 @@ def test_merge_pairs_above_threshold() -> None:
     cfg = MergeConfig(chunk_weight=1.0, entity_weight=0.0, dedupe_threshold=0.5)
     themes, _ = merge_candidates(sim, rel, cfg)
     kinds = sorted(t["discovery_pass"] for t in themes)
-    assert kinds == ["merged", "similarity"]
+    assert kinds == ["global_similarity", "merged"]
 
 
 def test_merge_greedy_picks_highest_combined_first() -> None:
@@ -53,7 +53,7 @@ def test_merge_below_threshold_leaves_both_alone() -> None:
     cfg = MergeConfig(chunk_weight=0.6, entity_weight=0.4, dedupe_threshold=0.5)
     themes, _ = merge_candidates(sim, rel, cfg)
     kinds = sorted(t["discovery_pass"] for t in themes)
-    assert kinds == ["relatedness", "similarity"]
+    assert kinds == ["global_similarity", "relatedness"]
 
 
 def test_merge_empty_inputs_returns_empty() -> None:
@@ -101,7 +101,7 @@ def test_merge_all_pass_through_when_no_overlap() -> None:
     themes, _ = merge_candidates(sim, rel, cfg)
     assert len(themes) == 4
     kinds = sorted(t["discovery_pass"] for t in themes)
-    assert kinds == ["relatedness", "relatedness", "similarity", "similarity"]
+    assert kinds == ["global_similarity", "global_similarity", "relatedness", "relatedness"]
 
 
 def test_merge_all_merged_canary() -> None:
@@ -114,10 +114,10 @@ def test_merge_all_merged_canary() -> None:
     cfg = MergeConfig(chunk_weight=1.0, entity_weight=0.0, dedupe_threshold=0.99)
     themes, _ = merge_candidates(sim, rel, cfg)
     merged = [t for t in themes if t["discovery_pass"] == "merged"]
-    sim_only = [t for t in themes if t["discovery_pass"] == "similarity"]
+    sim_only = [t for t in themes if t["discovery_pass"] == "global_similarity"]
     rel_only = [t for t in themes if t["discovery_pass"] == "relatedness"]
     assert len(merged) == 2
-    assert len(sim_only) == 1  # the unused sim
+    assert len(sim_only) == 1  # the unused global_similarity
     assert len(rel_only) == 0
 
 

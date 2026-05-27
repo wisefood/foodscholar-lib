@@ -176,7 +176,7 @@ def merge_global_and_local_candidates(
                 if rc.chunk_ids and rc.chunk_ids.issubset(theme_chunks)
             }
             t = {**t, "shelf_ids": sorted(contributing_shelves)}
-        elif pass_kind in ("similarity", "global_similarity"):
+        elif pass_kind == "global_similarity":
             t = {**t, "shelf_ids": []}
         elif pass_kind == "relatedness":
             # Match by exact chunk_ids to find origin shelf

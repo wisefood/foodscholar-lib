@@ -88,7 +88,7 @@ def test_smoke_end_to_end(mini_chunks, mock_embedder, mock_llm):  # type: ignore
             discovered_by="leiden",
             discovery_version="smoke-v1",
             facet="dietary_patterns",
-            discovery_pass="similarity",
+            discovery_pass="global_similarity",
         ),
         Theme(
             theme_id="t-plant",
@@ -97,7 +97,7 @@ def test_smoke_end_to_end(mini_chunks, mock_embedder, mock_llm):  # type: ignore
             discovered_by="leiden",
             discovery_version="smoke-v1",
             facet="dietary_patterns",
-            discovery_pass="similarity",
+            discovery_pass="global_similarity",
         ),
     ]
     graph_store.upsert_themes(themes)

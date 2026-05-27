@@ -29,28 +29,23 @@ if TYPE_CHECKING:
     from foodscholar.storage.protocols import LLMClient
 
 
-_LABEL_PROMPT = """You are labeling a cluster of related passages in a nutrition
-knowledge graph. The label is used as navigation in a UI — it must read like a
-topic, not like a single word or a code.
+_LABEL_PROMPT = """Write a short navigation label (2 to 5 words, lowercase, no
+quotes, no punctuation, no explanation) for the following cluster of related
+passages from a nutrition knowledge graph.
 
-Rules:
-- Output 2-5 words describing the topic of the passages.
-- Lowercase, no quotes, no punctuation, no explanation.
-- Describe what the chunks are ABOUT (e.g. "hydration and fluid intake",
-  "fiber-rich whole grains", "carbohydrate counting for diabetes").
-- Ignore any keyword that looks like a code or OCR garbage (digits, uppercase
-  IDs, short fragments like "h18567"). Read the chunks to decide the topic.
-- If the keywords contain only a generic word like "cup" or "food", read the
-  chunks and pick a topic phrase that captures the recurring subject matter.
+The label should describe what the passages are ABOUT as a topic phrase, for
+example: hydration and fluid intake, fiber-rich whole grains, carbohydrate
+counting for diabetes. Do NOT return a single word. Do NOT echo a keyword that
+looks like a code or OCR fragment (digits, uppercase IDs, short tokens).
 
-Keywords (filtered): {keywords}
+Keywords from the cluster: {keywords}
 
-Sample chunks:
+Sample passages:
 1. {chunk_1}
 2. {chunk_2}
 3. {chunk_3}
 
-Label:"""
+Reply with only the label."""
 
 
 # Token regex for c-TF-IDF garbage filtering. Drops:

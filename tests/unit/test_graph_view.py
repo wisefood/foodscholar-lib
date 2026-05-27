@@ -131,7 +131,7 @@ def test_theme_navigation(fs: FoodScholar) -> None:
         discovered_by="leiden",
         discovery_version="v0",
         facet="dietary_patterns",
-        discovery_pass="similarity",
+        discovery_pass="global_similarity",
     )
     fs.upsert_chunks(
         [
