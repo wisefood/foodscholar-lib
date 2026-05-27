@@ -6,6 +6,37 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-05-27 — Iteration 10: Layer B cross-shelf themes (M5 v0.2)
+
+**Goal:** make cross-shelf theme discovery first-class by replacing the per-shelf similarity pass with a single global Leiden run over all attached chunks, while keeping per-shelf entity coherence (Pass 2) unchanged.
+
+### What landed
+
+**Pass 1 went global.** The similarity pass no longer runs once per shelf. Instead, `build_layer_b` issues one `ChunkStore.knn_search_chunks` call to pull the entire attached corpus across all shelves in the facet, constructs a single global similarity graph, and runs Leiden once over it. The resulting communities are `ThemeCandidate(pass_name="global_similarity")` records that may span many shelves — topics that recur across the corpus surface as a single candidate rather than as siloed per-shelf duplicates.
+
+**`ChunkStore.knn_search_chunks` — new protocol method.** Implemented on both adapters: `ElasticChunkStore` issues an ES kNN query against the `chunk_vector` field and pages results back as `Chunk` objects; `InMemoryChunkStore` falls back to exact cosine search over its in-memory embedding dict. The method is the only I/O call in Pass 1, keeping `semantic_graph.py` and `community.py` pure.
+
+**`merge_global_and_local_candidates` — union shelf_ids.** The per-shelf merge step now calls `merge_global_and_local_candidates` instead of `merge_candidates`. For every (global, relatedness) pair that merges, the resulting `Theme.shelf_ids` is the union of all shelves represented by the global candidate's member chunks. Unmerged global candidates that survive without a relatedness partner have `shelf_ids` backfilled from the union of `chunk.shelf_ids` across their member chunks, so `shelf_ids` is always non-empty.
+
+**`orphan_themes` audit gate.** `audit_layer_b` gained a new CRITICAL gate: any theme with `shelf_ids = []` fails the audit. The gate catches silent merge-step bugs where backfill was skipped — a theme with an empty `shelf_ids` is unreachable from any shelf navigation path and would silently corrupt the index.
+
+**`discovery_version` bumped to v0.2.** The `Theme.version` field and the brief's status block both reflect v0.2. The `DiscoveryPass` literal dropped `"similarity"` in favour of `"global_similarity"` (a breaking change to the theme contract; existing v0.1 themes must be cleared and rebuilt).
+
+### Commits
+
+- `06ffbce` M5 (cross-shelf/p1): add knn_search_chunks to ChunkStore protocol
+- `c2b58da` M5 (cross-shelf/p1): InMemoryChunkStore.knn_search_chunks
+- `e7571bf` M5 (cross-shelf/p1): ElasticChunkStore.knn_search_chunks via ES kNN
+- `e657620` M5 (cross-shelf/p1): add 'global_similarity' literal + global_similarity_max_chunks config
+- `50cf072` M5 (cross-shelf/p2): build_global_similarity_graph via ChunkStore kNN
+- `8558f61` M5 (cross-shelf/p2): build_global_similarity_candidates orchestrator helper
+- `74de665` M5 (cross-shelf/p2): merge_global_and_local_candidates with union shelf_ids
+- `dd6d2f9` M5 (cross-shelf/p3): rewrite build_layer_b for hybrid global/per-shelf
+- `9997537` M5 (cross-shelf/p3): audit handles cross-shelf themes + orphan_themes gate
+- `c681e31` M5 (cross-shelf/p4): integration test asserts shelf reachability
+
+---
+
 ## 2026-05-26 — Iteration 9.1: drop SPECTER + collapse to single BGE-base embedder, fix ES `_source` round-trip
 
 **Goal:** unblock Layer B Pass 1, which was reporting `with embeddings: 0/868` on every shelf even though the chunk store held 13,344 ES docs all stamped with a real `embedding_model`. Root cause turned out to be a vector-mapping change in ES 9.x — the dispatch architecture also stopped being justified, so collapsed it in the same pass.

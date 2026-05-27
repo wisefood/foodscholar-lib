@@ -2,7 +2,8 @@
 
 **Status**: Implementation brief, hand to Claude Code alongside existing repo + progress log.
 **Prerequisites**: Layer A complete and audited (PASS on all critical gates). Chunks have FoodOn entity_links with confidence; Elastic has chunk embeddings; Neo4j has shelves and attachments.
-**Out of scope**: Layer C card generation; cross-shelf themes; ChEBI/MONDO integration.
+**Out of scope**: Layer C card generation; ChEBI/MONDO integration.
+**discovery_version**: v0.2 (cross-shelf themes now first-class; see §6 and §3).
 
 ---
 
@@ -69,13 +70,13 @@ ShelfId = str
 ThemeId = str
 FoodonId = str
 
-DiscoveryPass = Literal["similarity", "relatedness", "merged"]
+DiscoveryPass = Literal["global_similarity", "relatedness", "merged"]
 DiscoveredBy  = Literal["leiden", "hdbscan", "bertopic"]
 
 
 class ThemeCandidate(BaseModel):
     """Intermediate object emitted by a single pass. Not persisted."""
-    pass_name: Literal["similarity", "relatedness"]
+    pass_name: Literal["global_similarity", "relatedness"]
     chunk_ids: set[ChunkId]
     foodon_ids: set[FoodonId]       # union of high-conf entity links across chunks
     centroid_embedding: list[float] | None = None
@@ -84,7 +85,7 @@ class ThemeCandidate(BaseModel):
 
 class MergeDecision(BaseModel):
     """Records why two candidates were (or were not) merged."""
-    similarity_candidate_idx: int
+    global_candidate_idx: int
     relatedness_candidate_idx: int
     chunk_jaccard: float
     entity_jaccard: float
@@ -96,7 +97,7 @@ class Theme(BaseModel):
     """Persisted theme node (matches existing Theme model in package brief §4)."""
     theme_id: ThemeId
     label: str
-    parent_shelf_id: ShelfId
+    shelf_ids: list[ShelfId]               # v0.2: union of all shelves contributing chunks; len >= 1
     parent_theme_id: ThemeId | None = None
     facet: str
     chunk_count: int
@@ -105,7 +106,7 @@ class Theme(BaseModel):
     discovery_pass: DiscoveryPass
     discovered_by: DiscoveredBy
     config_hash: str
-    version: str                             # e.g. "v0.1"
+    version: str                             # e.g. "v0.2"
 
 
 class LayerBArtifact(BaseModel):
@@ -455,57 +456,56 @@ The whole `layer_b` block participates in the config hash. Changing any knob pro
 
 ## 6. Builder orchestrator (`builder.py`)
 
+As of v0.2 (added 2026-05-27), the orchestrator runs a **hybrid two-pass flow** that separates topical similarity (which is cross-shelf by nature) from entity coherence (which is shelf-local).
+
+**Pass 1 — global similarity.** Before iterating shelves, `build_layer_b` calls `ChunkStore.knn_search_chunks` to execute a single kNN query across the entire attached corpus — all shelves in the facet together. This returns a flat list of (chunk, neighbors) pairs drawn from the full embedding space rather than from one shelf at a time. Leiden community detection runs once over this global graph, producing `ThemeCandidate` records with `pass_name="global_similarity"`. Because these candidates span the embedding space without shelf boundaries, they naturally surface topics that recur across multiple shelves.
+
+**Pass 2 — per-shelf entity coherence.** The orchestrator then iterates shelves exactly as before, running `build_relatedness_graph` + Leiden per shelf and emitting relatedness candidates anchored to that shelf's chunk–FoodOn co-mentions.
+
+**Merge step — `merge_global_and_local_candidates`.** For each shelf, the per-shelf relatedness candidates are paired against the subset of global similarity candidates whose chunk membership overlaps that shelf. The merge function is `merge_global_and_local_candidates`, which operates with the same greedy Jaccard logic as the original `merge_candidates` but produces themes whose `shelf_ids` field is the **union of all shelves represented by the contributing global candidate's chunks**. A global candidate that touches three shelves therefore produces a theme with `shelf_ids` containing all three. Unmerged global candidates that survive without a relatedness partner have their `shelf_ids` backfilled from the union of `chunk.shelf_ids` across their member chunks, so no theme ever carries an empty `shelf_ids`.
+
 ```python
 def build_layer_b(
     facet: str,
     chunk_store: ChunkStore,
     graph_store: GraphStore,
-    embedder: Embedder,
     cfg: LayerBConfig,
 ) -> LayerBArtifact:
     """
-    Top-level orchestrator. For each shelf in facet that meets min_chunks:
-      1. fetch chunks + embeddings + entity_links
-      2. run similarity + relatedness in parallel
-      3. merge candidates
-      4. label themes
-      5. persist
-    Records a LayerBArtifact with run-level stats.
+    v0.2 orchestrator: global Pass 1 (similarity) + per-shelf Pass 2 (entity).
     """
-    artifact = LayerBArtifact(...)
+    # Pass 1: one kNN query + one Leiden over the full attached corpus
+    all_chunks = chunk_store.knn_search_chunks(facet=facet, cfg=cfg.similarity)
+    global_graph = build_global_similarity_graph(all_chunks, cfg.similarity)
+    global_communities = run_leiden(global_graph, cfg.leiden)
+    global_cands = communities_to_candidates(
+        global_communities, global_graph, all_chunks, pass_name="global_similarity"
+    )
 
+    # Pass 2 + merge: per shelf
     for shelf in graph_store.shelves_in_facet(facet):
-        if shelf.chunk_count < cfg.min_chunks_for_clustering:
+        if shelf.chunk_count < cfg.min_chunks_per_shelf:
             artifact.n_shelves_skipped += 1
             continue
 
         chunks = chunk_store.get_chunks_for_shelf(shelf.id)
-        embeddings = {c.chunk_id: c.embedding for c in chunks}
-
-        # Run both passes (could be parallelized with asyncio later)
-        sim_graph = build_similarity_graph(chunks, embeddings, cfg.similarity)
         rel_graph = build_relatedness_graph(chunks, cfg.relatedness)
-
-        sim_communities = run_leiden(sim_graph, cfg.leiden)
         rel_communities = run_leiden(rel_graph, cfg.leiden)
+        rel_cands = communities_to_candidates(
+            rel_communities, rel_graph, chunks, pass_name="relatedness"
+        )
 
-        sim_cands = communities_to_candidates(sim_communities, sim_graph, chunks, pass_name="similarity")
-        rel_cands = communities_to_candidates(rel_communities, rel_graph, chunks, pass_name="relatedness")
-
-        themes, decisions = merge_candidates(sim_cands, rel_cands, cfg.merge)
+        themes, decisions = merge_global_and_local_candidates(
+            global_cands, rel_cands, shelf.id, cfg.merge
+        )
         themes = label_themes(themes, chunks, cfg.labeling)
-
         persist_themes(themes, shelf.id, graph_store, chunk_store, cfg)
-
-        artifact.n_themes_total += len(themes)
-        for t in themes:
-            artifact.n_themes_by_pass[t.discovery_pass] += 1
-        artifact.n_shelves_themed += 1
+        ...
 
     return artifact
 ```
 
-Use `asyncio` or `concurrent.futures` to parallelize over shelves once the per-shelf loop is correct. Both Leiden passes within a shelf can also run concurrently — they're independent.
+Use `asyncio` or `concurrent.futures` to parallelize the per-shelf Pass 2 loop once the end-to-end flow is correct. The global Pass 1 is inherently sequential (one Leiden run) and should complete first.
 
 ---
 
@@ -640,11 +640,14 @@ Extend the existing audit framework. Layer B adds these checks:
 | each themed shelf has ≥ 1 theme | CRITICAL | failures = 0 |
 | each themed chunk has exactly 1 `primary` theme per shelf | CRITICAL | failures = 0 |
 | no theme has zero chunks | CRITICAL | failures = 0 |
+| no theme has `shelf_ids = []` (orphan_themes gate) | CRITICAL | orphans = 0 |
 | target themes per shelf (3–12) | WARNING | shelves outside range ≤ 20% |
 | each pass contributes ≥ 1 theme overall | WARNING | both passes > 0 |
 | `merged` theme rate between 0.20 and 0.80 | WARNING | rate in range |
 
 If `merged` rate is below 0.20, the two passes are barely overlapping — the relatedness graph is probably too sparse. Above 0.80, it's not earning its compute.
+
+The `orphan_themes` gate is new as of v0.2. A theme with `shelf_ids = []` is unreachable from any shelf — no navigation path exists to it, and any query filtered by shelf will miss it entirely. This condition should be impossible if the merge step correctly backfills `shelf_ids` from `chunk.shelf_ids` for unmerged global candidates, but the gate is CRITICAL precisely because silent failures here would corrupt the navigation index without a visible error at write time.
 
 ---
 
@@ -716,7 +719,7 @@ These are left to the engineer running Layer B; don't pre-decide:
 
 - **Hierarchical Leiden** (`la.find_partition_multiplex` or repeated runs with sub-resolutions): the brief mentions it as an option. Skip for v1; revisit only if certain shelves produce 1-2 mega-themes that should be split into sub-themes.
 - **Edge weighting in relatedness**: the IDF-style `1 / log(1 + doc_freq)` is a reasonable default. Could also use raw `1 / doc_freq` or BM25-style normalization. Tune in Phase 2 if themes look biased toward common entities.
-- **Multi-shelf themes**: a chunk attached to two shelves might land in themes in both. That's fine; the brief explicitly supports themes attaching to multiple shelves (`HAS_THEME` from multiple shelves to the same Theme). But for v1, run themes per-shelf and don't try to deduplicate themes across shelves. v2 work.
+- **Multi-shelf themes**: cross-shelf themes are now first-class via the hybrid global Pass 1 + per-shelf Pass 2 design (added 2026-05-27). A theme whose global similarity community spans multiple shelves carries all of them in `shelf_ids`; unmerged globals backfill from `chunk.shelf_ids`. The open question for a future iteration is whether to deduplicate themes that appear nearly identical across shelves — that remains deferred.
 - **Primary theme picker**: when a chunk lands in multiple themes within one shelf, which is primary? Default: highest weight (smallest distance to centroid). Document the rule; don't go beyond it for v1.
 
 ---
