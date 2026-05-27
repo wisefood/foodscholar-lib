@@ -71,6 +71,16 @@ layer_b:
     assert cfg.layer_b.leiden.random_state == 42
 
 
+def test_layer_b_config_has_global_similarity_max_chunks_default():
+    from foodscholar.config import LayerBConfig
+    assert LayerBConfig().global_similarity_max_chunks == 50_000
+
+
+def test_layer_b_config_global_similarity_max_chunks_is_int():
+    from foodscholar.config import LayerBConfig
+    assert LayerBConfig(global_similarity_max_chunks=10).global_similarity_max_chunks == 10
+
+
 def test_layer_b_hdbscan_algorithm_rejected_for_v1() -> None:
     """V1 ships Leiden only on both passes; HDBSCAN as an algorithm choice
     must raise at construction time so misconfigured runs fail loudly."""

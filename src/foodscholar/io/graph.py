@@ -45,7 +45,7 @@ class Theme(BaseModel):
     discovery_version: str
     # Layer B extensions (per layer_b_construction_brief.md §3)
     facet: Facet
-    discovery_pass: Literal["similarity", "relatedness", "merged"]
+    discovery_pass: Literal["similarity", "relatedness", "merged", "global_similarity"]
     keyword_terms: list[str] = Field(default_factory=list)
     foodon_id_signature: list[str] = Field(default_factory=list)
     config_hash: str = ""

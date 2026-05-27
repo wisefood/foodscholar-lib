@@ -116,6 +116,33 @@ def test_layer_b_artifact_default_counters_zero() -> None:
     assert a.n_themes_by_pass == {}
 
 
+def test_theme_accepts_global_similarity_pass():
+    from foodscholar.io.graph import Theme
+    t = Theme(
+        theme_id="foods/global/saturated_fat_g1",
+        label="saturated fat",
+        shelf_ids=["foodon:FOODON:00001234", "foodon:FOODON:00005678"],
+        chunk_count=12,
+        discovered_by="leiden",
+        discovery_version="v0.2",
+        facet="foods",
+        discovery_pass="global_similarity",
+    )
+    assert t.discovery_pass == "global_similarity"
+    assert len(t.shelf_ids) == 2
+
+
+def test_theme_candidate_accepts_global_similarity_pass():
+    from foodscholar.layer_b.models import ThemeCandidate
+    c = ThemeCandidate(
+        pass_name="global_similarity",
+        chunk_ids={"c1", "c2"},
+        foodon_ids=set(),
+        centroid_embedding=[0.1] * 768,
+    )
+    assert c.pass_name == "global_similarity"
+
+
 def test_layer_b_audit_report_passed_requires_perfect_invariants() -> None:
     from foodscholar.layer_b.models import LayerBAuditReport
 
