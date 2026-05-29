@@ -130,3 +130,42 @@ def test_propose_groups_uses_frozen_when_provided():
     groups = propose_groups(api, FakeLLM([]), leaf_freq={}, n_groups=14, frozen=frozen)
     assert [g.display_name for g in groups] == ["Fruits"]
     assert groups[0].anchor_foodon_ids == ["TEST:0000004"]
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — assign_leaves
+# ---------------------------------------------------------------------------
+
+from foodscholar.layer_a.grouping import assign_leaves, clean_label as _cl
+
+
+def test_assign_leaves_maps_by_label():
+    api = _mini_foodon()
+    groups = [Group("Fruits", ["TEST:0000004"]), Group("Vegetables", ["TEST:0000005"])]
+    leaf_ids = ["TEST:0000006", "TEST:0000005"]  # apple, vegetable
+    # Build the LLM response keyed by each leaf's clean_label (robust to synonyms)
+    resp = {"assignments": [
+        {"food": _cl("TEST:0000006", api), "group": "Fruits"},
+        {"food": _cl("TEST:0000005", api), "group": "Vegetables"},
+    ]}
+    llm = FakeLLM([resp])
+    assignment = assign_leaves(leaf_ids, groups, api, llm, batch_size=60)
+    assert assignment["TEST:0000006"] == "Fruits"
+    assert assignment["TEST:0000005"] == "Vegetables"
+
+
+def test_assign_leaves_handles_unknown_group_as_unassigned():
+    api = _mini_foodon()
+    groups = [Group("Fruits", ["TEST:0000004"])]
+    resp = {"assignments": [{"food": _cl("TEST:0000006", api), "group": "Bogus"}]}
+    llm = FakeLLM([resp])
+    assignment = assign_leaves(["TEST:0000006"], groups, api, llm, batch_size=60)
+    assert assignment.get("TEST:0000006") is None  # invalid group -> unassigned
+
+
+def test_assign_leaves_unmentioned_leaf_is_unassigned():
+    api = _mini_foodon()
+    groups = [Group("Fruits", ["TEST:0000004"])]
+    llm = FakeLLM([{"assignments": []}])  # LLM returns nothing
+    assignment = assign_leaves(["TEST:0000006"], groups, api, llm, batch_size=60)
+    assert assignment.get("TEST:0000006") is None

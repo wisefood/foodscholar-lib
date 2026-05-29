@@ -9,7 +9,7 @@ group shelf's `see_also` so the existing attach resolver routes its chunks there
 
 from __future__ import annotations
 
-import re  # noqa: F401  # used by Tasks 4-7 extending this module
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -161,3 +161,65 @@ def propose_groups(
         if anchors:
             groups.append(Group(nm, anchors))
     return groups
+
+
+def assign_leaves(
+    leaf_ids: list[str],
+    groups: list[Group],
+    ontology: FoodOnAPI,
+    llm,
+    *,
+    batch_size: int,
+) -> dict[str, str | None]:
+    """Assign each leaf id to a group display_name (or None) by LABEL via the LLM.
+
+    Batched; defensive — invalid/missing group names map to None (unassigned →
+    the leaf keeps its own shelf, preserving coverage). Assignment is by the
+    leaf's clean label, NOT is-a ancestry.
+    """
+    group_names = [g.display_name for g in groups]
+    valid = set(group_names)
+    label_to_ids: dict[str, list[str]] = defaultdict(list)
+    for fid in leaf_ids:
+        label_to_ids[clean_label(fid, ontology)].append(fid)
+    labels = sorted(label_to_ids)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "assignments": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "food": {"type": "string"},
+                        "group": {"type": "string"},
+                    },
+                    "required": ["food", "group"],
+                },
+            }
+        },
+        "required": ["assignments"],
+    }
+
+    label_group: dict[str, str] = {}
+    for i in range(0, len(labels), batch_size):
+        batch = labels[i : i + batch_size]
+        prompt = (
+            f"Assign each food to ONE of these groups: {', '.join(group_names)}, "
+            f"or '(other)' if none fits.\nFoods:\n"
+            + "\n".join(f"  - {lbl}" for lbl in batch)
+            + '\n\nReturn JSON {"assignments": [{"food": "<food>", "group": "<group>"}, ...]}'
+            " for every food."
+        )
+        try:
+            obj = llm.generate_json(prompt, schema, max_tokens=4096)
+        except Exception as exc:
+            _log.warning("grouping.assign_failed", batch_start=i, error=str(exc))
+            obj = {}
+        for a in (obj or {}).get("assignments", []):
+            food, group = a.get("food"), a.get("group")
+            if food in label_to_ids and group in valid:
+                label_group[food] = group
+
+    return {fid: label_group.get(clean_label(fid, ontology)) for fid in leaf_ids}
