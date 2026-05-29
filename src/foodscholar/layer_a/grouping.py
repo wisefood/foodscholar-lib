@@ -54,3 +54,28 @@ def collect_leaf_chunks(
         for fid in seen:
             leaf_chunks[fid].add(chunk.chunk_id)
     return dict(leaf_chunks)
+
+
+_SYN_BAD = re.compile(r"\d|\(|,|;|:")  # codes / parenthetical / list-y synonyms
+
+
+def _clean_synonym(fid: str, ontology: FoodOnAPI) -> str | None:
+    base = re.sub(r"\s+food product$", "", (ontology.id_to_label(fid) or "")).lower()
+    cands = [
+        s for s in ontology.id_to_synonyms(fid, include_related=False)
+        if s and not _SYN_BAD.search(s) and 2 <= len(s) <= 30
+    ]
+    cands.sort(key=len)
+    for s in cands:
+        if s.lower() != base:
+            return s
+    return cands[0] if cands else None
+
+
+def clean_label(fid: str, ontology: FoodOnAPI) -> str:
+    """Display label: clean FoodOn synonym -> strip ' food product' suffix -> raw label."""
+    syn = _clean_synonym(fid, ontology)
+    if syn:
+        return syn
+    lbl = ontology.id_to_label(fid) or fid
+    return re.sub(r"\s+food product$", "", lbl) or lbl

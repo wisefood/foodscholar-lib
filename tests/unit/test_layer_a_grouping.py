@@ -60,3 +60,28 @@ def test_collect_leaf_chunks_counts_distinct_chunks():
     leaf_chunks = collect_leaf_chunks(iter(chunks), api, facet="foods", min_link_confidence=0.0)
     assert leaf_chunks["TEST:0000006"] == {"c1", "c2"}
     assert leaf_chunks["TEST:0000008"] == {"c2"}
+
+
+from foodscholar.layer_a.grouping import clean_label
+
+
+def test_clean_label_uses_short_clean_synonym():
+    api = _mini_foodon()
+    # olive oil (TEST:0000008) has exact synonyms "extra-virgin olive oil","EVOO";
+    # _clean_synonym prefers the shortest clean one that differs from the base label.
+    # "EVOO" (4 chars, no digits/parens/commas) qualifies.
+    assert clean_label("TEST:0000008", api) == "EVOO"
+
+
+def test_clean_label_falls_back_to_label_when_no_clean_synonym():
+    api = _mini_foodon()
+    # vegetable (TEST:0000005) has no synonyms -> raw label
+    assert clean_label("TEST:0000005", api) == "vegetable"
+
+
+def test_clean_label_strips_food_product_suffix_when_no_synonym():
+    api = _mini_foodon()
+    # food product (TEST:0000001), no synonyms; suffix-strip leaves "food product"
+    # unchanged only if it equals the suffix — here label IS "food product" so it
+    # strips to "" then we keep raw. Assert it returns a non-empty string (the raw label).
+    assert clean_label("TEST:0000001", api) == "food product"
