@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re  # noqa: F401  # used by Tasks 4-7 extending this module
 from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from foodscholar.layer_a.facet import route_link_to_facet
@@ -79,3 +80,84 @@ def clean_label(fid: str, ontology: FoodOnAPI) -> str:
         return syn
     lbl = ontology.id_to_label(fid) or fid
     return re.sub(r"\s+food product$", "", lbl) or lbl
+
+
+# ---------------------------------------------------------------------------
+# Group dataclass + LLM-driven group proposal
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Group:
+    display_name: str
+    anchor_foodon_ids: list[str] = field(default_factory=list)
+
+
+def _split_concepts(group_name: str) -> list[str]:
+    parts = re.split(r"\s+and\s+|\s*,\s*|\s*/\s*", group_name.strip())
+    return [p.strip().lower() for p in parts if p.strip()]
+
+
+def _anchor_for_concept(concept: str, ontology: FoodOnAPI) -> str | None:
+    singular = concept.rstrip("s")
+    for cand in (concept, singular, concept + " food product", singular + " food product"):
+        fid = ontology.name_to_id(cand)
+        if fid:
+            return fid
+    for hit in ontology.search(concept, limit=12):
+        lbl = (ontology.id_to_label(hit) or "").lower()
+        clean = re.sub(r"\s+food product$", "", lbl)
+        if clean in {concept, singular} and "(" not in lbl:
+            return hit
+    return None
+
+
+def propose_groups(
+    ontology: FoodOnAPI,
+    llm,
+    *,
+    leaf_freq: dict[str, int],
+    n_groups: int,
+    frozen=None,
+) -> list[Group]:
+    """Return groups (display name + real FoodOn anchor ids).
+
+    If `frozen` (list of config.FrozenGroup) is given, use it verbatim (no LLM
+    call). Otherwise ask the LLM for ~n_groups human food-group names and resolve
+    each to real FoodOn anchor ids; names with no anchor are dropped.
+    """
+    if frozen is not None:
+        return [Group(g.display_name, list(g.anchor_foodon_ids)) for g in frozen]
+
+    schema = {
+        "type": "object",
+        "properties": {"groups": {"type": "array", "items": {"type": "string"}}},
+        "required": ["groups"],
+    }
+    sample = ", ".join(
+        ontology.id_to_label(fid) or fid
+        for fid, _ in sorted(leaf_freq.items(), key=lambda kv: -kv[1])[:50]
+    )
+    prompt = (
+        f"Propose {n_groups} intuitive, MUTUALLY-EXCLUSIVE top-level food groups for "
+        f"browsing a nutrition knowledge base (human category names like 'Vegetables', "
+        f"'Dairy and Eggs', 'Fish and Seafood', 'Grains and Bread'). Use food TYPES, "
+        f"not cross-cutting attributes like 'processed foods'. Frequent corpus foods "
+        f"for context:\n{sample}\n\nReturn JSON {{\"groups\": [\"...\"]}}."
+    )
+    try:
+        names = (llm.generate_json(prompt, schema, max_tokens=400) or {}).get("groups", [])
+    except Exception as exc:
+        _log.warning("grouping.propose_failed", error=str(exc))
+        names = []
+
+    groups: list[Group] = []
+    for nm in names:
+        anchors: list[str] = []
+        for concept in _split_concepts(nm):
+            fid = _anchor_for_concept(concept, ontology)
+            if fid is not None and fid not in anchors:
+                anchors.append(fid)
+        if anchors:
+            groups.append(Group(nm, anchors))
+    return groups
