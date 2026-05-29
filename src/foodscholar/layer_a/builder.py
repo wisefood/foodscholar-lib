@@ -37,7 +37,7 @@ def build_shelves(
     ontology: FoodOnAPI,
     config: LayerAConfig,
     *,
-    llm: "LLMClient | None" = None,
+    llm: LLMClient | None = None,
 ) -> list[Shelf]:
     """Build Layer A shelves across every configured facet.
 
@@ -60,7 +60,7 @@ def build_layer_a(
     *,
     config: LayerAConfig,
     full_config: FoodScholarConfig,
-    llm: "LLMClient | None" = None,
+    llm: LLMClient | None = None,
 ) -> ArtifactMeta:
     """Build and store Layer A shelves, returning phase metadata.
 
@@ -104,7 +104,7 @@ def _build_facet(
     config: LayerAConfig,
     facet: Facet,
     *,
-    llm: "LLMClient | None" = None,
+    llm: LLMClient | None = None,
 ) -> list[Shelf]:
     facet_config = config.resolve_facet(facet)
 
