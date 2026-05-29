@@ -25,11 +25,15 @@ def _utcnow() -> datetime:
 class Shelf(BaseModel):
     shelf_id: ShelfId
     label: str
+    display_label: str | None = None  # human-facing name for grouped shelves; None → use label
     facet: Facet
     depth: int
     foodon_id: str | None = None
     parent_shelf_id: ShelfId | None = None
     chunk_count: int = 0
+    support_direct: int = 0
+    support_lifted: int = 0
+    see_also: list[str] = Field(default_factory=list)
 
 
 class Theme(BaseModel):
@@ -40,6 +44,13 @@ class Theme(BaseModel):
     chunk_count: int = 0
     discovered_by: Literal["leiden", "hdbscan", "bertopic"]
     discovery_version: str
+    # Layer B extensions (per layer_b_construction_brief.md §3)
+    facet: Facet
+    discovery_pass: Literal["relatedness", "merged", "global_similarity"]
+    keyword_terms: list[str] = Field(default_factory=list)
+    foodon_id_signature: list[str] = Field(default_factory=list)
+    config_hash: str = ""
+    version: str = ""
 
 
 class Card(BaseModel):

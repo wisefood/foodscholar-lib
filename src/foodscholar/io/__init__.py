@@ -8,6 +8,7 @@ from foodscholar.io.chunk import (
     SectionType,
     SourceType,
 )
+from foodscholar.io.entity import ENTITY_CHUNK_SAMPLE_CAP, Entity
 from foodscholar.io.graph import (
     Card,
     CardId,
@@ -21,11 +22,13 @@ from foodscholar.io.graph import (
 from foodscholar.io.ontology import OntologyId, OntologyTerm
 
 __all__ = [
+    "ENTITY_CHUNK_SAMPLE_CAP",
     "ArtifactMeta",
     "Card",
     "CardId",
     "Chunk",
     "ChunkId",
+    "Entity",
     "EntityLink",
     "EntityType",
     "EvidenceQuality",

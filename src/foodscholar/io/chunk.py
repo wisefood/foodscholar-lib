@@ -17,20 +17,23 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
-# Coarse class of an extracted mention. `other` is the safe default for NER
-# implementations that don't classify (e.g. KeywordNER). The agentic NER does
-# classify. The type drives two things downstream: Layer A facet routing, and
-# linker gating — only food-like types are resolved against FoodOn (a food
-# ontology), so e.g. a `population` mention is kept but never linked.
+# Class of an extracted mention. The set is the literal label vocabulary
+# emitted by GLiNER-bio so the NER bridge is a no-op string copy. `other` is
+# kept as the safe default for NER impls that don't classify.
 EntityType = Literal[
     "food",
     "nutrient",
-    "health",
-    "dietary_pattern",
-    "allergen",
-    "population",   # demographic / life-stage group: children, adults, pregnant women, elderly
-    "biomarker",    # measurable outcome or marker: glycemic control, inflammation markers, LDL cholesterol
-    "processing",   # preparation / processing method or qualifier: fermentation, roasting, extra virgin
+    "micronutrient",
+    "macronutrient",
+    "food component",
+    "dietary supplement",
+    "dietary pattern",
+    "medical condition",
+    "biomarker",
+    "Country",
+    "Measurement",
+    "Population",
+    "Time expression",
     "other",
 ]
 
@@ -63,6 +66,7 @@ class Chunk(BaseModel):
     source_type: SourceType
     section_type: SectionType
     year: int | None = None
+    source_metadata: dict[str, object] = Field(default_factory=dict)
 
     embedding: list[float] | None = None
     embedding_model: str | None = None

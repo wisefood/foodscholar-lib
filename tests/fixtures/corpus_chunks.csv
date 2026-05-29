@@ -1,0 +1,4 @@
+chunk_id,chunk_text,type,chunk_metadata
+c-abstract,"Olive oil intake was associated with cardiovascular outcomes.",abstract,"{'title': 'Olive oil and heart health', 'venue': 'Nutrition Journal', 'year': 2024, 'DOI': 'https://doi.org/10.123/olive', 'citationCount': 3}"
+c-guide,"Eat vegetables every day.",guide,"{'file': 'OK_Ireland_guide.pdf', 'heading': 'Vegetables', 'country': 'Ireland', 'year': '2011', 'age_group': 'all', 'page_number': 7}"
+c-textbook,"Nutrients are required for normal body function.",textbook,"{'file': 'Human-Nutrition.pdf', 'heading': 'What are Nutrients?', 'page_number': 22}"

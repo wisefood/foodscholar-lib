@@ -20,25 +20,31 @@ dependencies = [
     "numpy",
     "pandas",
     "structlog",
+    "networkx",
 ]
 
 [project.optional-dependencies]
 ontology = ["pronto"]
-annotate = ["torch", "transformers", "sentence-transformers", "rapidfuzz"]
-ontorag = ["whoosh", "faiss-cpu", "sentence-transformers", "torch", "transformers"]
+annotate = [
+    "torch",
+    "transformers",
+    "sentence-transformers",
+    "gliner",
+    "hnswlib",
+]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
 elastic = ["elasticsearch>=8"]
 neo4j = ["neo4j>=5"]
 llm = ["anthropic", "openai", "google-genai", "groq", "ollama"]
+viz = ["pyvis>=0.3", "graphviz>=0.20", "matplotlib>=3.7"]
 all = [
     "pronto",
     "torch",
     "transformers",
     "sentence-transformers",
-    "rapidfuzz",
-    "whoosh",
-    "faiss-cpu",
+    "gliner",
+    "hnswlib",
     "leidenalg",
     "python-igraph",
     "hdbscan",
@@ -51,8 +57,11 @@ all = [
     "google-genai",
     "groq",
     "ollama",
+    "pyvis>=0.3",
+    "graphviz>=0.20",
+    "matplotlib>=3.7",
 ]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto", "rapidfuzz"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto"]
 
 [project.urls]
 Homepage = "https://github.com/wisefood/foodscholar-lib"

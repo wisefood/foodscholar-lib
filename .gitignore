@@ -12,6 +12,8 @@ data/
 *.local.yaml
 config.gate.yaml
 
+pytest-of-dpetrou/
+
 # Distribution / packaging
 .Python
 build/

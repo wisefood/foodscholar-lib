@@ -6,104 +6,324 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
-## 2026-05-19 — Iteration 5.2 (M2→agentic): §17 annotate gate + content-addressed cache
+## 2026-05-27 — Iteration 10: Layer B cross-shelf themes (M5 v0.2)
 
-**What:** two things — (1) ran the BRIEF §17 annotate sanity gate against real
-FoodOn for the first time, which surfaced a real linker-quality finding and
-confirmed the direction of the agentic redesign; (2) landed the next
-design-doc step — the content-addressed annotation cache.
+**Goal:** make cross-shelf theme discovery first-class by replacing the per-shelf similarity pass with a single global Leiden run over all attached chunks, while keeping per-shelf entity coherence (Pass 2) unchanged.
 
-### §17 annotate gate — first real-data run
+### What landed
 
-The unit suite is green on the 11-term mini fixture, but that does not tell us
-the pipeline produces *good annotations on real FoodOn + real models*. BRIEF
-§17 is the gate that does. New artifacts:
+**Pass 1 went global.** The similarity pass no longer runs once per shelf. Instead, `build_layer_b` issues one `ChunkStore.knn_search_chunks` call to pull the entire attached corpus across all shelves in the facet, constructs a single global similarity graph, and runs Leiden once over it. The resulting communities are `ThemeCandidate(pass_name="global_similarity")` records that may span many shelves — topics that recur across the corpus surface as a single candidate rather than as siloed per-shelf duplicates.
 
-- **`tests/fixtures/linker_gold_foodon.jsonl`** — 35-record gold set with
-  *real* `FOODON:` ids (the existing `linker_gold.jsonl` is mini-fixture
-  `TEST:` ids). Includes negative cases (`iron deficiency`, `heart disease`)
-  whose correct answer is *no* link.
-- **`tests/fixtures/sample_chunks.jsonl`** — 16 hand-written realistic
-  nutrition chunks across abstract / textbook / guide (no `data/chunks.parquet`
-  exists yet).
-- **`scripts/annotate_gate.py`** — runs the three §17 checks: linking coverage
-  (gate ≥ 70%), top-N most-linked-term frequency list, and a 50-link random
-  sample for hand-checking.
-- **`config.local.yaml`** rewritten — it was stale (`annotate.ner_model:
-  sci_food_ner_v1`, a field removed in iteration 5.0); now carries the `ner`
-  selector, `prefix_filter`, and the dense + llm linker tiers.
+**`ChunkStore.knn_search_chunks` — new protocol method.** Implemented on both adapters: `ElasticChunkStore` issues an ES kNN query against the `chunk_vector` field and pages results back as `Chunk` objects; `InMemoryChunkStore` falls back to exact cosine search over its in-memory embedding dict. The method is the only I/O call in Pass 1, keeping `semantic_graph.py` and `community.py` pure.
 
-**Bug fixed — `evaluate_linker` coverage could exceed 100%.** A false-positive
-link on a negative gold case inflated the numerator (it counted *all* links,
-divided by *positive* cases only). Added `n_linked_positive` so coverage counts
-only links produced on positive cases — now correctly bounded in [0, 1].
+**`merge_global_and_local_candidates` — union shelf_ids.** The per-shelf merge step now calls `merge_global_and_local_candidates` instead of `merge_candidates`. For every (global, relatedness) pair that merges, the resulting `Theme.shelf_ids` is the union of all shelves represented by the global candidate's member chunks. Unmerged global candidates that survive without a relatedness partner have `shelf_ids` backfilled from the union of `chunk.shelf_ids` across their member chunks, so `shelf_ids` is always non-empty.
 
-**Gate result — Check 1 PASS, Check 3 FAIL.** Coverage 100%, gold-set accuracy
-94.3%. But the 50-link hand-check found **~10–14 wrong links**: the lexical
-fuzzy tier substring-matches into qualified labels (`saturated fat` →
-`saturated fat free food`, `water` → `watermelon plant`, `Mediterranean diet`
-→ `diet soft drink`), and nutrient/abstract mentions get forced onto spurious
-food terms because the semantic-type gate is not catching them. This is
-exactly the failure mode the agentic redesign exists to fix. **Decision
-(design owner): proceed with the redesign rather than keep patching the old
-`ThreeTierLinker`.** The gate stays in the repo as the measurement that
-re-validates the agentic pipeline once it lands.
+**`orphan_themes` audit gate.** `audit_layer_b` gained a new CRITICAL gate: any theme with `shelf_ids = []` fails the audit. The gate catches silent merge-step bugs where backfill was skipped — a theme with an empty `shelf_ids` is unreachable from any shelf navigation path and would silently corrupt the index.
 
-**Note:** the gate runs the linker against real FoodOn but uses `HashEmbedder`
-for chunk embeddings — chunk embeddings are not one of the three §17 checks,
-and mocking them avoids a ~1.3GB SPECTER2/BGE load that the gate does not need.
+**`discovery_version` bumped to v0.2.** The `Theme.version` field and the brief's status block both reflect v0.2. The `DiscoveryPass` literal dropped `"similarity"` in favour of `"global_similarity"` (a breaking change to the theme contract; existing v0.1 themes must be cleared and rebuilt).
 
-### Content-addressed annotation cache — design-doc step 2
+### Commits
 
-**New module — `foodscholar.annotate.cache`** (docs/DESIGN_agentic_annotate.md
-§4, §10 step 2):
-
-- `cache_key(chunk_text, *, agent_model_id, prompt_version, ontology_hash)` —
-  the content-addressed key. The four parts are **length-prefixed** before
-  hashing so no concatenation collision is possible.
-- `AnnotationCache` — SQLite-backed (decision log: indexed point lookups +
-  incremental upserts fit the access pattern; Parquet does not). Stores each
-  chunk's full `list[EntityLink]` as JSON. `get` / `put` / `__contains__` /
-  `__len__`, context-manager lifecycle, `:memory:` default for tests. A
-  `SCHEMA_VERSION` column means an entry from an older schema is treated as a
-  miss (recomputed) rather than mis-deserialized.
-- This is what makes agentic annotation idempotent (BRIEF §13) *and* affordable
-  at BRIEF §16 scale: a rerun over an unchanged corpus/model/prompt/ontology is
-  a pure cache replay — deterministic, free.
-
-**Tests:** `tests/unit/test_cache.py` — 11 tests (key determinism, per-input
-sensitivity, no-collision, get/put round-trip, empty-links-is-a-hit,
-idempotent put, persistence across reopen, stale-schema-as-miss, replay).
-
-**Verification:** ruff clean; `test_cache.py` 11/11; full unit suite green.
-
-**Status:** design doc §10 — steps 1 (ontorag) + 2 (cache) done. Next: step 3
-(`tools.py` — wrap the lexical tiers + OntoRAG retriever as agent tools) and
-step 4 (`agent.py` — the tool-using NER+NEL agent).
+- `06ffbce` M5 (cross-shelf/p1): add knn_search_chunks to ChunkStore protocol
+- `c2b58da` M5 (cross-shelf/p1): InMemoryChunkStore.knn_search_chunks
+- `e7571bf` M5 (cross-shelf/p1): ElasticChunkStore.knn_search_chunks via ES kNN
+- `e657620` M5 (cross-shelf/p1): add 'global_similarity' literal + global_similarity_max_chunks config
+- `50cf072` M5 (cross-shelf/p2): build_global_similarity_graph via ChunkStore kNN
+- `8558f61` M5 (cross-shelf/p2): build_global_similarity_candidates orchestrator helper
+- `74de665` M5 (cross-shelf/p2): merge_global_and_local_candidates with union shelf_ids
+- `dd6d2f9` M5 (cross-shelf/p3): rewrite build_layer_b for hybrid global/per-shelf
+- `9997537` M5 (cross-shelf/p3): audit handles cross-shelf themes + orphan_themes gate
+- `c681e31` M5 (cross-shelf/p4): integration test asserts shelf reachability
 
 ---
 
-## 2026-05-19 — Iteration 5.1 (M2→agentic): OntoRAG tri-hybrid retriever
+## 2026-05-26 — Iteration 9.1: drop SPECTER + collapse to single BGE-base embedder, fix ES `_source` round-trip
 
-**What:** the second piece of the agentic-annotation redesign (docs/DESIGN_agentic_annotate.md, §10 step 1) — an OntoRAG-derived tri-hybrid ontology retriever.
+**Goal:** unblock Layer B Pass 1, which was reporting `with embeddings: 0/868` on every shelf even though the chunk store held 13,344 ES docs all stamped with a real `embedding_model`. Root cause turned out to be a vector-mapping change in ES 9.x — the dispatch architecture also stopped being justified, so collapsed it in the same pass.
 
-**Decisions locked this iteration** (design doc decision log): the brief owner approved the BRIEF §15 deviation (agentic annotation); `ontorag_resolve` is **retrieval-only** (no nested LLM selector / synonym-retry loop); the future annotation cache will be **SQLite**.
+### Root cause (the load-bearing investigation)
 
-**New module — `foodscholar.annotate.ontorag`:**
-- `index.py` — `build_index(ontology, minilm, sapbert, index_dir)` builds three on-disk indexes over the FoodOn term set: a Whoosh BM25 index (label + synonyms text) and two FAISS `IndexFlatIP` indexes (MiniLM + SapBERT embeddings, cosine via L2-normalized inner product). Persisted under one dir; a fingerprint of the term set + embedder model ids guards the cache so an unchanged ontology/model reloads instead of rebuilding.
-- `retriever.py` — `OntoRagRetriever.retrieve(query, k)` queries all three arms and merges by **Reciprocal Rank Fusion** (`1/(60+rank)`, the RRF-paper / OntoRAG constant) into a ranked `RetrievedCandidate` list. Deterministic tie-break by contributing-arm priority (lexical > sapbert > minilm). Retrieval only — the agent/linker selects.
-- `RetrievedCandidate` — Pydantic: `id`, `label`, `fusion_score`, `source`, `sources` (every arm that surfaced the term).
+[ElasticChunkStore.init()](src/foodscholar/storage/elastic.py) declared the mapping with `dense_vector(type=dense_vector, index=true, similarity=cosine)` and no explicit `index_options`. ES 9.4 silently picks **`bbq_hnsw`** as the default index_options, which stores a binary-quantized vector in the HNSW segment and **drops the raw vector from `_source`**. So:
 
-**Design choices:**
-- Stayed faithful to upstream OntoRAG: FAISS (not our numpy `DenseIndex`) and the full tri-hybrid (Whoosh + MiniLM + SapBERT, not a bi-hybrid). Keeps us aligned with the source repo and easier to track its changes.
-- New `[ontorag]` extra (`whoosh`, `faiss-cpu`, `sentence-transformers`, `torch`, `transformers`); folded into `[all]`.
-- OntoRAG's own LLM selector / confidence scorer / synonym-retry loop deliberately **not** adopted — our agent is the selector, and the retry loop is the part BRIEF §15 most directly defers.
+- index-wide `_count` with `exists: embedding` → 13,344/13,344 (the indexed field is there)
+- `_mget` of those same ids → `_source` keys are `['chunk_id', 'created_at', 'embedding_model', ...]` — **no `embedding` key**
+- `_doc_to_chunk` → Pydantic builds `Chunk(embedding=None)` (the default)
+- Layer B Pass 1 → `[c for c in chunks if c.embedding is not None]` → 0 chunks → 0 candidates
 
-**Tests:** `tests/unit/test_ontorag.py` — 12 unit tests over the mini fixture with `HashEmbedder` standing in for the two real embedders (index build, obsolete exclusion, cache reload, fingerprint-driven rebuild, retrieval, RRF ranking order, source provenance, empty-query). A slow integration test exercises real MiniLM + SapBERT.
+Same data, two views, only one of which the Python side could see. The OOM that came up in the same session was a red herring on top of this — Docker `OOMKilled: true` because no JVM heap cap was set; the index data on the named volume is fine.
 
-**Verification:** ruff clean; full unit suite green.
+### What landed
 
-**Status:** design doc §10 — step 1 done. Next: step 2 (`cache.py`, the SQLite content-addressed annotation cache) and step 3 (`tools.py`, wrapping the lexical tiers + retriever as agent tools).
+**Mapping fix ([src/foodscholar/storage/elastic.py](src/foodscholar/storage/elastic.py)).** Embedding field is now declared explicitly with `dims: 768`, `similarity: cosine`, and `index_options: {type: hnsw, m: 16, ef_construction: 100}` — plain `hnsw`, not `bbq_hnsw`, so `_source` preserves the raw vector that Pydantic round-trips through `Chunk.embedding`. The cost is irrelevant at our scale: 13k chunks × 768 dims × 4 bytes ≈ 40 MB. The existing index has `bbq_hnsw` baked in — a `DELETE foodscholar_chunks` + re-run of `fs.embed()` is required to apply the fix (vectors are recoverable from chunk text, ~minutes on the T4).
+
+**Drop SPECTER, single BGE-base embedder.** The `SourceTypeRouter(scientific=SPECTER2, general=BGE-large)` dispatch was producing two index widths (768 vs 1024) that BRIEF §7 papered over with "one index per embedder". With a single embedder there's exactly one index and one width.
+
+- [src/foodscholar/config.py](src/foodscholar/config.py) — collapsed `scientific_embedder` + `general_embedder` (two keys) to a single `embedder: str = "BAAI/bge-base-en-v1.5"` on `AnnotateConfig`.
+- [src/foodscholar/annotate/embedder.py](src/foodscholar/annotate/embedder.py) — deleted `SourceTypeRouter` entirely; `HFEmbedder` default flipped to BGE-base.
+- [src/foodscholar/annotate/runner.py](src/foodscholar/annotate/runner.py) — dropped the `isinstance(embedder, SourceTypeRouter)` branch and replaced the per-chunk `router.embed_chunk(text, source_type)` loop with a single batched `embedder.embed([c.text for c in batch])` call. Side benefit: N forward passes per batch → 1 forward pass per batch.
+- [src/foodscholar/facade.py](src/foodscholar/facade.py) — `_build_embedder` returns a plain `HFEmbedder(cfg.annotate.embedder)`; `fs.embed()._flush()` collapsed from "split by source_type, encode per backend, merge results" to a single batched encode; `info()` lazy banner reports the configured embedder instead of "router:…,…".
+- Tests rewired: deleted the four `SourceTypeRouter` unit tests in [tests/unit/test_embedder.py](tests/unit/test_embedder.py); deleted `test_embed_uses_source_type_router_when_present` and rewrote `test_embed_router_batches_per_backend_one_encode_call_each` as `test_embed_batches_one_encode_call_per_flush` (asserts ONE encode per flush, no backend split) in [tests/unit/test_facade_embed.py](tests/unit/test_facade_embed.py).
+- Config YAMLs ([config.example.yaml](config.example.yaml), [config.local.yaml](config.local.yaml), [config.gate.yaml](config.gate.yaml)) — collapsed to a single `embedder: BAAI/bge-base-en-v1.5` line.
+- [BRIEF.md](BRIEF.md) — §2 architecture table row, §4 file-tree comment, §6 facade table + lazy-load paragraph, §7 ingest description + embedder description + dim-defaults paragraph, §11 example config: all retargeted to BGE-base-only.
+
+### What this unblocks
+
+After re-creating the ES index and re-running `fs.embed()`, the Layer B preview cell in [notebooks/build_graph.ipynb](notebooks/build_graph.ipynb) should report `with embeddings: N/N (100.0%)` instead of `0/868`, and Pass 1 similarity candidates should come back non-empty. Pass 2 (relatedness, entity-coherence based) was always working — it never touched vectors.
+
+### Out of scope, deliberately
+
+- The ES OOMKill on startup. Separate issue; the host has 16 GiB / 0 swap with Neo4j + Kibana competing. Documented in the debugging session; needs an explicit `ES_JAVA_OPTS=-Xms2g -Xmx2g` + `-m 4g` when the container is recreated. Not committing changes for it here since the container isn't managed from this repo.
+- [CONSOLIDATION.md](CONSOLIDATION.md) still mentions BGE-large in the spec for the (future) semantic-consolidation embedder. That's a separate component spec, not the chunk embedder — left for a deliberate decision later.
+
+---
+
+## 2026-05-25 — Iteration 9.0 (M5): Layer B — dual-pass theme discovery + embed perf patch
+
+**Goal:** land Layer B end-to-end (theme discovery inside each Layer A shelf) per the dual-pass architecture in [layer_b_construction_brief.md](layer_b_construction_brief.md). Bonus: fix the per-doc-update bottleneck blocking the real-corpus embedding run on a Colab T4 over an ngrok tunnel.
+
+### What landed (sub-phase commits)
+
+**Embed perf patch — `7e93f24..9bc91eb`** (a series; see commits before `2edb7f7`). Original `fs.embed()` encoded one chunk at a time and issued one ES `_update` per chunk — under a tunneled ES, throughput collapsed to ~2 chunks/sec on a T4 that should hit 100-300/sec. Two fixes: (1) the `_flush()` path now groups the pending batch by `source_type`, runs ONE `encode()` call per backend (SPECTER2 vs BGE-large) — the T4 amortization win; (2) a new `ChunkStore.update_embeddings_bulk(items)` collapses N `_update`s into one ES `_bulk` POST — the network-side win. New tests in [test_facade_embed.py](tests/unit/test_facade_embed.py) lock the contract ("ONE bulk call per flush", "ONE encode per backend per flush").
+
+**Phase 0 — foundation (4 commits, `2edb7f7..a47ab5b`):**
+- Extended `Theme` Pydantic ([io/graph.py](src/foodscholar/io/graph.py)) with the brief's new fields: `facet`, `discovery_pass`, `keyword_terms`, `foodon_id_signature`, `config_hash`, `version`. `shelf_ids` stays a `list[ShelfId]` (multi-shelf themes are kept open for v2 cross-shelf dedup; v1 builder emits length-1).
+- `ThemeCandidate`, `MergeDecision`, `LayerBArtifact`, `LayerBAuditReport` Pydantic in new [layer_b/models.py](src/foodscholar/layer_b/models.py).
+- Replaced flat `LayerBConfig` ([config.py](src/foodscholar/config.py)) with seven nested blocks: `SimilarityConfig`, `RelatednessConfig`, `LeidenConfig`, `MergeConfig`, `LabelingConfig`, `LayerBAuditConfig` (+ top-level `min_chunks_per_shelf`, `min_embedded_fraction`). `Literal["leiden"]` on per-pass algorithm fields makes HDBSCAN selection raise a Pydantic ValidationError (HDBSCAN cut from v1 per Plan-agent review — the precomputed-distance hack on the relatedness graph wasn't a valid metric).
+- Three new storage protocol methods, implemented on memory + Elastic + Neo4j adapters:
+  - `ChunkStore.bulk_set_theme_ids(items)` — sets `theme_ids` ONLY, leaves `shelf_ids` alone (the load-bearing reason this exists instead of reusing `bulk_update_attachments`, which clobbers shelf_ids under concurrent writes).
+  - `GraphStore.attach_chunks_to_themes_bulk(items)` — writes `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges in one UNWIND-driven session.run on Neo4j. New `THEME_OF` edge label; the legacy `attach_chunks_to_theme` (which writes `ATTACHED_TO`) stays for back-compat. `get_chunks_for_theme` reads either label.
+  - `GraphStore.clear_themes()` — DETACH DELETE every (:Theme); called by `build_layer_b` at the start so re-runs don't leave ghosts.
+
+**Phase 1 — Pass 1 (similarity) (4 commits, `4318df6..7fe5812`):**
+- [semantic_graph.py](src/foodscholar/layer_b/semantic_graph.py) — mutual-kNN over normalized chunk embeddings; cosine via numpy dot product, `argpartition` for top-k. Defensive normalization in case input vectors aren't unit-norm.
+- [community.py](src/foodscholar/layer_b/community.py) — `run_leiden(graph, cfg)` using `leidenalg.RBConfigurationVertexPartition` with weighted modularity. Deterministic with fixed `random_state` (the load-bearing audit-parity guarantee). Empty/no-edges graphs short-circuit to `[]`.
+- [label.py](src/foodscholar/layer_b/label.py) — `label_by_keywords` (c-TF-IDF with English stopwords + uni/bigram) and `label_by_llm` (one `LLMClient.generate` call per theme with keywords + 3 sample chunks; strips surrounding quotes; falls back to top keyword if LLM returns blank).
+- [builder.py](src/foodscholar/layer_b/builder.py) — `build_shelf_similarity_candidates`: skips chunks without embeddings, runs kNN+Leiden, emits ThemeCandidate records with normalized-mean centroids.
+
+**Phase 2 — Pass 2 (relatedness) (2 commits, `94157d9..235d650`):**
+- [relatedness_graph.py](src/foodscholar/layer_b/relatedness_graph.py) — entity-bridge graph; edge weight = sum over shared FoodOn IDs of `1 / log(1 + doc_freq[id])`. The three knobs the brief calls make-or-break are exposed: `tau_strict` (link confidence floor), `min_shared_ids` (edge threshold), `max_doc_frequency` (drop ubiquitous entities). `always_exclude_iris=['FOODON:00001002']` is the default permanent kill-list — the 'food product' umbrella that survived Layer A propagates onto every chunk.
+- `build_shelf_relatedness_candidates` — builds the graph, runs Leiden, emits candidates whose `foodon_ids` is the union of high-conf links across members (the entity signature the merge step uses for Jaccard).
+
+**Phase 3 — merge + primary + persist + audit (5 commits, `ac83cb3..9359d7d`):**
+- [merge.py](src/foodscholar/layer_b/merge.py) — greedy pair assignment with deterministic tie-break by `(-combined_similarity, sim_idx, rel_idx)`. Records the full cartesian product as `MergeDecision`s for audit. Greedy not optimal (Hungarian is) — documented; v1 scale (≤30 candidates per shelf) makes greedy sufficient.
+- [primary.py](src/foodscholar/layer_b/primary.py) — per-pass-aware primary picker (Plan-agent flagged lex-first alone as too crude): similarity → closest-to-centroid in embedding space; relatedness → max sum-of-edge-weights to other members in the rel graph; merged → max of both scores per chunk. Lex-first chunk_id is the deterministic tie-breaker.
+- [persist.py](src/foodscholar/layer_b/persist.py) — three writes in lockstep: `upsert_themes` (creates (:Theme) nodes + IN_SHELF edges, with all the new Layer B Theme fields stamped), `attach_chunks_to_themes_bulk` (THEME_OF edges with primary+weight), `bulk_set_theme_ids` (ES denorm, preserves shelf_ids). Merges with pre-existing theme_ids on each chunk (a chunk in two shelves can land in themes in both).
+- [builder.build_shelf_themes](src/foodscholar/layer_b/builder.py) — full per-shelf pipeline (Pass 1 + Pass 2 + merge + label + primary picker). Emits Pydantic Theme records with deterministic theme_ids of the form `{facet}/{shelf_slug}/{label_slug}_{p}{seq}` (p ∈ {s,r,m}; seq is per-shelf-per-pass counter so identical-label themes get `_s1`/`_s2`).
+- [audit.py](src/foodscholar/layer_b/audit.py) — `audit_layer_b(chunk_store, graph_store) -> LayerBAuditReport`. CRITICAL gates (flip `passed`): parity (Neo4j THEME_OF ↔ ES theme_ids agreement = 1.0), no dangling theme_ids, no empty themes. WARN-level reporting for tuning: per-pass theme counts (the brief's "≥ 1 from each pass" canary) and `merged_rate` (1.0 = Pass 2 isn't earning compute; 0.0 with relatedness=0 = entity graph mis-tuned).
+
+**Phase 4 — orchestrator + facade + integration test (`5169f76`):**
+- Top-level `build_layer_b(fs, *, facet, dry_run)` in [builder.py](src/foodscholar/layer_b/builder.py). Iterates shelves in the facet, applies `min_chunks_per_shelf` + `min_embedded_fraction` gates (Plan-agent flag — biased subsamples are worse than not clustering), skips the synthetic facet root (iteration-8 unclassified bucket). Calls `clear_themes()` at start. `dry_run=True` runs the full pipeline but persists nothing.
+- [facade.py:1077](src/foodscholar/facade.py#L1077) `fs.build_layer_b(*, facet="foods", dry_run=False)` is now wired and returns a `LayerBArtifact` with `n_shelves_themed`, `n_themes_total`, `n_themes_by_pass`, `leiden_seed`, timestamps.
+- The existing `foodscholar build-layer-b --config <path>` CLI command at [cli/main.py:83](src/foodscholar/cli/main.py#L83) already routes here via `_run_phase` — no CLI work needed.
+- [tests/integration/test_layer_b_pipeline.py](tests/integration/test_layer_b_pipeline.py) — mini-corpus e2e (2 shelves × 8 chunks each) asserts `n_shelves_themed=2`, `n_themes >= 4`, `audit.passed`. Plus a dry-run test asserting no writes land.
+
+### Design decisions worth remembering
+
+- **Two passes capture different structure, not redundant signal.** Pass 1 finds *topical* clusters (chunks that discuss the same thing in similar prose). Pass 2 finds *entity-anchored* clusters (chunks co-mentioning the same FoodOn IDs even when the prose differs widely). A `discovery_pass="merged"` theme is grounded in *both* — stronger than either alone. Audit canaries: relatedness=0 means Pass 2 mis-tuned; merged_rate=1.0 means Pass 2 isn't earning compute.
+- **`bulk_set_theme_ids` is a deliberate carve-out from `bulk_update_attachments`.** The latter overwrites both `shelf_ids` and `theme_ids` per call; using it from persist would race against any concurrent shelf writer. The new method touches `theme_ids` only — safe under any `shelf_ids` writer.
+- **HDBSCAN cut from v1.** Plan-agent flagged the precomputed-distance hack on the relatedness graph as broken (the normalization isn't a valid metric). Brief defers HDBSCAN; v1 ships Leiden-only on both passes. `cfg.similarity.algorithm = "hdbscan"` raises ValidationError so misconfigurations fail loudly.
+- **LLM labels are v1 default** (`cfg.labeling.strategy = "llm"`). Navigation labels need to read well; ~$0.60/run cost (Haiku) is trivial vs cluster compute. Keyword fallback is always computed and fed to the LLM as context — and stays available via `strategy="keyword"`.
+- **Theme IDs are deterministic.** `{facet}/{shelf_slug}/{label_slug}_{p}{seq}` with per-shelf-per-pass `seq` counter. Audit cross-store parity depends on stable IDs across runs; same chunks + same `random_state` = identical theme membership and IDs.
+
+### Verification
+
+- `ruff check src tests` — clean.
+- `pytest tests/` — **524 passed, 1 skipped** (was 432 before this iteration; +92 new across 8 layer_b_* test files + 2 integration tests). Test count by area: 7 layer_b_models, 3 layer_b_config, 13 layer_b_persist, 7 layer_b_semantic_graph, 5 layer_b_community, 7 layer_b_label, 6 layer_b_relatedness_graph, 9 layer_b_merge, 5 layer_b_primary, 10 layer_b_builder, 7 layer_b_audit, 2 integration.
+- **Local env note:** the broken-openblas numpy in `/mnt/miniconda3/bin/python` made the embed-perf-patch session's local pytest runs skip layer_b tests. The project's actual env is `/mnt/miniconda3/envs/foodscholar/bin/python` (Python 3.11.15) where numpy + igraph + leidenalg + hdbscan + sklearn all work — this iteration's full suite runs green there. The wrong-interpreter confusion is what triggered the embed-perf debugging session in the first place.
+
+### Status at end of iteration — Layer B is DONE (code-side)
+
+- `fs.build_layer_b(facet="foods")` runs end-to-end against any backend (in-memory, ES+Neo4j).
+- All §10 audit gates implemented; CRITICAL invariants enforced via `LayerBAuditReport.passed`.
+- §17 sanity gate (20-theme hand audit against the real corpus) — **deferred to the next session in Colab/notebook** since (a) the embed run on the live ES is still finishing, (b) `fs.attach()` needs to re-run to populate Neo4j HAS_CHUNK edges (the current 6,290 attached chunks in ES carry the denorm but Neo4j has 0 edges — drift surfaced at iteration start).
+
+### Handoff for next session
+
+Run order against the live ES + Neo4j once embedding completes:
+1. `fs.attach()` — rebuild Neo4j HAS_CHUNK edges from the existing ES shelf_ids denorm.
+2. `fs.build_layer_b(facet="foods")` — full Layer B rollout. Expected: ~30-60 themed shelves at min_chunks_per_shelf=50, 100-300 total themes, parity=1.0.
+3. §17 hand audit cell — sample 20 themes random, inspect label + 3 chunk excerpts, target ≥ 75% coherent.
+
+If the per-pass canary fires (relatedness=0 or merged_rate=1.0), the tuning order from the brief is: try `relatedness.min_shared_ids=1`, then `relatedness.max_doc_frequency=0.6`, then inspect the `excluded` set (likely too aggressive).
+
+---
+
+## 2026-05-22 — Iteration 8.0 (M4): semantic consolidation + Layer A tuning; Layer A declared done
+
+**Goal:** add the semantic-consolidation pass (catch duplicate shelves lexical rules miss), then validate Layer A is a sound foundation for Layer B and close out Layer A.
+
+### What landed (two commits)
+
+**`32ee313` — `fs.semantic_consolidate()` (LLM-as-judge).** New package [src/foodscholar/layer_a/semantic_consolidation/](src/foodscholar/layer_a/semantic_consolidation/) (models, embed, candidates, cluster, judge, prompts, apply, orchestrator). Runs as a standalone phase **after `fs.attach()`** so the judge can ground on real sample chunks. Pipeline: embed each shelf (label + FoodOn synonyms) → cosine candidate pairs → cluster into connected components (size-capped, weakest-edge split) → **one LLM call per cluster** returning `merge_groups`/`keep_alone` by index → enforce a permanent block-list → apply confirmed N-way merges via `see_also` (which the next `attach` re-homes). Off by default (`layer_a.semantic_consolidation.enabled`); `dry_run=True` returns the full `ConsolidationArtifact` for inspection without persisting. Reuses `fs.embedder` (BGE-large) and `fs.llm`. Config knobs: `cosine_threshold` (0.94), `max_cluster_size` (12), `auto_merge_confidence` (0.80), `subtype_patterns`, `permanent_block_list` (FoodOn-id pairs), `use_few_shot`, `exclude_scaffolding` + `classifier_suffixes`. Also hardened `GroqClient.generate_json` to fall back to a plain-text parse when strict `json_object` mode returns empty/truncated output.
+
+**`f15425d` — projection fix: `foodon_ids` denorm no longer bypasses the `link_blocklist`.** [collect_support](src/foodscholar/layer_a/propagate.py) counted foods-facet support from both `entity_links` and the `foodon_ids` denorm list. When a term sat in both (the real-corpus shape — the nel_loader mirrors every link into `foodon_ids`), the `entity_links` loop would *skip* a blocklisted `(surface, id)` pair, then the `foodon_ids` loop *re-added* the bare id — silently undoing the blocklist (`foodon_ids` carries no surface text to match). Fix: `entity_links` is authoritative for any term it covers; the `foodon_ids` path only contributes terms with no `entity_link` (its designed role). +2 regression tests.
+
+### Tuning learned on the real corpus (config-side, in the notebook — NOT committed library changes)
+
+- **Judge precision is the hard part.** v1 prompt over-merged badly (apple+pear, fish+marine-fish, cow-milk fat variants) because it judged on "same category / co-occurs in chunks." Fixed with a v3 **identity-only** prompt (`PROMPT_VERSION = v3.0-identity`): merge ONLY if labels name the same food (spelling/synonym/processing variant); explicitly forbid category-vs-member and co-occurrence merging; chunks demoted to *confirm-identity-only*. Few-shot balanced and drawn from observed failures.
+- **Cluster discipline matters.** At cosine 0.88 the candidate graph chained into one ~197-shelf hairball that blew groq's JSON budget. Raising to 0.94 + the cluster-size cap (weakest-edge split) keeps clusters tight and judgeable.
+- **Scaffolding filter.** FoodOn organizational umbrellas ('food product', 'food consumer group', 'food modification process') have no synonyms + a classifier-suffix label; they're now excluded from consolidation candidates so they don't pollute clusters.
+- **`food product` dumping ground (10% of chunks).** Diagnosed: it survived the umbrella rule by a whisker (`direct_share` 0.102 vs 0.10 cutoff) because the linker mapped generic mentions ('foods', 'whole foods', …) onto `FOODON:00001002`. The `link_blocklist` (+ the `f15425d` fix) drops those → umbrella rule fires → `food product` removed.
+
+### Layer A readiness for Layer B — investigated and CLOSED
+
+Added notebook diagnostics (§6e readiness, §6f/§6g/§6h orphan analysis) — exploratory, uncommitted. Findings on the real foods facet:
+
+- **Structurally GO:** `fs.audit().passed == True` (single root, no cycles/dangling, ≥95% coverage, ≥99% attach integrity).
+- **~116 shelves clusterable** (≥ `min_chunks_per_shelf`=50), ~113 too small (skipped), 0 empty. ~23.8k chunks attached. Solid Layer B input.
+- **Synthetic-root orphans ~18%.** Removing `food product` sent its lifted chunks to the synthetic root (no surviving mid-level parent). Investigated thoroughly:
+  - Orphans split into NEL junk (`food calorie datum`, `edible food`, `processed food`) — blocklistable — and a genuine **rare-food long-tail** (kiwifruit, mackerel, flaxseed) that clears `min_support` but whose only ancestors are umbrellas the umbrella rule kills.
+  - **`min_support` is the wrong lever** (the rare foods already clear it). The right lever is whitelisting specific mid-level FoodOn categories — but the specificity-ranked recommender found no clean win: only 2 categories adopt ≥3 orphans, the rest are +1 each (39/70 have no good parent). **FoodOn's structure simply lacks navigable mid-level food shelves that survive the umbrella rule.**
+  - **Decision: accept the ~18% as the 'unclassified' bucket Layer B skips.** Further Layer A tuning is diminishing returns.
+
+### Status at end of iteration — Layer A is DONE
+
+`fs.audit().passed`, 116 clusterable shelves, orphan tail understood and accepted. Semantic consolidation committed and ready (dedup pass, opt-in). **Next milestone: Layer B (theme discovery).** See the Layer B handoff note below.
+
+### Layer B handoff (start here next session)
+
+- **Hard blocker first:** run `fs.embed()` — attached chunks currently have **no embeddings** (`embedding=None`); Leiden/HDBSCAN need vectors. This is the one prerequisite.
+- **Layer B clusters chunks *within* each shelf** into themes. Read per-shelf chunks via `graph_store.list_chunk_shelf_attachments()` (invert chunk→shelves to shelf→chunks) and fetch vectors via `chunk_store.get_many(chunk_ids)`; gate on `LayerBConfig.min_chunks_per_shelf` (50).
+- **Skip the synthetic facet root (`facet:foods`)** — it's the ~18% unclassified bucket, not a coherent topic; clustering it would be noise.
+- Stub exists: [src/foodscholar/layer_b/](src/foodscholar/layer_b/), `fs.build_layer_b()` currently `NotImplementedError`. `LayerBConfig` (algorithm=leiden, resolution, recurse_threshold) and the `Theme` model ([io/graph.py](src/foodscholar/io/graph.py)) are in place.
+- **Optionally run consolidation first** (`fs.semantic_consolidate(dry_run=False)` with `enabled=True`) to dedup shelves before clustering — independent of the orphan question.
+- §17 sanity gate after Layer B: 20 random themes inspected, labels readable, min-chunk thresholds respected.
+
+### Notebook state (uncommitted)
+
+[notebooks/build_graph.ipynb](notebooks/build_graph.ipynb) carries the consolidation cells (§6d), Layer-B readiness (§6e), and the orphan diagnostics (§6f–6h), plus a `link_blocklist` of generic surfaces in the config cell. These are exploratory/tuning aids — keep or prune as desired; none are required by the committed library code.
+
+---
+
+## 2026-05-21 — Iteration 7.0 (M4): Layer A backbone — full projection
+
+**Goal:** the previous M3 builder at [src/foodscholar/layer_a/builder.py](src/foodscholar/layer_a/builder.py) was a foods-only stub — raw chunk counts, no single-child collapse (the flag existed in config but the logic was absent), no facet routing. This iteration implements the full projection per BRIEF §12 step 10 and the user's pruning spec: ordered passes (blacklist → whitelist → threshold → depth cap → single-child collapse), per-facet config, lifting on depth cap (not dropping), confidence-floored support, and provenance diagnostics (`support_direct`/`support_lifted`/`see_also`).
+
+### What changed
+
+**`src/foodscholar/layer_a/` split into four modules**
+- `facet.py` (new) — canonical home for `ENTITY_TYPE_TO_FACET` (moved from facade.py — `build_entities` now imports from here). `route_link_to_facet(link)` adds a FOODON fallback so the prototype's `entity_type="other"` NEL CSVs still populate the foods facet. `stub_root(facet)` produces the empty-corpus shelf for facets with no support.
+- `propagate.py` (new) — `collect_support(chunks, ontology, *, min_link_confidence, facet) -> SupportTable` tracks `direct` and `with_descendants` side-by-side. The threshold metric is `with_descendants` per spec. `foodon_ids` denormalization is honored for the foods facet — cheap path for prototype-NEL chunks that have no per-mention entity_type.
+- `prune.py` (new) — order of operations locked in code (1. blacklist → 2. whitelist exception → 3. threshold → 4. depth cap → 5. single-child collapse). Depth cap **lifts** rather than drops: a term at depth 8 with cap 5 gets its `parent_shelf_id` re-pointed to the nearest surviving ancestor at depth ≤ 5, and its reported `depth` is clamped to the cap. Single-child collapse iterates to fixed point; when shelf B collapses into its only surviving child C, B's `foodon_id` is recorded on C's `see_also` for provenance.
+- `builder.py` (rewritten) — orchestrator only. Multi-facet loop. Empty support tables emit a stub root via `facet.stub_root(...)`.
+
+**`Shelf` Pydantic gained three fields** ([src/foodscholar/io/graph.py](src/foodscholar/io/graph.py))
+- `support_direct: int = 0` — chunks mentioning this exact term.
+- `support_lifted: int = 0` — chunks lifted in from pruned descendants.
+- `see_also: list[str] = []` — foodon_ids of shelves collapsed into this one.
+
+The invariant `chunk_count == support_direct + support_lifted` holds for non-stub shelves. Neo4j adapter's `upsert_shelves` Cypher SET clause and `_shelf_from_record` reader were updated in lockstep.
+
+**`LayerAConfig` reshaped for per-facet overrides** ([src/foodscholar/config.py](src/foodscholar/config.py))
+- New `FacetConfig` Pydantic — every field optional, None means "fall back to globals."
+- `LayerAConfig.facet_overrides: dict[Facet, FacetConfig]` — facets absent from the dict use globals.
+- `LayerAConfig.resolve_facet(facet) -> _ResolvedFacetConfig` returns a fully-resolved (no-None) config the pruner consumes. Keeps the prune logic free of `None`-handling.
+- New `min_link_confidence: float = 0.70` (global), overridable per facet. Defaults to the linker's `nel_min_sim` so projection is no stricter than ingestion unless the user explicitly tightens it.
+- Globals (`min_support`, `max_depth`, `collapse_single_child_chains`, `blacklist_terms`, `facets`) kept verbatim for backward compat.
+
+**`FoodOnAPI` gained `id_to_children`** ([src/foodscholar/ontology/api.py](src/foodscholar/ontology/api.py))
+- `_children: dict[id, set[id]]` precomputed in `__init__` by inverting `parent_ids`, same pattern as the existing `_descendants` precompute. Public `id_to_children()` returns sorted list. O(1) lookup, deterministic order.
+
+**`config.example.yaml`** documents the per-facet override structure with the user's spec values (foods threshold=25, depth_cap=6, foods-specific blacklist of FoodOn organizational classes, whitelist placeholder, health depth_cap=7 for deeper disease taxonomies). All commented out so the default is the safe globals.
+
+**Notebook** gained §5 "Build Layer A" between Entities and Inspect — three cells: an explanation of projection vs. attachment + the prototype-NEL caveat that non-foods facets stay stub-rooted on this corpus, a tunable `build_layer_a()` call, and a diagnostics cell printing shelves-per-facet / top-10 foods shelves / depth distribution / inflation flag (`support_lifted/chunk_count > 0.9`).
+
+### Design decisions worth remembering
+
+- **Op order is locked, not configurable.** Reversing blacklist↔threshold leaks chunks under blacklisted intermediates and inflates their parents (the threshold sees the inflated count, makes the wrong keep/drop decision). Reversing depth-cap↔collapse creates collapses the cap would have prevented. The order is documented in `prune.py`'s docstring referencing the plan file.
+- **Depth cap lifts, doesn't drop.** A term too deep in the ontology hasn't done anything wrong — only the *display position* is too deep. Lifting preserves the term as a shelf at a shallower position; its chunks remain reachable via the lifted shelf. Dropping would lose coverage.
+- **`route_link_to_facet` has a FOODON fallback** for prototype-NEL data with `entity_type="other"`. Without it, the entire foods projection would be dead code on the current corpus (`entity_type="other"` doesn't map to any facet, so no link would be counted). The fallback is honest about what the chunk-store data actually contains.
+- **Two embedders → two facets too:** sustainability has no entity_type that maps to it AND no OBO ontology we project — always a stub root regardless of corpus. Allergies / health / dietary_patterns / nutrients **could** populate, but only after re-annotation with GLiNER (prototype-NEL is `entity_type="other"` for all loaded mentions per [nel_loader.py:116-123](src/foodscholar/corpus/nel_loader.py#L116-L123)).
+- **Raw count + confidence floor, not weighted sum.** Cosines aren't probabilities — summing them isn't meaningful. A floor (default 0.70, matching the linker's `nel_min_sim`) is a quality gate; counts are then a chunk vote. Threshold semantics stay legible ("min_support: 20" means "≥ 20 chunks", not "≥ 20.0 cosine-units").
+- **Per-facet overrides, not per-facet config blocks.** Globals stay the load-bearing knobs; an override fills in only the field that differs. Keeps `config.example.yaml` short and the override surface easy to reason about.
+
+### Verification
+
+- `ruff check src tests` — clean (one SIM103 + one SIM108 fixed during the iteration).
+- `pytest` — **264 passed, 1 skipped** (baseline was 254 before this iteration; 10 new tests added). Existing 4 layer_a tests passed after explicitly setting `collapse_single_child_chains=False` and `facets=["foods"]` — they exercise propagation/blacklist in isolation, where the new defaults (collapse on, all 6 facets) would have changed observed output unrelated to what those tests assert.
+- New unit tests cover: single-child collapse fires on a pure chain, single-child collapse does **not** fire when siblings survive, depth-cap lifting (`max_depth=2` clamps reported depth + repoints parent edge), whitelist override, see_also is populated with all collapsed ancestor ids, confidence floor filters low-confidence links, per-facet override resolves over globals correctly, sustainability emits a single stub root, blacklist-before-threshold lets chunks lift through blacklisted intermediates.
+- New ontology test: `id_to_children` returns direct children only, sorted, empty for leaf or unknown id.
+
+### Caveats — what this iteration does NOT do
+
+- **Does not run `fs.attach()`.** Layer A is projection only. Chunk-to-shelf edges and the `shelf_ids` denormalization on chunks are still `NotImplementedError`. The `lifted_from` field on attachment edges (user's spec) belongs there.
+- **Does not implement sibling merging.** Marked optional in the user's spec; defer until first sanity audit shows it's needed.
+- **Non-foods facets are stub roots on the current real corpus.** Re-annotating with GLiNER (which populates `entity_type` correctly) is a prerequisite for nutrients/health/dietary_patterns to project meaningful shelves. Sustainability stays a stub forever — no OBO we link to covers it.
+- **§17 sanity gate** (50-chunk hand audit) is documentation, not a unit test. To be performed against the real corpus once the notebook diagnostics cell is run.
+
+### Status at end of iteration
+
+- M4 Layer A projection landed. `fs.build_layer_a()` produces multi-facet, pruned shelves with provenance diagnostics. Per-facet config tuning available via `cfg.layer_a.facet_overrides`.
+- Next per BRIEF §12: `fs.attach()` — read shelves + chunks, walk ancestors per `entity_links`, write `(:Shelf)-[:HAS_CHUNK]->(:Chunk)` edges + denormalize `shelf_ids` onto chunks (the single drift-prone step the GraphView's `attach_chunks` already centralizes for tests). Then Layer B theme discovery.
+
+---
+
+## 2026-05-21 — Iteration 6.0 (M3): GLiNER + HNSW pivot, ES/Neo4j adapters, ingest/embed/entities
+
+**Goal:** the M2 agentic-NER + 3-tier-linker stack was not converging — the fuzzy tier was the source of the §17 audit wrong-links, agentic NER was non-deterministic and required local span reconciliation. A standalone `gliner.py` prototype validated GLiNER bio + HNSW-over-BioLORD on real FoodOn. M3 makes that pipeline the only NER+NEL path, finalizes the storage backends end-to-end, makes the configuration in-code-friendly, and promotes linked entities to first-class citizens.
+
+### What changed (in commit order — 8 landed commits)
+
+**`a3f40a0` M3 (annotate): pivot to GLiNER + HNSW NEL.**
+- New `GLinerNER` (`annotate/gliner_ner.py`) wraps `urchade/gliner_large_bio-v0.1` behind the `NER` protocol. Batched fast path `ner.extract_batch(texts)` runs a single `GLiNER.inference(batch_size=N)` call — the runner is wired against it.
+- New `NELIndex` protocol (`annotate/nel_index.py`) with `HNSWNELIndex` (default; local `hnswlib ip` index over BioLORD-encoded FoodOn term labels, build-on-first-use cache keyed on `sha256(encoder + sorted-term-id-set)`) and `ElasticNELIndex` (stub, opt-in for the storage milestone).
+- `HNSWLinker` (`annotate/linker.py`) is a thin single-tier dense linker over the NEL index. `link_many` is the batched path the runner uses.
+- `EntityType` (`io/chunk.py`) widened to GLiNER's 13-label vocab (food/nutrient/micronutrient/macronutrient/food component/dietary supplement/dietary pattern/medical condition/biomarker/Country/Measurement/Population/Time expression + `other`).
+- Deleted: `agent_ner.py`, `ner.py` (`KeywordNER`), `dense_index.py`, `ontorag/`, repo-root `gliner.py` prototype, and the 5 test files exercising them.
+
+**`3bf7e93` M3 (config): in-code dict config + `fs.load_and_annotate`.**
+- `resolve_config(config)` normalizes `str | Path | dict | FoodScholarConfig` into a validated config — `${ENV}` substitution now flows over dict inputs too. `from_config()`, `in_memory(config=...)`, and `__init__` all route through it.
+- `AnnotateConfig` / `LinkerConfig` reshaped: `cfg.annotate.ner: "gliner"`, `cfg.annotate.gliner.*`, `cfg.annotate.linker.{nel_backend, nel_encoder, nel_top_k, nel_min_sim, nel_index_path, nel_metadata_path}`, `cfg.annotate.batch_size`, `cfg.corpus.annotated_snapshot_path`.
+- `fs.load_and_annotate(path)` is the release-ready single-call entry point that mirrors the prototype's `main()` — load → annotate → upsert → optional parquet snapshot with skip-if-exists idempotency.
+- CSV reader hardened: `csv.field_size_limit(10 MB)` at import (large abstracts in the prototype's corpus).
+
+**`0aa52f5` M3 (storage): release-ready ElasticChunkStore + Neo4jGraphStore.**
+- `ElasticChunkStore` fully implemented: index mapping (BM25 `text`, `dense_vector` cosine, nested mentions/entity_links, `keyword[]` for shelf_ids/theme_ids/foodon_ids, flattened source_metadata), bulk upsert paginated at 500, search with BM25+kNN+RRF fusion, search_after-based `scan` / `iter_chunks`, scoped `_update` for annotations. `init()` is idempotent.
+- `Neo4jGraphStore` fully implemented: MERGE upserts for shelves/themes/cards/chunk stubs, parameterized Cypher, list/get/get_neighbors. `init()` creates `CREATE CONSTRAINT … IF NOT EXISTS` on all four node types.
+- Auth at the config layer: `ChunkStoreConfig.{api_key, username, password}` (HTTP-basic wins over api_key; env fallback to `ELASTICSEARCH_API_KEY`), `GraphStoreConfig.password` with env fallback to `NEO4J_PASSWORD`. `ProviderConfig.api_key` (with `_resolve_secret` cascade) plumbed through every LLM adapter.
+- `ChunkStore` + `GraphStore` protocols gain `init()` (no-op in-memory, real provisioning remote). `fs.init()` calls all three stores uniformly.
+
+**`a6f20b7` M3 (docs): BRIEF + notebook refresh.** §2/§3.5/§8 updated; full notebook rebuild around the new pipeline.
+
+**`941683f` M3 (api): one-call ingest + use precomputed NER/NEL when available.**
+- New `corpus/nel_loader.py` reads the prototype's `(chunk_id, chunk_entities_ner, chunk_uri_nel)` CSVs. `shorten_obo_uri` normalizes purls (`http://purl.obolibrary.org/obo/FOODON_03309927` → `FOODON:03309927`). Empty URI slots become NIL mentions (kept as `Mention`, no `EntityLink`). FoodOn ids land in the chunk's denormalized `foodon_ids`; CHEBI/GAZ/PATO/… stay in `entity_links` only.
+- `fs.ingest(corpus_dir, *, nel_dir=None, snapshot_path=None)` is the new top-level entry point. With `nel_dir`: load chunks → attach precomputed annotations → upsert (no GLiNER, no HNSW, no `[annotate]` extra needed). Without `nel_dir`: delegates to `load_and_annotate`. **All chunks are inserted** — chunks with no matching NEL row land with empty mentions/links, never silently dropped.
+- Notebook simplified to 3 happy-path cells + collapsed "Under the hood" appendix.
+
+**`d36c85f` M3 (perf): lazy chunk embedder.** `from_config` no longer eagerly builds `SourceTypeRouter(SPECTER2, BGE-large)` (~1.7 GB of model weights). `fs.embedder` is a property — first access pays the cost; `fs.info()` reports `lazy(…)` until then. An explicit `embedder=` kwarg still skips the lazy build.
+
+**`6a7c0d8` M3 (embed): split chunk-text embedding out of ingest into `fs.embed()`.**
+- `fs.ingest(nel_dir=...)` no longer embeds chunks — they land with `embedding=None`, so iterating on NER/NEL doesn't re-pay the SPECTER2/BGE cost. The runner's `fs.load_and_annotate` path still embeds inline (it already loads the router).
+- New `fs.embed(only_missing=True, batch_size=64)` walks the chunk store, encodes via the source-type router, writes back via a new `chunk_store.update_embedding(chunk_id, vec, model_id)` — a scoped `_update` in Elastic that does NOT touch annotations. `only_missing=True` (default) skips chunks whose `embedding_model` is already real (anchored to the `mock-embedder-v0` / `hash-embedder-v0` exclusion set).
+- New §3 "Embed (optional)" cell in the notebook.
+
+**`41c82ea` M3 (entities): linked entities as first-class citizens.**
+- New `Entity` Pydantic (`io/entity.py`): frozen record with `ontology_id`, `prefix` (FOODON/CHEBI/GAZ/…), `label`, `synonyms`, `ancestor_ids`, `facet_hint` (mapped from `Mention.entity_type` via `_ENTITY_TYPE_TO_FACET`), `mention_count`, `chunk_count`, sample `chunk_ids` (cap = 50), `last_seen`. Exported from `foodscholar.io`.
+- New `EntityStore` protocol with `InMemoryEntityStore` (dict-backed, token-overlap search) and `ElasticEntityStore` (own index `foodscholar_chunks_entities`, BM25 over `label`+`synonyms`, prefix-term filter, idempotent `init()`).
+- `GraphStore` extended with `upsert_entities` + `attach_chunks_to_entity(chunk_id, conf, method)`. Neo4j adds `CREATE CONSTRAINT` on `(:Entity {ontology_id})`, MERGEs `(:Entity)` nodes, and writes `(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)` edges. In-memory mirror tracks the same shape.
+- `fs.entity_store` plumbed through the facade (eager construction — adapter ctor is cheap). `fs.init()` now provisions all three stores in lockstep.
+- `fs.build_entities()` walks the chunk store, dedupes EntityLinks by `ontology_id`, aggregates counts + facet_hint (max-voted) + chunk_ids (capped sample), enriches FOODON ids with `label`/`synonyms`/`ancestor_ids` from the loaded ontology (other OBO prefixes fall back to the most-frequent surface form as label, no ancestors), upserts to entity store, then MERGEs entity nodes + `[:MENTIONS]` edges. Idempotent.
+- `fs.entities` view: `list(prefix=)`, `get(id)`, `search("query")`, `chunks_for(id)` (Elastic `terms`-filter shortcut for FOODON ids, in-memory sample otherwise), `build()` convenience.
+- Notebook gains §4 "Build & explore entities" between Embed and Inspect.
+
+### Design decisions worth remembering
+
+- **GLiNER bio is the only NER**. SciFoodNER and agentic NER were tried and dropped — the bio-fine-tuned GLiNER converges deterministically on real FoodOn and amortizes batches.
+- **Linker is pure dense, single tier**. The 3-tier (lexical exact / fuzzy / dense) plus optional LLM-select linker was the source of §17 wrong-links via fuzzy over-matching. HNSW over BioLORD is fast (one encode + one kNN per batch), deterministic, and audit-friendly (`method = "dense"`).
+- **Two-step pipeline by default**: `fs.ingest` (chunks + annotations, fast, no model loads) → `fs.embed` (vectors, opt-in, pays SPECTER2/BGE once). The prototype only produced surface forms + URIs; chunk-text embeddings are a downstream BRIEF §2/§7 requirement, not a prototype output.
+- **Entities are first-class**, not chunk-side payload. They live in their own ES index AND as `(:Entity)` nodes in Neo4j, so "what does my corpus mention" and "which chunks talk about X" are both fast lookups.
+- **In-code config is first-class** — `FoodScholar.from_config({...})` works exactly like a YAML path. Secrets (LLM api_key, Neo4j password, ES api_key/basic-auth) can be set in config OR fall back to env vars.
+
+### Verification
+
+- `ruff check src tests` — clean.
+- `pytest` — full suite green: **220 passed, 2 skipped** (`torch`/`groq` import-skip paths). New tests: `test_gliner_ner.py` (9, fake gliner model), `test_hnsw_linker.py` (6, fake NELIndex), `test_nel_index.py` (8), `test_config_in_code.py` (8), `test_nel_loader.py` (9), `test_facade_ingest.py` (5), `test_facade_embed.py` (8), `test_storage_init.py` (6), `test_entity_store.py` (7), `test_facade_build_entities.py` (9). Existing facade / annotate / config tests updated for the new contracts.
+- Notebook rebuilt to 4 happy-path sections (`configure → init+ingest → embed → entities → inspect`) + a collapsed "Under the hood" appendix for GLiNER+HNSW direct usage.
+
+### Status at end of iteration
+
+- M3 storage milestone done. Production pipeline runs end-to-end against local ES + Neo4j with `pip install -e '.[elastic,neo4j,ontology]'` (and `[annotate]` once vector search is needed). Pre-computed NER/NEL CSVs at `data/foodscholar/ner/*.csv` are loaded without invoking GLiNER.
+- Next per BRIEF §12: Layer A backbone builder, then Layer B (theme clustering — first real consumer of `fs.embed()`'s output), then Layer C (LLM cards) and the §14 retrieval pipeline.
 
 ---
 

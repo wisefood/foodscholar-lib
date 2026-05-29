@@ -1,0 +1,2 @@
+chunk_id,chunk_text,type,chunk_metadata
+c-a,"First directory chunk.",guide,"{'file': 'a.pdf', 'heading': 'A'}"

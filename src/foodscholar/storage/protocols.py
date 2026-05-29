@@ -2,11 +2,21 @@ from collections.abc import Iterable
 from typing import Literal, Protocol, runtime_checkable
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
+from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
+from foodscholar.io.ontology import OntologyId
 
 
 @runtime_checkable
 class ChunkStore(Protocol):
+    def init(self) -> None:
+        """Provision the underlying store (index, schema, etc.). Idempotent.
+
+        Local stores (e.g. `InMemoryChunkStore`) implement this as a no-op so
+        that `fs.init()` works the same regardless of backend.
+        """
+        ...
+
     def upsert(self, chunks: Iterable[Chunk]) -> None: ...
     def get(self, chunk_id: ChunkId) -> Chunk | None: ...
     def get_many(self, chunk_ids: list[ChunkId]) -> list[Chunk]: ...
@@ -25,16 +35,187 @@ class ChunkStore(Protocol):
         shelf_ids: list[ShelfId],
         theme_ids: list[ThemeId],
     ) -> None: ...
+    def bulk_update_attachments(
+        self,
+        items: list[tuple[ChunkId, list[ShelfId], list[ThemeId]]],
+        *,
+        wait_for_refresh: bool = False,
+    ) -> None:
+        """Patch `shelf_ids` + `theme_ids` on many chunks in one round-trip.
+
+        Used by `fs.attach()` so the chunk-side denormalization doesn't pay
+        one ES `_update` per chunk. `wait_for_refresh=True` blocks until the
+        new values are searchable — set on the last flush only so subsequent
+        queries in the same cell see the result. Remote backends collapse to
+        a single bulk call per invocation; in-memory loops.
+        """
+        ...
+    def clear_attachments(self) -> None:
+        """Reset all chunk-side shelf/theme denormalization.
+
+        `fs.attach()` calls this at the start so a re-run produces honest
+        `shelf_ids` even when the projection changed (a chunk that previously
+        attached to a now-pruned shelf no longer carries its id). Theme
+        attachments are wiped too — they're written by Layer B, which always
+        rebuilds them. Per-chunk content (text, mentions, entity_links,
+        embedding) is untouched.
+        """
+        ...
+    def update_annotations(
+        self,
+        chunk_id: ChunkId,
+        mentions: list[Mention],
+        entity_links: list[EntityLink],
+        foodon_ids: list[str],
+        enrichment_version: str,
+    ) -> None: ...
+    def update_embedding(
+        self,
+        chunk_id: ChunkId,
+        embedding: list[float],
+        embedding_model: str,
+    ) -> None:
+        """Patch the chunk's `embedding` + `embedding_model` only.
+
+        Used by `fs.embed()` so re-embedding doesn't rewrite the
+        `mentions` / `entity_links` / `foodon_ids` payload — a single
+        field-scoped update on the remote backends, a `model_copy` on the
+        in-memory ones.
+        """
+        ...
+    def update_embeddings_bulk(
+        self,
+        items: list[tuple[ChunkId, list[float], str]],
+    ) -> None:
+        """Bulk variant of `update_embedding`. Each item is
+        `(chunk_id, embedding, embedding_model)`. Implementations should
+        coalesce into a single network round-trip on remote backends — this
+        is the hot path for `fs.embed()` over a tunneled cluster, where
+        per-doc updates are network-bound.
+        """
+        ...
+    def bulk_set_theme_ids(
+        self,
+        items: list[tuple[ChunkId, list[ThemeId]]],
+    ) -> None:
+        """Set `theme_ids` on many chunks without touching `shelf_ids`.
+
+        Layer B's persist path uses this instead of `bulk_update_attachments`
+        to avoid a read-then-overwrite race: if a separate writer (e.g., a
+        concurrent `fs.attach()`) updates `shelf_ids` between the persist
+        read and the persist write, the bulk-update would clobber the new
+        shelf attachments. `bulk_set_theme_ids` only touches `theme_ids`, so
+        it's safe under any `shelf_ids` writer.
+
+        Passing `theme_ids=[]` is the explicit 'remove all themes from this
+        chunk' signal — used by clear-and-rebuild Layer B runs. Items
+        targeting a missing `chunk_id` are silently skipped.
+        """
+        ...
+    def knn_search_chunks(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[ChunkId] | None = None,
+        candidate_ids: list[ChunkId] | None = None,
+    ) -> list[tuple[ChunkId, float]]:
+        """Return the top-k cosine-nearest chunks to `query_vector`.
+
+        - `exclude_ids`: chunks to omit from the result (typically `[query_id]`).
+        - `candidate_ids`: if provided, restrict the search to these ids
+          (used to constrain the global similarity pass to attached chunks).
+
+        Returns `[(chunk_id, cosine_score), ...]` sorted by score descending.
+        Implementations may skip the score sort if their backend returns it
+        unordered (callers re-sort).
+        """
+        ...
     def scan(self) -> list[Chunk]: ...
+    def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
 
 
 @runtime_checkable
 class GraphStore(Protocol):
+    def init(self) -> None:
+        """Provision the underlying store (constraints, indexes). Idempotent."""
+        ...
+
     def upsert_shelves(self, shelves: list[Shelf]) -> None: ...
+    def clear_layer_a(self) -> None:
+        """Delete every (:Shelf) node and any edges attached to it.
+
+        Called by `build_layer_a` before re-upsert so stale shelves from a
+        previous projection (with a different blacklist / threshold) don't
+        survive as ghosts. Local stores clear their shelf dict; Neo4j runs
+        `MATCH (s:Shelf) DETACH DELETE s`, which kills PARENT_OF, HAS_THEME,
+        HAS_CHUNK, DESCRIBES edges in one shot.
+
+        Idempotent — a no-op when no shelves exist.
+        """
+        ...
+
     def upsert_themes(self, themes: list[Theme]) -> None: ...
     def upsert_cards(self, cards: list[Card]) -> None: ...
-    def attach_chunks_to_shelf(self, shelf_id: ShelfId, chunk_ids: list[ChunkId]) -> None: ...
+    def clear_attachments(self) -> None:
+        """Delete every `(:Chunk)-[:ATTACHED_TO]->(:Shelf)` edge.
+
+        Called at the start of `fs.attach()` so a re-run doesn't leave ghost
+        edges from a previous projection. `(:Shelf)` nodes themselves
+        survive (they're the output of `build_layer_a`, not of attach), as
+        do `(:Chunk)` stub nodes and any `:ATTACHED_TO` edges pointing at
+        `(:Theme)` (those belong to Layer B). Idempotent.
+        """
+        ...
+
+    def attach_chunks_to_shelf(
+        self,
+        shelf_id: ShelfId,
+        attachments: list[tuple[ChunkId, list[str]]],
+    ) -> None:
+        """Wire `(:Chunk)-[:ATTACHED_TO {lifted_from}]->(:Shelf)` edges.
+
+        Each tuple is `(chunk_id, lifted_from)`. `lifted_from` lists the
+        FOODON ids on the chunk whose ancestry/collapse resolved to this
+        shelf — empty when the chunk linked the shelf's own `foodon_id`
+        directly. Used by the attach phase to record projection provenance
+        on every edge so audits can answer "why is this chunk on this
+        shelf?" without re-running the resolver. Idempotent — re-running
+        with the same shelf+chunk pair overwrites `lifted_from`.
+        """
+        ...
+
     def attach_chunks_to_theme(self, theme_id: ThemeId, chunk_ids: list[ChunkId]) -> None: ...
+
+    def attach_chunks_to_themes_bulk(
+        self,
+        items: list[tuple[ChunkId, ThemeId, bool, float]],
+    ) -> None:
+        """Wire `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges in bulk.
+
+        Each tuple is `(chunk_id, theme_id, primary, weight)`. `primary`
+        marks the per-shelf primary theme for a chunk (used by retrieval
+        ranking); `weight` is a continuous score (centroid-distance for
+        similarity themes, edge-degree for relatedness, max-of-both for
+        merged). One network round-trip per call on remote backends —
+        the hot path for Layer B persistence on a tunneled Neo4j.
+
+        Idempotent — re-running with the same `(chunk_id, theme_id)` pair
+        overwrites `primary` + `weight`.
+        """
+        ...
+
+    def clear_themes(self) -> None:
+        """Delete every `(:Theme)` node along with its `HAS_THEME` and
+        `THEME_OF` edges.
+
+        `fs.build_layer_b()` calls this at the start so a re-run with a
+        different config doesn't leave ghost themes. Shelves and chunks
+        survive (they're Layer A artifacts); chunk-side `theme_ids` denorm
+        is the caller's responsibility via `chunk_store.bulk_set_theme_ids`.
+        Idempotent — a no-op when no themes exist.
+        """
+        ...
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None: ...
     def get_themes_for_shelf(self, shelf_id: ShelfId) -> list[Theme]: ...
     def get_chunks_for_theme(self, theme_id: ThemeId) -> list[ChunkId]: ...
@@ -44,6 +225,54 @@ class GraphStore(Protocol):
     ) -> Card | None: ...
     def list_shelves(self) -> list[Shelf]: ...
     def list_themes(self) -> list[Theme]: ...
+
+    def list_chunk_shelf_attachments(self) -> dict[ChunkId, set[ShelfId]]:
+        """Return every `(:Chunk)-[:ATTACHED_TO]->(:Shelf)` edge as a map
+        `chunk_id -> {shelf_id, ...}`. Used by audit to cross-check the
+        Elastic `shelf_ids` denorm against the actual edge graph. One round
+        trip; output size proportional to total attach edges.
+        """
+        ...
+
+    def list_chunk_foodon_mentions(self) -> dict[ChunkId, set[str]]:
+        """Return every `(:Chunk)-[:MENTIONS]->(:Entity)` edge whose entity is
+        FOODON-prefixed, as a map `chunk_id -> {ontology_id, ...}`. Used by
+        audit to verify the Elastic `foodon_ids` denorm matches what
+        `build_entities` wrote. One round trip.
+        """
+        ...
+
+    # Entity graph (first-class linked entities)
+    def upsert_entities(self, entities: list[Entity]) -> None: ...
+    def attach_chunks_to_entity(
+        self,
+        ontology_id: OntologyId,
+        chunk_links: list[tuple[ChunkId, float, str]],
+    ) -> None:
+        """Wire up `(:Chunk)-[:MENTIONS {confidence, method}]->(:Entity)` edges.
+
+        `chunk_links` is a list of `(chunk_id, confidence, method)` tuples
+        carrying the per-mention metadata. Implementations must be idempotent
+        — re-running with the same links must not duplicate the edges.
+        """
+        ...
+
+
+@runtime_checkable
+class EntityStore(Protocol):
+    """Dedicated, queryable store for first-class linked entities.
+
+    Local stores implement `init()` as a no-op; the Elastic adapter creates a
+    `foodscholar_entities` index alongside the chunk index.
+    """
+
+    def init(self) -> None: ...
+    def upsert(self, entities: Iterable[Entity]) -> None: ...
+    def get(self, ontology_id: OntologyId) -> Entity | None: ...
+    def get_many(self, ontology_ids: list[OntologyId]) -> list[Entity]: ...
+    def list_by_prefix(self, prefix: str, *, k: int = 100) -> list[Entity]: ...
+    def search(self, query: str, *, prefix: str | None = None, k: int = 10) -> list[Entity]: ...
+    def scan(self) -> list[Entity]: ...
 
 
 @runtime_checkable
