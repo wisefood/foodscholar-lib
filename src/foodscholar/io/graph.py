@@ -25,6 +25,7 @@ def _utcnow() -> datetime:
 class Shelf(BaseModel):
     shelf_id: ShelfId
     label: str
+    display_label: str | None = None  # human-facing name for grouped shelves; None → use label
     facet: Facet
     depth: int
     foodon_id: str | None = None
