@@ -280,15 +280,29 @@ def build_grouped_shelves(
         if gname is not None:
             group_members[gname].append(fid)
 
+    # Anchors that actually become group shelves. A kept-leaf shelf must not be
+    # emitted for any of these fids — it would collide on shelf_id with the group
+    # shelf (the graph store MERGEs on shelf_id, silently overwriting one). The
+    # group shelf wins; an anchor's own direct chunks are folded into it below.
+    group_anchor_ids: set[str] = {
+        g.anchor_foodon_ids[0] for g in groups if group_members.get(g.display_name)
+    }
+
     for g in groups:
         members = group_members.get(g.display_name, [])
         if not members:
             continue
+        anchor = g.anchor_foodon_ids[0]
         chunk_ids: set[str] = set()
         for fid in members:
             chunk_ids |= leaf_chunks.get(fid, set())
+        # Fold the anchor's own direct chunks in too — the anchor may itself be a
+        # mentioned leaf that the LLM left unassigned; those chunks belong here.
+        chunk_ids |= leaf_chunks.get(anchor, set())
         all_chunks |= chunk_ids
-        anchor = g.anchor_foodon_ids[0]
+        see_also = set(members)
+        if anchor in leaf_chunks:
+            see_also.add(anchor)  # anchor-as-leaf is represented by this group shelf
         shelves.append(Shelf(
             shelf_id=shelf_id_for_foodon(anchor),
             label=ontology.id_to_label(anchor) or anchor,
@@ -300,12 +314,14 @@ def build_grouped_shelves(
             chunk_count=len(chunk_ids),
             support_direct=0,
             support_lifted=len(chunk_ids),
-            see_also=sorted(set(members)),
+            see_also=sorted(see_also),
         ))
 
     for fid, gname in assignment.items():
         if gname is not None:
             continue
+        if fid in group_anchor_ids:
+            continue  # already represented by its group shelf (no shelf_id collision)
         cs = leaf_chunks.get(fid, set())
         all_chunks |= cs
         shelves.append(Shelf(
