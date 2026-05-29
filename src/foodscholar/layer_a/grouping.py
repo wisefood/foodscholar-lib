@@ -60,13 +60,17 @@ def collect_leaf_chunks(
 
 
 _SYN_BAD = re.compile(r"\d|\(|,|;|:")  # codes / parenthetical / list-y synonyms
+# Scientific binomial: "Malus domestica", "Olea europaea" — capitalized genus +
+# lowercase species. A worse display label than the term itself, so skip these
+# as synonym candidates (a user browses "apple", not "Malus domestica").
+_BINOMIAL = re.compile(r"^[A-Z][a-z]+ [a-z]+$")
 
 
 def _clean_synonym(fid: str, ontology: FoodOnAPI) -> str | None:
     base = re.sub(r"\s+food product$", "", (ontology.id_to_label(fid) or "")).lower()
     cands = [
         s for s in ontology.id_to_synonyms(fid, include_related=False)
-        if s and not _SYN_BAD.search(s) and 2 <= len(s) <= 30
+        if s and not _SYN_BAD.search(s) and not _BINOMIAL.match(s) and 2 <= len(s) <= 30
     ]
     cands.sort(key=len)
     for s in cands:
@@ -101,12 +105,21 @@ def _split_concepts(group_name: str) -> list[str]:
 
 
 def _anchor_for_concept(concept: str, ontology: FoodOnAPI) -> str | None:
+    """Resolve a concept to a real anchor id present in the ontology, or None.
+
+    Only ids actually IN the ontology are accepted. The FoodOnAPI is built with
+    a prefix filter (FOODON: in production), so `name_to_id`/`search` can surface
+    ids outside it; requiring `fid in ontology` keeps a group anchor within the
+    facet's term set.
+    """
     singular = concept.rstrip("s")
     for cand in (concept, singular, concept + " food product", singular + " food product"):
         fid = ontology.name_to_id(cand)
-        if fid:
+        if fid and fid in ontology:
             return fid
     for hit in ontology.search(concept, limit=12):
+        if hit not in ontology:
+            continue
         lbl = (ontology.id_to_label(hit) or "").lower()
         clean = re.sub(r"\s+food product$", "", lbl)
         if clean in {concept, singular} and "(" not in lbl:
@@ -152,6 +165,12 @@ def propose_groups(
     except Exception as exc:
         _log.warning("grouping.propose_failed", error=str(exc))
         names = []
+
+    # Defensive: the LLM can return non-list / non-string entries (Groq has
+    # surfaced ints, nulls). Keep only non-empty strings.
+    if not isinstance(names, list):
+        names = []
+    names = [nm for nm in names if isinstance(nm, str) and nm.strip()]
 
     groups: list[Group] = []
     for nm in names:
@@ -269,6 +288,16 @@ def build_grouped_shelves(
             list(leaf_chunks), groups, ontology, llm, batch_size=cfg.assign_batch_size
         )
     else:
+        # No groups resolved → every leaf becomes its own flat shelf. That is the
+        # un-navigable blob this path exists to avoid, so warn loudly (the usual
+        # cause is an absent/mock LLM with no frozen_groups configured).
+        if cfg.frozen_groups is None:
+            _log.warning(
+                "grouping.no_groups",
+                facet=facet,
+                n_leaves=len(leaf_chunks),
+                hint="LLM proposed no resolvable groups; set GROQ_API_KEY or frozen_groups",
+            )
         assignment = {fid: None for fid in leaf_chunks}
 
     root_id = f"facet:{facet}"
@@ -280,19 +309,30 @@ def build_grouped_shelves(
         if gname is not None:
             group_members[gname].append(fid)
 
-    # Anchors that actually become group shelves. A kept-leaf shelf must not be
-    # emitted for any of these fids — it would collide on shelf_id with the group
-    # shelf (the graph store MERGEs on shelf_id, silently overwriting one). The
-    # group shelf wins; an anchor's own direct chunks are folded into it below.
-    group_anchor_ids: set[str] = {
-        g.anchor_foodon_ids[0] for g in groups if group_members.get(g.display_name)
-    }
-
+    # Collapse groups by ANCHOR fid first. Two distinct group names can resolve to
+    # the same FoodOn anchor (e.g. "Fruit"/"Fruits" → same id); emitting a shelf
+    # per name would produce duplicate shelf_ids and the graph store's MERGE would
+    # silently drop one (losing its members). Merge same-anchor groups into one
+    # shelf, keeping the first name as the display label and unioning members.
+    by_anchor: dict[str, dict] = {}
     for g in groups:
         members = group_members.get(g.display_name, [])
         if not members:
             continue
         anchor = g.anchor_foodon_ids[0]
+        slot = by_anchor.get(anchor)
+        if slot is None:
+            by_anchor[anchor] = {"display": g.display_name, "members": set(members)}
+        else:
+            slot["members"].update(members)  # second name folds into the first
+
+    # Anchors that became group shelves — a kept-leaf shelf must NOT be emitted for
+    # these fids (it would collide on shelf_id with the group shelf). The group
+    # shelf wins; an anchor's own direct chunks fold into it below.
+    group_anchor_ids: set[str] = set(by_anchor)
+
+    for anchor, slot in by_anchor.items():
+        members = slot["members"]
         chunk_ids: set[str] = set()
         for fid in members:
             chunk_ids |= leaf_chunks.get(fid, set())
@@ -306,7 +346,7 @@ def build_grouped_shelves(
         shelves.append(Shelf(
             shelf_id=shelf_id_for_foodon(anchor),
             label=ontology.id_to_label(anchor) or anchor,
-            display_label=g.display_name,
+            display_label=slot["display"],
             facet=facet,
             depth=1,
             foodon_id=anchor,
