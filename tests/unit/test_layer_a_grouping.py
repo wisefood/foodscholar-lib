@@ -254,3 +254,42 @@ def test_build_grouped_shelves_no_shelf_id_collision_when_anchor_is_also_unassig
     assert fruit_shelves[0].display_label == "Fruit"
     # the directly-linked 'fruit' chunk (c2) is absorbed into the group shelf
     assert fruit_shelves[0].chunk_count == 2  # c1 (apple) + c2 (fruit direct)
+
+
+# ---------------------------------------------------------------------------
+# Task 8 — build_shelves grouping branch
+# ---------------------------------------------------------------------------
+
+from foodscholar.layer_a.builder import build_shelves
+from foodscholar.config import LayerAConfig
+from foodscholar.storage.memory import InMemoryChunkStore
+
+
+def _store_with(chunks):
+    store = InMemoryChunkStore()
+    store.upsert(chunks)
+    return store
+
+
+def test_build_shelves_uses_grouping_when_enabled():
+    api = _mini_foodon()
+    store = _store_with([_chunk("c1", ["TEST:0000006"])])  # apple
+    cfg = LayerAConfig(
+        facets=["foods"],
+        facet_overrides={"foods": {"bottom_up_grouping": {"enabled": True}}},
+    )
+    llm = FakeLLM([
+        {"groups": ["Fruit"]},
+        {"assignments": [{"food": _cl("TEST:0000006", api), "group": "Fruit"}]},
+    ])
+    shelves = build_shelves(store, api, cfg, llm=llm)
+    assert any((s.display_label or "") == "Fruit" for s in shelves)
+
+
+def test_build_shelves_uses_prune_when_grouping_disabled():
+    api = _mini_foodon()
+    store = _store_with([_chunk("c1", ["TEST:0000006"])])
+    cfg = LayerAConfig(facets=["foods"])  # grouping disabled by default
+    shelves = build_shelves(store, api, cfg, llm=None)
+    # old prune path never sets display_label
+    assert all(s.display_label is None for s in shelves)

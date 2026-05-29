@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from foodscholar.config import FoodScholarConfig, LayerAConfig
     from foodscholar.io.graph import Facet
     from foodscholar.ontology import FoodOnAPI
-    from foodscholar.storage.protocols import ChunkStore, GraphStore
+    from foodscholar.storage.protocols import ChunkStore, GraphStore, LLMClient
 
 _log = get_logger("foodscholar.layer_a")
 
@@ -36,6 +36,8 @@ def build_shelves(
     chunk_store: ChunkStore,
     ontology: FoodOnAPI,
     config: LayerAConfig,
+    *,
+    llm: "LLMClient | None" = None,
 ) -> list[Shelf]:
     """Build Layer A shelves across every configured facet.
 
@@ -44,7 +46,7 @@ def build_shelves(
     """
     all_shelves: list[Shelf] = []
     for facet in config.facets:
-        all_shelves.extend(_build_facet(chunk_store, ontology, config, facet))
+        all_shelves.extend(_build_facet(chunk_store, ontology, config, facet, llm=llm))
     return sorted(
         all_shelves,
         key=lambda s: (s.facet, s.depth, s.label.lower(), s.shelf_id),
@@ -58,6 +60,7 @@ def build_layer_a(
     *,
     config: LayerAConfig,
     full_config: FoodScholarConfig,
+    llm: "LLMClient | None" = None,
 ) -> ArtifactMeta:
     """Build and store Layer A shelves, returning phase metadata.
 
@@ -67,7 +70,7 @@ def build_layer_a(
     `shelf_id`, which never deletes — clearing first is the only way to make
     re-runs idempotent against the *result*, not the *cumulative history*.
     """
-    shelves = build_shelves(chunk_store, ontology, config)
+    shelves = build_shelves(chunk_store, ontology, config, llm=llm)
     graph_store.clear_layer_a()
     graph_store.upsert_shelves(shelves)
 
@@ -100,6 +103,8 @@ def _build_facet(
     ontology: FoodOnAPI,
     config: LayerAConfig,
     facet: Facet,
+    *,
+    llm: "LLMClient | None" = None,
 ) -> list[Shelf]:
     facet_config = config.resolve_facet(facet)
 
@@ -107,6 +112,20 @@ def _build_facet(
     def chunk_iter():
         for batch in chunk_store.iter_chunks():
             yield from batch
+
+    if facet_config.bottom_up_grouping.enabled:
+        # Deferred import: grouping imports from this module, so a top-level
+        # import would create a cycle.
+        from foodscholar.layer_a.grouping import build_grouped_shelves
+
+        return build_grouped_shelves(
+            chunk_iter(),
+            ontology,
+            facet_config.bottom_up_grouping,
+            facet=facet,
+            min_link_confidence=facet_config.min_link_confidence,
+            llm=llm,
+        )
 
     support = collect_support(
         chunk_iter(),
