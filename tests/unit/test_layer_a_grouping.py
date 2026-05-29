@@ -230,3 +230,27 @@ def test_build_grouped_shelves_empty_returns_stub_root():
     shelves = build_grouped_shelves(iter([]), api, BottomUpGroupingConfig(enabled=True),
                                     facet="foods", min_link_confidence=0.0, llm=FakeLLM([]))
     assert len(shelves) == 1  # stub root only
+
+
+def test_build_grouped_shelves_no_shelf_id_collision_when_anchor_is_also_unassigned_leaf():
+    api = _mini_foodon()
+    # A chunk links 'fruit' (TEST:0000004) DIRECTLY — and 'fruit' is also the
+    # anchor the "Fruit" group resolves to. apple is assigned to Fruit; the
+    # direct 'fruit' leaf is left UNASSIGNED by the LLM. The group shelf must win
+    # for the anchor id (no duplicate shelf_id), and the direct 'fruit' chunk is
+    # folded into the group shelf so coverage holds.
+    chunks = [_chunk("c1", ["TEST:0000006"]),   # apple -> assigned to Fruit
+              _chunk("c2", ["TEST:0000004"])]   # fruit (direct) -> unassigned
+    llm = FakeLLM([
+        {"groups": ["Fruit"]},  # anchors to TEST:0000004
+        {"assignments": [{"food": _cl("TEST:0000006", api), "group": "Fruit"}]},  # fruit-leaf omitted
+    ])
+    shelves = build_grouped_shelves(iter(chunks), api, BottomUpGroupingConfig(enabled=True),
+                                    facet="foods", min_link_confidence=0.0, llm=llm)
+    ids = [s.shelf_id for s in shelves]
+    assert len(ids) == len(set(ids)), f"duplicate shelf_id(s): {ids}"
+    fruit_shelves = [s for s in shelves if s.foodon_id == "TEST:0000004"]
+    assert len(fruit_shelves) == 1
+    assert fruit_shelves[0].display_label == "Fruit"
+    # the directly-linked 'fruit' chunk (c2) is absorbed into the group shelf
+    assert fruit_shelves[0].chunk_count == 2  # c1 (apple) + c2 (fruit direct)
