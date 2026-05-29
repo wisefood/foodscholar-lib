@@ -169,3 +169,64 @@ def test_assign_leaves_unmentioned_leaf_is_unassigned():
     llm = FakeLLM([{"assignments": []}])  # LLM returns nothing
     assignment = assign_leaves(["TEST:0000006"], groups, api, llm, batch_size=60)
     assert assignment.get("TEST:0000006") is None
+
+
+# ---------------------------------------------------------------------------
+# Task 7 — build_grouped_shelves
+# ---------------------------------------------------------------------------
+
+from foodscholar.layer_a.grouping import build_grouped_shelves
+
+
+def test_build_grouped_shelves_emits_group_and_kept_leaf_shelves():
+    api = _mini_foodon()
+    # apple(0006), olive oil(0008) -> Fruits group; peanut(0009) -> unassigned (kept leaf)
+    chunks = [
+        _chunk("c1", ["TEST:0000006"]),  # apple
+        _chunk("c2", ["TEST:0000008"]),  # olive oil
+        _chunk("c3", ["TEST:0000009"]),  # peanut (no group)
+    ]
+    propose_resp = {"groups": ["Fruit"]}  # resolves to TEST:0000004 (fruit)
+    assign_resp = {"assignments": [
+        {"food": _cl("TEST:0000006", api), "group": "Fruit"},
+        {"food": _cl("TEST:0000008", api), "group": "Fruit"},
+        # peanut intentionally omitted -> unassigned
+    ]}
+    llm = FakeLLM([propose_resp, assign_resp])
+    cfg = BottomUpGroupingConfig(enabled=True)
+    shelves = build_grouped_shelves(iter(chunks), api, cfg, facet="foods",
+                                    min_link_confidence=0.0, llm=llm)
+
+    by_disp = {(s.display_label or s.label): s for s in shelves}
+    assert "Fruit" in by_disp
+    assert by_disp["Fruit"].chunk_count == 2          # c1, c2 distinct
+    assert by_disp["Fruit"].foodon_id == "TEST:0000004"
+    assert set(by_disp["Fruit"].see_also) >= {"TEST:0000006", "TEST:0000008"}
+    # unassigned peanut kept as its own shelf
+    assert any(s.foodon_id == "TEST:0000009" for s in shelves)
+    # exactly one facet root at depth 0
+    roots = [s for s in shelves if s.parent_shelf_id is None]
+    assert len(roots) == 1 and roots[0].shelf_id == "facet:foods" and roots[0].depth == 0
+
+
+def test_build_grouped_shelves_covers_every_leaf():
+    api = _mini_foodon()
+    chunks = [_chunk("c1", ["TEST:0000006"]), _chunk("c2", ["TEST:0000009"])]  # apple, peanut
+    llm = FakeLLM([
+        {"groups": ["Fruit"]},
+        {"assignments": [{"food": _cl("TEST:0000006", api), "group": "Fruit"}]},
+    ])
+    shelves = build_grouped_shelves(iter(chunks), api, BottomUpGroupingConfig(enabled=True),
+                                    facet="foods", min_link_confidence=0.0, llm=llm)
+    represented = {s.foodon_id for s in shelves if s.foodon_id} | {
+        fid for s in shelves for fid in s.see_also
+    }
+    assert "TEST:0000006" in represented  # via group see_also
+    assert "TEST:0000009" in represented  # via kept-leaf shelf
+
+
+def test_build_grouped_shelves_empty_returns_stub_root():
+    api = _mini_foodon()
+    shelves = build_grouped_shelves(iter([]), api, BottomUpGroupingConfig(enabled=True),
+                                    facet="foods", min_link_confidence=0.0, llm=FakeLLM([]))
+    assert len(shelves) == 1  # stub root only

@@ -14,7 +14,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from foodscholar.layer_a.facet import route_link_to_facet
+from foodscholar.io.graph import Shelf
+from foodscholar.layer_a.facet import route_link_to_facet, stub_root
+from foodscholar.layer_a.prune import shelf_id_for_foodon
 from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
@@ -223,3 +225,106 @@ def assign_leaves(
                 label_group[food] = group
 
     return {fid: label_group.get(clean_label(fid, ontology)) for fid in leaf_ids}
+
+
+# ---------------------------------------------------------------------------
+# Task 7 — integration orchestrator
+# ---------------------------------------------------------------------------
+
+_FACET_ROOT_LABELS = {
+    "foods": "Foods", "health": "Health", "sustainability": "Sustainability",
+    "dietary_patterns": "Dietary patterns", "allergies": "Allergies", "nutrients": "Nutrients",
+}
+
+
+def build_grouped_shelves(
+    chunks: Iterable[Chunk],
+    ontology: FoodOnAPI,
+    cfg,  # BottomUpGroupingConfig
+    *,
+    facet: Facet,
+    min_link_confidence: float,
+    llm=None,
+) -> list[Shelf]:
+    """Bottom-up + LLM-grouping shelves for one facet.
+
+    Emits: 1 synthetic facet root (depth 0); one group shelf per non-empty group
+    (depth 1, display_label set, member leaf foodon_ids in see_also); one kept-leaf
+    shelf (depth 1) per leaf not assigned to any group. Every mentioned leaf is
+    represented — coverage by construction.
+    """
+    leaf_chunks = collect_leaf_chunks(
+        chunks, ontology, facet=facet, min_link_confidence=min_link_confidence
+    )
+    leaf_chunks = {fid: cs for fid, cs in leaf_chunks.items() if len(cs) >= cfg.min_leaf_support}
+    if not leaf_chunks:
+        return [stub_root(facet)]
+
+    leaf_freq = {fid: len(cs) for fid, cs in leaf_chunks.items()}
+    groups = propose_groups(
+        ontology, llm, leaf_freq=leaf_freq, n_groups=cfg.n_groups, frozen=cfg.frozen_groups
+    )
+    if groups:
+        assignment = assign_leaves(
+            list(leaf_chunks), groups, ontology, llm, batch_size=cfg.assign_batch_size
+        )
+    else:
+        assignment = {fid: None for fid in leaf_chunks}
+
+    root_id = f"facet:{facet}"
+    shelves: list[Shelf] = []
+    all_chunks: set[str] = set()
+
+    group_members: dict[str, list[str]] = defaultdict(list)
+    for fid, gname in assignment.items():
+        if gname is not None:
+            group_members[gname].append(fid)
+
+    for g in groups:
+        members = group_members.get(g.display_name, [])
+        if not members:
+            continue
+        chunk_ids: set[str] = set()
+        for fid in members:
+            chunk_ids |= leaf_chunks.get(fid, set())
+        all_chunks |= chunk_ids
+        anchor = g.anchor_foodon_ids[0]
+        shelves.append(Shelf(
+            shelf_id=shelf_id_for_foodon(anchor),
+            label=ontology.id_to_label(anchor) or anchor,
+            display_label=g.display_name,
+            facet=facet,
+            depth=1,
+            foodon_id=anchor,
+            parent_shelf_id=root_id,
+            chunk_count=len(chunk_ids),
+            support_direct=0,
+            support_lifted=len(chunk_ids),
+            see_also=sorted(set(members)),
+        ))
+
+    for fid, gname in assignment.items():
+        if gname is not None:
+            continue
+        cs = leaf_chunks.get(fid, set())
+        all_chunks |= cs
+        shelves.append(Shelf(
+            shelf_id=shelf_id_for_foodon(fid),
+            label=ontology.id_to_label(fid) or fid,
+            display_label=clean_label(fid, ontology),
+            facet=facet,
+            depth=1,
+            foodon_id=fid,
+            parent_shelf_id=root_id,
+            chunk_count=len(cs),
+            support_direct=len(cs),
+            support_lifted=0,
+            see_also=[],
+        ))
+
+    root = Shelf(
+        shelf_id=root_id, label=_FACET_ROOT_LABELS[facet], facet=facet, depth=0,
+        foodon_id=None, parent_shelf_id=None, chunk_count=len(all_chunks),
+        support_direct=0, support_lifted=len(all_chunks), see_also=[],
+    )
+    return [root, *sorted(shelves, key=lambda s: (s.display_label or s.label).lower())]
