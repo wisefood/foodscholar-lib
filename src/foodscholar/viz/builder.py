@@ -360,13 +360,17 @@ def _entity_node(e: Entity, *, anchor: bool = False) -> VizNode:
 
 
 def _shelf_node(s: Any) -> VizNode:
+    # Prefer the human-facing display_label (set on grouped shelves, e.g.
+    # "Fruits" for the FoodOn node "plant fruit food product"); fall back to the
+    # raw FoodOn label for top-down shelves that don't set one.
+    display = getattr(s, "display_label", None) or s.label
     return VizNode(
         id=s.shelf_id,
-        label=s.label,
+        label=display,
         kind="shelf",
         weight=float(s.chunk_count),
         facet=s.facet,
-        attrs={"depth": s.depth, "foodon_id": s.foodon_id},
+        attrs={"depth": s.depth, "foodon_id": s.foodon_id, "ontology_label": s.label},
     )
 
 
