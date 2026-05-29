@@ -136,6 +136,29 @@ _DEFAULT_LINK_BLOCKLIST: list[LinkBlocklistEntry] = [
 ]
 
 
+class FrozenGroup(BaseModel):
+    """A pre-reviewed group: human display name + the real FoodOn anchor ids."""
+    display_name: str
+    anchor_foodon_ids: list[str] = Field(default_factory=list)
+
+
+class BottomUpGroupingConfig(BaseModel):
+    """Bottom-up + LLM-grouping foods construction (opt-in, per facet).
+
+    When enabled for a facet, build_grouped_shelves replaces the top-down prune
+    path: every corpus-mentioned leaf is kept (coverage), the LLM proposes
+    ~n_groups human food groups anchored to real FoodOn ids, and each leaf is
+    assigned to a group by label. If frozen_groups is set, the proposal step is
+    skipped and that reviewed set is used (reproducible, no proposal LLM call).
+    """
+    enabled: bool = False
+    model: str = "llama-3.1-8b-instant"
+    n_groups: int = 14
+    assign_batch_size: int = 60
+    min_leaf_support: int = 1
+    frozen_groups: list[FrozenGroup] | None = None
+
+
 class FacetConfig(BaseModel):
     """Per-facet override on top of `LayerAConfig` globals.
 
@@ -155,6 +178,7 @@ class FacetConfig(BaseModel):
     umbrella_lifted_share_min: float | None = None
     umbrella_min_count: int | None = None
     link_blocklist: list[LinkBlocklistEntry] | None = None
+    bottom_up_grouping: BottomUpGroupingConfig | None = None
 
 
 class _ResolvedFacetConfig(BaseModel):
@@ -173,6 +197,7 @@ class _ResolvedFacetConfig(BaseModel):
     umbrella_lifted_share_min: float
     umbrella_min_count: int
     link_blocklist: list[LinkBlocklistEntry]
+    bottom_up_grouping: BottomUpGroupingConfig
 
 
 _DEFAULT_BLACKLIST: list[str] = [
@@ -364,6 +389,11 @@ class LayerAConfig(BaseModel):
     )
     """Embedding + LLM-as-judge merge pass. Off by default; runs as a separate
     phase after attach. See `SemanticConsolidationConfig`."""
+    bottom_up_grouping: BottomUpGroupingConfig = Field(
+        default_factory=BottomUpGroupingConfig
+    )
+    """Global default for the bottom-up + LLM-grouping path. Off by default;
+    opt in per facet via facet_overrides."""
 
     def resolve_facet(self, facet: Facet) -> _ResolvedFacetConfig:
         """Return the fully-resolved (no-None) config for one facet."""
@@ -380,6 +410,7 @@ class LayerAConfig(BaseModel):
                 umbrella_lifted_share_min=self.umbrella_lifted_share_min,
                 umbrella_min_count=self.umbrella_min_count,
                 link_blocklist=list(self.link_blocklist),
+                bottom_up_grouping=self.bottom_up_grouping,
             )
         return _ResolvedFacetConfig(
             min_support=override.min_support
@@ -410,6 +441,9 @@ class LayerAConfig(BaseModel):
             link_blocklist=list(override.link_blocklist)
             if override.link_blocklist is not None
             else list(self.link_blocklist),
+            bottom_up_grouping=override.bottom_up_grouping
+            if override.bottom_up_grouping is not None
+            else self.bottom_up_grouping,
         )
 
 
