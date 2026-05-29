@@ -4,19 +4,12 @@
     used as the default for `FoodScholar.in_memory()` and in unit tests.
   - `HFEmbedder` — wraps a sentence-transformers / transformers model.
     Lazy-imports torch + transformers; gated by `[annotate]` extra.
-  - `SourceTypeRouter` — picks SPECTER2 vs BGE based on `Chunk.source_type`
-    per BRIEF §2. Itself an Embedder (composable).
+  - `SapBERTEmbedder` — UMLS-trained surface-form embedder for entity linking.
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
-
-from foodscholar.io.chunk import SourceType
-
-if TYPE_CHECKING:
-    from foodscholar.storage.protocols import Embedder
 
 
 class HashEmbedder:
@@ -46,11 +39,12 @@ class HashEmbedder:
 class HFEmbedder:
     """sentence-transformers / transformers backed Embedder.
 
-    Default uses SPECTER2 (BRIEF §2). Construction loads the model. Gated by
-    `[annotate]` extra. For unit tests, prefer `HashEmbedder`.
+    Default is BGE-base (BRIEF §2 — the single production chunk embedder).
+    Construction loads the model. Gated by `[annotate]` extra. For unit tests,
+    prefer `HashEmbedder`.
     """
 
-    def __init__(self, model_name: str = "allenai/specter2_base") -> None:
+    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5") -> None:
         try:
             from sentence_transformers import (  # type: ignore[import-not-found]
                 SentenceTransformer,
@@ -137,34 +131,3 @@ class SapBERTEmbedder:
             cls = hidden[:, 0, :]
             out.extend(v.tolist() for v in cls)
         return out
-
-
-class SourceTypeRouter:
-    """Routes embedding to SPECTER2 vs BGE per BRIEF §2 dispatch rule.
-
-    Use `embed_chunk(text, source_type)` for source-aware routing, or the
-    plain `embed(texts)` for the default (scientific) path so this class
-    still satisfies the `Embedder` protocol.
-    """
-
-    def __init__(self, scientific: Embedder, general: Embedder) -> None:
-        self._scientific = scientific
-        self._general = general
-        # Pick a stable model_id that reflects both backends.
-        self.model_id = f"router(scientific={scientific.model_id};general={general.model_id})"
-
-    @property
-    def dim(self) -> int:
-        # SPECTER2 = 768, BGE-large = 1024. Per BRIEF §7 these go to separate
-        # indexes — the router's "dim" only makes sense for one branch at a
-        # time. Return the scientific path's dim; callers using both backends
-        # must route through embed_chunk and read each chunk's stamped model.
-        return self._scientific.dim
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return self._scientific.embed(texts)
-
-    def embed_chunk(self, text: str, source_type: SourceType) -> tuple[list[float], str]:
-        backend = self._scientific if source_type == "abstract" else self._general
-        [vec] = backend.embed([text])
-        return vec, backend.model_id

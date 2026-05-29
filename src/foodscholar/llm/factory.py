@@ -34,7 +34,7 @@ def _build_one(spec: ProviderConfig, *, timeout_s: float) -> LLMClient:
             f"unknown LLM provider {spec.provider!r}; "
             f"expected one of {sorted(PROVIDERS)}"
         )
-    kwargs: dict[str, object] = {"timeout_s": timeout_s}
+    kwargs: dict[str, object] = {"timeout_s": timeout_s, "api_key": spec.api_key}
     if spec.provider == "ollama" and spec.host:
         kwargs["host"] = spec.host
     return cls(spec.model, **kwargs)  # type: ignore[arg-type]

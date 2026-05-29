@@ -1,5 +1,9 @@
 corpus:
   chunks_path: data/chunks.parquet
+  # Where to drop a parquet snapshot of annotated chunks after each run.
+  # `fs.load_and_annotate(...)` short-circuits if this file already exists
+  # and is non-empty (idempotent reruns).
+  annotated_snapshot_path: data/annotated.parquet
 
 ontology:
   foodon_path: data/foodon.owl
@@ -7,50 +11,146 @@ ontology:
   include_imports: false           # import_depth=0 in pronto
   # FoodOn .owl files embed NCBITaxon/CHEBI/BFO/ENVO terms inline. Default
   # filter keeps only FOODON: ids so the linker doesn't match food queries
-  # against unrelated ontologies. Add prefixes (e.g. ["FOODON:", "CHEBI:"])
-  # to broaden, or set to null to disable filtering entirely.
+  # against unrelated ontologies.
   prefix_filter: ["FOODON:"]
 
 annotate:
-  # NER strategy: keyword (deterministic ontology matcher, no LLM) or
-  # agentic (LLM extracts mentions via the llm: client below). agentic is
-  # the recommended setup; needs the [llm] extra + a configured provider.
-  ner: agentic
-  scientific_embedder: allenai/specter2_base
-  general_embedder: BAAI/bge-large-en-v1.5
+  # NER: GLiNER bio (the validated prototype model). The configured labels
+  # are the EntityType vocabulary — keep this in lock-step with
+  # `foodscholar.io.chunk.EntityType`.
+  ner: gliner
+  gliner:
+    model_id: urchade/gliner_large_bio-v0.1
+    threshold: 0.4
+    flat_ner: true
+    max_length: 2048
+    batch_size: 16
+    # Default labels are shipped in code; uncomment to override.
+    # labels:
+    #   - food
+    #   - nutrient
+    #   - micronutrient
+    #   - macronutrient
+    #   - food component
+    #   - dietary supplement
+    #   - dietary pattern
+    #   - medical condition
+    #   - biomarker
+    #   - Country
+    #   - Measurement
+    #   - Population
+    #   - Time expression
+  embedder: BAAI/bge-base-en-v1.5
+  batch_size: 16
   linker:
-    lexical_threshold: 0.85
-    dense_threshold: 0.78
-    semantic_type_gate: true
-    # All four linker tiers are enabled here for highest linking quality.
-    # Dense tier — SapBERT embedding kNN. Catches lexically-distinct synonyms
-    # (e.g. "ascorbate" -> vitamin C). Empty string disables it.
-    dense_model: cambridgeltl/SapBERT-from-PubMedBERT-fulltext
-    dense_cache_path: data/sapbert_terms.npz
-    # LLM-select tier (4th tier — deviation from BRIEF §2, see BRIEF §3.5).
-    # When no deterministic tier is confident, the LLM (see the `llm:` section
-    # below) picks from the top-k candidates or rejects. Uses the configured
-    # provider chain. Fires only below llm_select_threshold, so deterministic
-    # tiers still handle the bulk of mentions.
-    llm_select: true
-    llm_select_threshold: 0.90
-    llm_candidate_k: 8
+    # Vector NEL backend. `hnsw` (default) builds a local hnswlib index from
+    # the loaded FoodOn ontology on first use and caches it to disk.
+    # `elastic` uses an ES dense_vector index (set chunk_store.url + es_index).
+    nel_backend: hnsw
+    nel_encoder: biolord            # biolord | sapbert | minilm | mpnet
+    nel_top_k: 1
+    nel_min_sim: 0.70
+    # Leave these unset to let the linker derive content-addressed cache paths
+    # under data/. Set them to pin specific files for reproducibility.
+    # nel_index_path: data/foodon_hnsw_biolord.bin
+    # nel_metadata_path: data/foodon_hnsw_biolord.meta.json
 
 layer_a:
+  # Global defaults — apply to every facet unless overridden below.
   min_support: 20
   max_depth: 5
   collapse_single_child_chains: true
+  # Discard EntityLinks below this cosine before counting support. Defaults to
+  # the linker's nel_min_sim so projection is no stricter than ingestion.
+  min_link_confidence: 0.70
+  # Static blacklist is intentionally short. The umbrella rule below catches
+  # FoodOn organizational classes (`plant food product`, `vegetable food
+  # product`, `mammal material`, the `* by *` family, ...) by structure — they
+  # have near-zero direct support relative to their lifted support, so they're
+  # detected by the data, not by a name list that goes stale on every FoodOn
+  # release. Keep here only terms that genuinely get linked but a domain
+  # reviewer judges navigationally useless.
   blacklist_terms:
     - material entity
     - physical object
     - manufactured product
+  # Umbrella rule: drop a shelf when almost nobody mentions it directly and
+  # almost all its support came from descendants. Catches FoodOn's
+  # `X food product` and `Y material` organizational axes automatically.
+  #   direct/chunk_count  <  umbrella_direct_share_max  →  ratio of direct mentions
+  #   lifted/chunk_count  >  umbrella_lifted_share_min  →  ratio of lifted mentions
+  #   chunk_count         >= umbrella_min_count         →  size guard, see below
+  # Validated on a real corpus: catches `food by meal type` (0.051/0.95),
+  # `plant food product` (0.033/0.97), `vegetable food product` (0.023/0.98),
+  # `animal food product` (0.005/0.99), while keeping `food product`
+  # (0.102/0.90 — genuinely the foods root) and small niche shelves.
+  # Set umbrella_direct_share_max: 0.0 to disable.
+  umbrella_direct_share_max: 0.10
+  umbrella_lifted_share_min: 0.85
+  # umbrella_min_count = min_support means "every threshold-survivor is
+  # umbrella-eligible" — the typical configuration. Raise above min_support
+  # only if you want to spare small niche shelves from umbrella detection.
+  umbrella_min_count: 25
+  # NEL-drift filter: drop EntityLinks where (mention.text.lower(),
+  # ontology_id) matches an entry. Catches polysemous surface forms the
+  # upstream NEL mis-disambiguated. Surface match is case-insensitive;
+  # ontology_id match is exact. Notebook §5d surfaces frequent drift
+  # candidates so you can add them here without re-running NEL.
+  link_blocklist:
+    # `fish` mentions in food prose almost always mean fish-as-human-food,
+    # but the upstream linker pairs them with FOODON:00002281 (fish food =
+    # aquarium feed). Verified on the audit sample.
+    - { surface: fish, ontology_id: FOODON:00002281 }
   facets: [foods, health, sustainability, dietary_patterns, allergies, nutrients]
+  # Per-facet overrides. Every field is optional — None falls back to globals.
+  # Foods is the densest facet; tighten its threshold and add FoodOn's
+  # well-known organizational classes to the blacklist (no user navigates
+  # "food product by packing medium").
+  # facet_overrides:
+  #   foods:
+  #     min_support: 25
+  #     max_depth: 6
+  #     blacklist_terms:
+  #       - food product by packing medium
+  #       - food product by sourcing geography
+  #       - preparation process
+  #     whitelist: []     # term ids that bypass the threshold (manual scaffolds)
+  #   health:
+  #     max_depth: 7      # disease taxonomies are inherently deeper
 
 layer_b:
   min_chunks_per_shelf: 50
-  algorithm: leiden
-  resolution: 1.0
-  recurse_threshold: 200
+  min_embedded_fraction: 0.80    # skip shelves where < this fraction has embeddings
+  similarity:
+    knn_k: 15
+    edge_threshold: 0.55
+    require_mutual: true
+    algorithm: leiden            # v1 ships leiden only; hdbscan deferred
+  relatedness:
+    tau_strict: 0.80
+    min_shared_ids: 2
+    max_doc_frequency: 0.40
+    algorithm: leiden
+    always_exclude_iris:
+      - "FOODON:00001002"        # 'food product' umbrella that survives Layer A
+  leiden:
+    resolution: 1.0
+    n_iterations: 10
+    min_community_size: 15
+    random_state: 42             # determinism contract — same seed = same themes
+  merge:
+    chunk_weight: 0.6
+    entity_weight: 0.4
+    dedupe_threshold: 0.70
+  labeling:
+    strategy: llm                # "keyword" | "llm" — LLM is the v1 default
+    top_keywords: 5
+    llm_max_tokens: 32
+  audit:
+    target_themes_per_shelf_min: 3
+    target_themes_per_shelf_max: 12
+    merged_rate_min: 0.20
+    merged_rate_max: 0.80
 
 layer_c:
   llm_model: claude-sonnet-4-6
@@ -64,22 +164,30 @@ storage:
     backend: elastic
     url: http://localhost:9200
     index: foodscholar_chunks
+    # Authentication is optional; for an unauthenticated local cluster, leave
+    # all auth fields unset. For production prefer api_key over basic-auth.
+    # api_key: ${ELASTICSEARCH_API_KEY}
+    # username: elastic
+    # password: ${ELASTICSEARCH_PASSWORD}
   graph_store:
     backend: neo4j
     url: bolt://localhost:7687
     user: neo4j
+    # Use ${VAR} to inject the password from the environment, OR put it inline
+    # (e.g. `password: change-me` for local dev). When omitted, the driver
+    # falls back to the NEO4J_PASSWORD environment variable.
     password: ${NEO4J_PASSWORD}
 
-# LLM client — used by the linker's llm_select tier and Layer C card
-# generation. Provider-agnostic: anthropic | openai | groq | gemini | ollama.
-# API keys come from the environment (GROQ_API_KEY, ANTHROPIC_API_KEY,
-# OPENAI_API_KEY, GEMINI_API_KEY), never from this file. Ollama needs no key,
-# just a local daemon. The primary is tried first; fallbacks are tried in
-# order if it errors (timeout, rate limit, auth, service down).
+# LLM client — used only by Layer C card generation now that NER is GLiNER
+# and the linker is purely dense. Provider-agnostic: anthropic | openai |
+# groq | gemini | ollama. API keys may be supplied via `api_key:` here (use
+# ${VAR} to read from the environment) or via the provider's standard env
+# var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY).
 llm:
   primary:
     provider: groq
     model: llama-3.3-70b-versatile
+    # api_key: ${GROQ_API_KEY}
   fallbacks:
     - provider: ollama
       model: llama3.1

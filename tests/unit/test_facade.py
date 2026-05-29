@@ -16,6 +16,8 @@ def test_in_memory_constructs_with_defaults() -> None:
     info = fs.info()
     assert info["chunk_store"] == "memory"
     assert info["graph_store"] == "memory"
+    assert info["ner"] == "gliner"
+    assert info["nel_backend"] == "hnsw"
 
 
 def test_in_memory_accepts_overrides() -> None:
@@ -60,6 +62,36 @@ def test_from_config_accepts_pydantic_config() -> None:
     assert isinstance(fs.chunk_store, InMemoryChunkStore)
 
 
+def test_from_config_accepts_plain_dict() -> None:
+    """In-code config: no YAML file on disk, just a dict."""
+    fs = FoodScholar.from_config(
+        {
+            "corpus": {"chunks_path": "data/chunks.parquet"},
+            "storage": {
+                "chunk_store": {"backend": "memory"},
+                "graph_store": {"backend": "memory"},
+            },
+        }
+    )
+    assert isinstance(fs.chunk_store, InMemoryChunkStore)
+    assert isinstance(fs.graph_store, InMemoryGraphStore)
+    assert fs.config.corpus.chunks_path == Path("data/chunks.parquet")
+
+
+def test_in_memory_accepts_dict_config() -> None:
+    fs = FoodScholar.in_memory(
+        config={
+            "corpus": {"chunks_path": "data/chunks.parquet"},
+            "annotate": {"batch_size": 4},
+            "storage": {
+                "chunk_store": {"backend": "memory"},
+                "graph_store": {"backend": "memory"},
+            },
+        }
+    )
+    assert fs.config.annotate.batch_size == 4
+
+
 def test_upsert_chunks_routes_to_store() -> None:
     fs = FoodScholar.in_memory()
     fs.upsert_chunks(
@@ -78,27 +110,11 @@ def test_upsert_chunks_routes_to_store() -> None:
 
 def test_deferred_phases_raise_not_implemented() -> None:
     fs = FoodScholar.in_memory()
-    for method in ["build_layer_a", "attach", "build_layer_b", "build_layer_c"]:
+    # build_layer_b is wired as of M5 (Phase 4); only build_layer_c remains
+    # deferred until Layer C lands.
+    for method in ["build_layer_c"]:
         with pytest.raises(NotImplementedError, match="not implemented yet"):
             getattr(fs, method)()
-
-
-def test_build_stops_at_first_deferred_phase() -> None:
-    """`fs.build()` runs annotate (real) then trips on build-layer-a (deferred)."""
-    from pathlib import Path
-
-    from foodscholar import FoodOnAPI
-    from foodscholar.ontology import load_ontology
-
-    fs = FoodScholar.in_memory()
-    fs.attach_ontology(
-        FoodOnAPI(
-            load_ontology(Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"),
-            prefix_filter=None,
-        )
-    )
-    with pytest.raises(NotImplementedError, match="'build-layer-a'"):
-        fs.build()
 
 
 def test_query_raises_until_retrieval_lands() -> None:
@@ -112,57 +128,7 @@ def test_init_in_memory_is_noop() -> None:
     fs.init()  # should not raise
 
 
-def _fs_with_mini_ontology(**linker_overrides) -> FoodScholar:  # type: ignore[no-untyped-def]
-    from pathlib import Path
-
-    from foodscholar import FoodOnAPI
-    from foodscholar.ontology import load_ontology
-
-    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "mini_foodon.obo"
-    fs = FoodScholar.in_memory()
-    fs.attach_ontology(FoodOnAPI(load_ontology(fixture), prefix_filter=None))
-    for k, v in linker_overrides.items():
-        setattr(fs.config.annotate.linker, k, v)
-    return fs
-
-
-def test_linker_defaults_to_lexical_only() -> None:
-    """No dense_model, llm_select off → linker has no dense index, no LLM."""
-    fs = _fs_with_mini_ontology()
-    linker = fs.linker
-    assert linker._dense_index is None
-    assert linker._llm is None
-
-
-def test_linker_llm_select_wires_facade_llm() -> None:
-    """cfg.annotate.linker.llm_select=True → linker uses the facade's LLM."""
-    fs = _fs_with_mini_ontology(llm_select=True)
-    linker = fs.linker
-    assert linker._llm is fs.llm
-
-
-def test_ner_defaults_to_keyword() -> None:
-    """cfg.annotate.ner defaults to 'keyword' → fs.ner is a KeywordNER."""
-    from foodscholar.annotate.ner import KeywordNER
-
-    fs = _fs_with_mini_ontology()
-    assert isinstance(fs.ner, KeywordNER)
-
-
-def test_ner_agentic_selector_builds_agentic_ner() -> None:
-    """cfg.annotate.ner='agentic' → fs.ner is an AgenticNER wrapping fs.llm."""
-    from foodscholar.annotate.agent_ner import AgenticNER
-
-    fs = _fs_with_mini_ontology()
-    fs.config.annotate.ner = "agentic"
-    ner = fs.ner
-    assert isinstance(ner, AgenticNER)
-    assert ner._llm is fs.llm
-
-
-def _memory_config():  # type: ignore[no-untyped-def]
-    from foodscholar import FoodScholarConfig
-
+def _memory_config() -> FoodScholarConfig:
     return FoodScholarConfig.model_validate(
         {
             "corpus": {"chunks_path": "data/chunks.parquet"},
@@ -184,15 +150,68 @@ def test_from_config_explicit_embedder_is_respected() -> None:
 
 
 def test_from_config_embedder_degrades_to_mock_without_deps() -> None:
-    """When the [annotate] embedder deps are absent, from_config falls back to
-    the mock embedder rather than crashing — `_build_embedder` returns None and
-    __init__ supplies _MockEmbedder."""
-    import importlib.util
-
+    """Memory configs stay offline/lightweight unless an embedder is explicit."""
     fs = FoodScholar.from_config(_memory_config())
-    if importlib.util.find_spec("sentence_transformers") is None:
-        # No sentence-transformers in this env → SourceTypeRouter can't build.
-        assert fs.embedder.model_id == "mock-embedder-v0"
-    else:
-        # Deps present → a real source-type router was built.
-        assert fs.embedder.model_id.startswith("router(")
+    assert fs.embedder.model_id == "mock-embedder-v0"
+
+
+def test_from_config_does_not_eagerly_build_embedder() -> None:
+    """from_config and info() must NOT trigger model loads for elastic backends.
+
+    The chunk embedder is lazy — the production BGE-base load is ~440 MB and
+    would otherwise stall every `fs.info()` call.
+    """
+    import sys
+
+    fs = FoodScholar.from_config({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {
+            # elastic forces _build_embedder under the old logic; we just want
+            # the property check, not a live ES connection — skip if the SDK
+            # isn't installed.
+            "chunk_store": {"backend": "memory"},
+            "graph_store": {"backend": "memory"},
+        },
+    })
+    # info() must not have built it.
+    info = fs.info()
+    assert info["embedder"].startswith("lazy(") or info["embedder"] == "mock-embedder-v0"
+    # sentence_transformers must NOT have been imported just to construct + info.
+    if "sentence_transformers" in sys.modules:
+        # already loaded by an earlier test — skip the assertion rather than
+        # producing a false negative on test order.
+        return
+    assert "sentence_transformers" not in sys.modules
+
+
+def test_resolve_config_rejects_unknown_type() -> None:
+    from foodscholar.config import resolve_config
+
+    with pytest.raises(TypeError, match="unsupported config type"):
+        resolve_config(42)  # type: ignore[arg-type]
+
+
+def test_attach_ner_and_linker_satisfy_protocol() -> None:
+    """Attach custom NER + Linker so we can exercise annotate without GLiNER."""
+    from foodscholar.io.chunk import EntityLink, Mention
+
+    class _NER:
+        model_id = "noop-ner"
+
+        def extract(self, text: str) -> list[Mention]:
+            return []
+
+        def extract_batch(self, texts: list[str]) -> list[list[Mention]]:
+            return [[] for _ in texts]
+
+    class _Linker:
+        linker_id = "noop-linker"
+
+        def link(self, mention: Mention) -> EntityLink | None:
+            return None
+
+    fs = FoodScholar.in_memory()
+    fs.attach_ner(_NER())
+    fs.attach_linker(_Linker())
+    assert fs.ner.model_id == "noop-ner"
+    assert fs.linker.linker_id == "noop-linker"

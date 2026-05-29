@@ -15,6 +15,26 @@ def test_chunk_roundtrip() -> None:
     assert restored == c
     assert restored.shelf_ids == []
     assert restored.theme_ids == []
+    assert restored.source_metadata == {}
+
+
+def test_chunk_preserves_source_metadata() -> None:
+    c = Chunk(
+        chunk_id="c-1",
+        text="Olive oil and heart health.",
+        source_doc_id="10.123/example",
+        source_type="abstract",
+        section_type="abstract",
+        year=2024,
+        source_metadata={
+            "title": "Olive oil study",
+            "DOI": "https://doi.org/10.123/example",
+            "citationCount": 12,
+        },
+    )
+    restored = Chunk.model_validate_json(c.model_dump_json())
+    assert restored.source_metadata["title"] == "Olive oil study"
+    assert restored.source_metadata["citationCount"] == 12
 
 
 def test_entity_link_validates_method() -> None:
@@ -30,38 +50,35 @@ def test_entity_link_validates_method() -> None:
 
 
 def test_mention_entity_type_defaults_to_other() -> None:
-    # Backward compat: NER impls that don't classify (KeywordNER) omit it.
+    # NER impls that don't classify (or pass an unknown label) leave it as "other".
     m = Mention(text="olive oil", start=0, end=9, score=1.0, ner_model_version="v0")
     assert m.entity_type == "other"
 
 
 def test_mention_entity_type_accepts_valid_value() -> None:
-    m = Mention(
-        text="olive oil",
-        start=0,
-        end=9,
-        score=1.0,
-        ner_model_version="v0",
-        entity_type="food",
-    )
-    assert m.entity_type == "food"
-
-
-def test_mention_entity_type_accepts_all_taxonomy_values() -> None:
-    # Every value in the EntityType taxonomy must validate on Mention.
     for et in (
         "food",
         "nutrient",
-        "health",
-        "dietary_pattern",
-        "allergen",
-        "population",
+        "micronutrient",
+        "macronutrient",
+        "food component",
+        "dietary supplement",
+        "dietary pattern",
+        "medical condition",
         "biomarker",
-        "processing",
+        "Country",
+        "Measurement",
+        "Population",
+        "Time expression",
         "other",
     ):
         m = Mention(
-            text="x", start=0, end=1, score=1.0, ner_model_version="v0", entity_type=et
+            text="x",
+            start=0,
+            end=1,
+            score=1.0,
+            ner_model_version="v0",
+            entity_type=et,  # type: ignore[arg-type]
         )
         assert m.entity_type == et
 
@@ -89,6 +106,8 @@ def test_shelf_theme_card_basic() -> None:
         shelf_ids=[s.shelf_id],
         discovered_by="leiden",
         discovery_version="v0",
+        facet="dietary_patterns",
+        discovery_pass="global_similarity",
     )
     card = Card(
         card_id="card-1",
