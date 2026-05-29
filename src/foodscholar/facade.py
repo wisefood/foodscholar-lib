@@ -901,6 +901,7 @@ class FoodScholar:
             self.ontology,
             config=self.config.layer_a,
             full_config=self.config,
+            llm=self.llm,
         )
 
     def attach(self) -> ArtifactMeta:
