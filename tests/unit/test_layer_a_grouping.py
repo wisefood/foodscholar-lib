@@ -85,3 +85,48 @@ def test_clean_label_strips_food_product_suffix_when_no_synonym():
     # unchanged only if it equals the suffix — here label IS "food product" so it
     # strips to "" then we keep raw. Assert it returns a non-empty string (the raw label).
     assert clean_label("TEST:0000001", api) == "food product"
+
+
+# ---------------------------------------------------------------------------
+# Shared test double (reused by Tasks 6-7)
+# ---------------------------------------------------------------------------
+
+class FakeLLM:
+    model_id = "fake"
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+
+    def generate(self, prompt, max_tokens=1024):
+        return ""
+
+    def generate_json(self, prompt, schema, max_tokens=1024):
+        return self._responses.pop(0)
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — propose_groups
+# ---------------------------------------------------------------------------
+
+from foodscholar.layer_a.grouping import propose_groups, Group
+from foodscholar.config import FrozenGroup
+
+
+def test_propose_groups_resolves_names_to_real_foodon_ids():
+    api = _mini_foodon()
+    llm = FakeLLM([{"groups": ["Fruit", "Vegetable", "Nonexistent Xyz"]}])
+    groups = propose_groups(api, llm, leaf_freq={}, n_groups=14)
+    names = {g.display_name for g in groups}
+    assert "Fruit" in names and "Vegetable" in names
+    assert "Nonexistent Xyz" not in names      # unresolvable -> dropped
+    fruit = next(g for g in groups if g.display_name == "Fruit")
+    assert all(fid in api for fid in fruit.anchor_foodon_ids)
+    assert "TEST:0000004" in fruit.anchor_foodon_ids
+
+
+def test_propose_groups_uses_frozen_when_provided():
+    api = _mini_foodon()
+    frozen = [FrozenGroup(display_name="Fruits", anchor_foodon_ids=["TEST:0000004"])]
+    groups = propose_groups(api, FakeLLM([]), leaf_freq={}, n_groups=14, frozen=frozen)
+    assert [g.display_name for g in groups] == ["Fruits"]
+    assert groups[0].anchor_foodon_ids == ["TEST:0000004"]
