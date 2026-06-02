@@ -77,7 +77,7 @@ def sample_query_leaves(leaf_freq: dict[str, int], *, n: int) -> list[str]:
         return by_freq
     head = n // 2
     tail = n - head
-    return by_freq[:head] + by_freq[head:head + tail]
+    return by_freq[:head] + by_freq[-tail:]
 
 
 def faithfulness(result: MethodResult) -> dict[str, float]:
