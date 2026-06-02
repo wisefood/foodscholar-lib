@@ -7,7 +7,7 @@ from foodscholar.layer_a.bakeoff.result import MethodResult
 
 _COLUMNS = [
     "method", "coverage", "find_median", "find_p90", "find_pct_within_k",
-    "nameability", "fanout_max", "depth_max",
+    "nameability", "fanout_max", "depth_max", "spec_mean",
     "faithfulness_is_a", "faithfulness_fabricated", "llm_calls",
 ]
 
@@ -27,6 +27,7 @@ def build_scorecard(
         faith = M.faithfulness(r)
         fo_max, _ = M.fan_out(r)
         d_max, _ = M.tree_depth(r)
+        spec_mean, _ = M.specificity(r)
         rows.append({
             "method": r.name,
             "coverage": M.coverage(r, mentioned_leaves),
@@ -37,6 +38,7 @@ def build_scorecard(
                             if llm is not None else None),
             "fanout_max": fo_max,
             "depth_max": d_max,
+            "spec_mean": spec_mean,
             "faithfulness_is_a": faith["is-a"],
             "faithfulness_fabricated": faith["fabricated"],
             "llm_calls": r.llm_calls,

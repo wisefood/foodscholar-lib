@@ -1,5 +1,28 @@
-from foodscholar.layer_a.bakeoff.metrics import coverage, fan_out, tree_depth
+from foodscholar.layer_a.bakeoff.metrics import (
+    coverage,
+    fan_out,
+    specificity,
+    tree_depth,
+)
 from foodscholar.layer_a.bakeoff.result import MethodResult
+
+
+def test_specificity_mean_and_median_distance():
+    r = MethodResult(
+        name="toy", root="root", edges={"root": ["A"]},
+        labels={"root": "Foods", "A": "Fruit"}, counts={},
+        leaf_home={"x": "A", "y": "root"}, home_edge_type={"x": "is-a", "y": "is-a"},
+        home_distance={"x": 1, "y": 3},  # x placed 1 step away, y dumped 3 steps up
+    )
+    mean, med = specificity(r)
+    assert mean == 2.0
+    assert med == 2.0
+
+
+def test_specificity_zero_when_no_distances():
+    r = MethodResult(name="t", root="root", edges={}, labels={}, counts={},
+                     leaf_home={}, home_edge_type={})
+    assert specificity(r) == (0.0, 0.0)
 
 
 def _toy() -> MethodResult:
