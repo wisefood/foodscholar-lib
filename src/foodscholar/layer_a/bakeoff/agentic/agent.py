@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from foodscholar.layer_a.bakeoff.agentic.support import rollup_support
 from foodscholar.layer_a.bakeoff.agentic.tools import GraphTools
-from foodscholar.layer_a.bakeoff.result import MethodResult
+from foodscholar.layer_a.bakeoff.result import MethodResult, home_distance
 from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
@@ -100,16 +100,18 @@ def build_agentic_result(
     kept = {root, *(c for kids in edges.values() for c in kids)}
     leaf_home: dict[str, str] = {}
     home_edge_type: dict[str, str] = {}
+    home_dist: dict[str, int] = {}
     for leaf in leaf_chunks:
         if leaf not in ontology:
             continue
-        cands = [a for a in ([leaf] + ontology.id_to_ancestors(leaf)) if a in kept]
+        cands = [a for a in [leaf, *ontology.id_to_ancestors(leaf)] if a in kept]
         if cands:
             home = max(cands, key=lambda a: len(ontology.id_to_ancestors(a)))
             leaf_home[leaf] = home
             home_edge_type[leaf] = "is-a"
+            home_dist[leaf] = home_distance(leaf, home, ontology)
     return MethodResult(
         name="agentic", root=root, edges=edges, labels=labels, counts=counts,
-        leaf_home=leaf_home, home_edge_type=home_edge_type,
+        leaf_home=leaf_home, home_edge_type=home_edge_type, home_distance=home_dist,
         llm_calls=calls[0], audit=audit,
     )

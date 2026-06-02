@@ -80,6 +80,17 @@ def sample_query_leaves(leaf_freq: dict[str, int], *, n: int) -> list[str]:
     return by_freq[:head] + by_freq[-tail:]
 
 
+def specificity(result: MethodResult) -> tuple[float, float]:
+    """(mean, median) is-a distance from each homed leaf to its home node.
+
+    Lower = leaves placed at specific categories; higher = dumped under generic
+    ancestors. Complements coverage (which is ~1.0 for any bottom-up method)."""
+    dists = [float(d) for d in result.home_distance.values()]
+    if not dists:
+        return 0.0, 0.0
+    return float(statistics.mean(dists)), float(statistics.median(dists))
+
+
 def faithfulness(result: MethodResult) -> dict[str, float]:
     """Fraction of homed leaves whose membership edge is is-a / other-relation /
     fabricated. is-a + other-relation = 'within FoodOn'; fabricated = invented."""
