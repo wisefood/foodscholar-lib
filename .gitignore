@@ -3,11 +3,14 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+pytest-of-dpetrou/
+
 # C extensions
 *.so
 data/
 .vscode/
 *.local.yaml
+config.gate.yaml
 
 pytest-of-dpetrou/
 

@@ -54,10 +54,21 @@ class HNSWLinker:
         hits = self._nel.link_batch(surfaces)
         return [self._to_link(m, h) for m, h in zip(mentions, hits, strict=True)]
 
-    def dry_run(self, text: str) -> EntityLink | None:
-        """Convenience for notebooks: build a Mention from raw text and link it."""
+    def dry_run(self, text: str, *, entity_type: str = "food") -> EntityLink | None:
+        """Convenience for notebooks: build a Mention from raw text and link it.
+
+        `entity_type` defaults to "food" so the result is not gated out by the
+        semantic-type gate; pass another type to exercise the gate.
+        """
         return self.link(
-            Mention(text=text, start=0, end=len(text), score=1.0, ner_model_version="dry-run")
+            Mention(
+                text=text,
+                start=0,
+                end=len(text),
+                score=1.0,
+                ner_model_version="dry-run",
+                entity_type=entity_type,  # type: ignore[arg-type]
+            )
         )
 
     # ------------------------------------------------------------------ helpers

@@ -147,7 +147,14 @@ def test_hnsw_nel_index_links_lexically_distinct_synonym(tmp_path: Path) -> None
     )
     linker = HNSWLinker(index, min_sim=0.60)
     link = linker.link(
-        Mention(text="ascorbate", start=0, end=9, score=1.0, ner_model_version="test")
+        Mention(
+            text="ascorbate",
+            start=0,
+            end=9,
+            score=1.0,
+            ner_model_version="test",
+            entity_type="nutrient",  # food-like → passes the semantic-type gate
+        )
     )
     assert link is not None
     assert link.method == "dense"

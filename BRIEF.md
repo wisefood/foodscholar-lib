@@ -284,6 +284,8 @@ Override defaults with `fs.attach_ner(...)`, `fs.attach_linker(...)`, or by pass
 
 **Deviations from §2.** The original brief listed SciFoodNER + lexical→dense linking. SciFoodNER was dropped (no proprietary models); an LLM-driven `AgenticNER` was tried as an interim and superseded — it was non-deterministic, expensive, and required local span reconciliation because LLM offsets are unreliable. A four-tier `ThreeTierLinker` (lexical-exact + fuzzy + dense + LLM-select) was the matching interim linker; the fuzzy tier accounted for the §17 audit's wrong links and the LLM tier was a per-residue cost. Both are now removed in favor of GLiNER + HNSW, which validated cleanly in the prototype and is deterministic, fast, and pure dense.
 
+**Deviation from §15 — agentic annotation (approved).** The annotate phase is being redesigned around LLM agents (`AgenticNER` is shipped; an OntoRAG-derived retriever and a fused tool-using agent follow). This departs from §15 ("deterministic only for v1"). The brief owner explicitly approved it; the full design and decision log are in `docs/DESIGN_agentic_annotate.md`. The OntoRAG retriever (`foodscholar.annotate.ontorag`) is *retrieval-only* — Whoosh BM25 + FAISS(MiniLM) + FAISS(SapBERT) merged by Reciprocal Rank Fusion, returning ranked candidates for the agent/linker to select from. OntoRAG's own LLM selector and synonym-retry loop are **not** adopted, so no agentic *retry* loop is introduced. Gated by the `[ontorag]` extra.
+
 ### LLM client (`fs.llm`)
 
 The LLM used by the `llm` linker tier and by Layer C card generation is provider-agnostic. `cfg.llm` declares a `primary` provider plus an ordered `fallbacks` list:
@@ -333,7 +335,10 @@ SectionType = Literal[
 ]
 SourceType = Literal["abstract", "textbook", "guide"]
 
-EntityType = Literal["food", "nutrient", "health", "dietary_pattern", "allergen", "other"]
+EntityType = Literal[
+    "food", "nutrient", "health", "dietary_pattern", "allergen",
+    "population", "biomarker", "processing", "other",
+]
 
 class Mention(BaseModel):
     text: str
