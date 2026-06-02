@@ -105,3 +105,40 @@ def reproducibility(a: MethodResult, b: MethodResult) -> float:
     if not union:
         return 1.0
     return len(na & nb) / len(union)
+
+
+def nameability(result: MethodResult, llm, *, sample: int) -> float:
+    """Fraction of a deterministic sample of shelf labels an LLM judges
+    'recognizable to a layperson'. Excludes the root. Returns 0.0 if the LLM
+    errors (so a broken judge never inflates the score)."""
+    labels = sorted(
+        {lbl for nid, lbl in result.labels.items() if nid != result.root}
+    )[:sample]
+    if not labels:
+        return 0.0
+    schema = {
+        "type": "object",
+        "properties": {"verdicts": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"label": {"type": "string"}, "recognizable": {"type": "boolean"}},
+            "required": ["label", "recognizable"],
+        }}},
+        "required": ["verdicts"],
+    }
+    prompt = (
+        "For each food-category label, would a layperson browsing a nutrition "
+        "site recognize it as a food group / food (true) or is it jargon / an "
+        "organizational artifact (false)?\nLabels:\n"
+        + "\n".join(f"  - {lbl}" for lbl in labels)
+        + '\n\nReturn JSON {"verdicts": [{"label": "...", "recognizable": true}]}.'
+    )
+    try:
+        obj = llm.generate_json(prompt, schema, max_tokens=2048)
+    except Exception:
+        return 0.0
+    verdict = {
+        v.get("label"): bool(v.get("recognizable"))
+        for v in (obj or {}).get("verdicts", [])
+    }
+    ok = sum(1 for lbl in labels if verdict.get(lbl) is True)
+    return ok / len(labels)
