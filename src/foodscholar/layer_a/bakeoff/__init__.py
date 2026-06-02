@@ -5,6 +5,11 @@ MethodResult via an adapter; metrics consume only that struct so methods are
 scored on identical footing.
 """
 
-from foodscholar.layer_a.bakeoff.result import MethodResult, node_depths
+from foodscholar.layer_a.bakeoff.result import (
+    MethodResult,
+    from_children_map,
+    from_shelves,
+    node_depths,
+)
 
-__all__ = ["MethodResult", "node_depths"]
+__all__ = ["MethodResult", "from_children_map", "from_shelves", "node_depths"]
