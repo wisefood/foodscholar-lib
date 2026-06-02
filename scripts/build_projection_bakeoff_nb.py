@@ -38,6 +38,7 @@ the tree; it doesn't *define* it.
 | **0 — Baseline** | current `build_layer_a` (the flat blob, reference) |
 | **2 — Structural cut** | fixed-depth FoodOn cut, keep real tiers regardless of support |
 | **1a — Auto backbone** | structural-rule backbone + support decorates |
+| **1a+ — Auto backbone + controlled expansion** | same top backbone, recursively opens only supported/capped tiers |
 | **1b — LLM backbone** | `llama-3.1-8b-instant` proposes the backbone + support decorates |
 | **3 — Multi-facet** | a node may sit under several backbone axes (DAG) |
 
@@ -347,6 +348,164 @@ auto_backbone = api.id_to_children(FOOD_PRODUCT)
 MULTI_HOME_1A = backbone_column(f"1a — Auto backbone ({len(auto_backbone)} cats)", auto_backbone)
 print(f"1a auto backbone: {[api.id_to_label(b) for b in auto_backbone]}")
 print(f"1a multi-home chunks: {len(MULTI_HOME_1A)} / {TOTAL_FOOD_CHUNKS}")'''
+    )
+)
+
+cells.append(
+    md(
+        """## Col 1a+ — Auto backbone + controlled expansion
+
+Keep the exact same auto backbone as 1a, but make large buckets less opaque by
+opening deeper FoodOn tiers under strict browse constraints. This is still a
+projection experiment: support controls visibility, caps prevent runaway
+fan-out, and low-value single-child chains may be skipped."""
+    )
+)
+
+cells.append(
+    code(
+        '''# 1a+ — same auto backbone, but expand large buckets with constrained tiers.
+# Counts are chunk support for each FoodOn node or any of its descendants.
+NODE_CHUNKS = defaultdict(set)
+TERM_ROLLUPS = {}
+for fid in TERM_DOC_FREQ:
+    rollups = [fid] + [
+        a for a in api.id_to_ancestors(fid)
+        if a == FOOD_PRODUCT or api.is_subclass_of(a, FOOD_PRODUCT)
+    ]
+    TERM_ROLLUPS[fid] = rollups
+
+for cid, terms in CHUNK_TERMS.items():
+    for fid in terms:
+        for nd in TERM_ROLLUPS.get(fid, ()):
+            NODE_CHUNKS[nd].add(cid)
+
+
+EXPAND_MIN_CHUNKS = 25
+EXPAND_MAX_DEPTH = 6       # root -> backbone -> ... -> concrete high-support terms
+EXPAND_MAX_CHILDREN = 12   # hard cap per opened parent
+EXPAND_MIN_CHILDREN = 2    # skip pure filing chains when possible
+
+
+def node_support(fid):
+    return len(NODE_CHUNKS.get(fid, set()))
+
+
+def supported_children(fid):
+    kids = []
+    for child in api.id_to_children(fid):
+        if child not in api:
+            continue
+        support = node_support(child)
+        if support >= EXPAND_MIN_CHUNKS:
+            kids.append(child)
+    return kids
+
+
+def evidence_descendant_count(fid):
+    """How many distinct directly mentioned FoodOn terms live under this node."""
+    return sum(
+        1 for term_id, n in TERM_DOC_FREQ.items()
+        if n > 0 and (term_id == fid or api.is_subclass_of(term_id, fid))
+    )
+
+
+def display_rank(fid):
+    # Prefer useful grouping nodes first, then high-support concrete terms.
+    return (
+        node_support(fid),
+        evidence_descendant_count(fid),
+        TERM_DOC_FREQ.get(fid, 0),
+        -(len(api.id_to_label(fid) or fid)),
+    )
+
+
+def collapsed_supported_children(fid, *, depth_left):
+    """Return display children, skipping low-value single-child filing chains.
+
+    If FoodOn says A -> B -> C but B is the only supported child and B is not
+    directly evidenced, the projection may show C under A. This keeps navigation
+    shorter while all displayed nodes remain real FoodOn ids.
+    """
+    kids = supported_children(fid)
+    while (
+        depth_left > 1
+        and len(kids) == 1
+        and TERM_DOC_FREQ.get(kids[0], 0) == 0
+        and len(supported_children(kids[0])) >= EXPAND_MIN_CHILDREN
+    ):
+        fid = kids[0]
+        kids = supported_children(fid)
+        depth_left -= 1
+    return sorted(kids, key=display_rank, reverse=True)[:EXPAND_MAX_CHILDREN]
+
+
+def controlled_backbone_column(title, backbone_ids):
+    backbone_ids = [b for b in backbone_ids if b in api]
+    homed, multi_home, unhomed = lift_to_backbone(backbone_ids)
+
+    ROOT = "__controlled_backbone_root__"
+    children = defaultdict(list)
+    counts = {ROOT: sum(len(v) for v in homed.values())}
+    labels = {ROOT: "foods"}
+    seen_edges = set()
+
+    def add_edge(parent, child):
+        edge = (parent, child)
+        if edge not in seen_edges:
+            children[parent].append(child)
+            seen_edges.add(edge)
+
+    def expand(parent, rel_depth):
+        if rel_depth >= EXPAND_MAX_DEPTH:
+            return
+        depth_left = EXPAND_MAX_DEPTH - rel_depth
+        kids = collapsed_supported_children(parent, depth_left=depth_left)
+        for child in kids:
+            add_edge(parent, child)
+            counts[child] = node_support(child)
+            labels[child] = api.id_to_label(child) or child
+            expand(child, rel_depth + 1)
+
+    for b in sorted(backbone_ids, key=display_rank, reverse=True):
+        add_edge(ROOT, b)
+        counts[b] = len(homed.get(b, set()))
+        labels[b] = api.id_to_label(b) or b
+        expand(b, 1)
+
+    tree = render_tree_from_edges(
+        ROOT,
+        children,
+        counts,
+        lambda n: labels.get(n, n),
+        max_depth=EXPAND_MAX_DEPTH,
+        open_depth=2,
+        max_children=EXPAND_MAX_CHILDREN,
+    )
+    fanout = max((len(v) for v in children.values()), default=0)
+    n_empty = sum(1 for b in backbone_ids if counts.get(b, 0) == 0)
+    homed_chunks = TOTAL_FOOD_CHUNKS - len(unhomed)
+    COLUMNS.append({
+        "title": title,
+        "stats": (
+            stats_line(fanout, EXPAND_MAX_DEPTH, homed_chunks, TOTAL_FOOD_CHUNKS,
+                       n_empty, len(multi_home))
+            + f"<br>min support {EXPAND_MIN_CHUNKS} · cap {EXPAND_MAX_CHILDREN}/parent"
+        ),
+        "tree": tree,
+    })
+    return multi_home
+
+
+MULTI_HOME_1A_PLUS = controlled_backbone_column(
+    f"1a+ — Auto backbone + controlled expansion ({len(auto_backbone)} cats)",
+    auto_backbone,
+)
+print(
+    "1a+ controlled expansion: "
+    f"fan-out cap {EXPAND_MAX_CHILDREN}, min chunks {EXPAND_MIN_CHUNKS}, "
+    f"multi-home chunks {len(MULTI_HOME_1A_PLUS)} / {TOTAL_FOOD_CHUNKS}"
+)'''
     )
 )
 
