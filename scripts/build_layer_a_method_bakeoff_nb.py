@@ -1,19 +1,22 @@
-"""Assemble notebooks/projection_bakeoff.ipynb from source cells.
+"""Assemble notebooks/layer_a_method_bakeoff.ipynb from source cells.
 
-Compares competing Layer-A projection methodologies on the foods facet, side by
-side, judged by eye. Kept as a script so the notebook source stays reviewable
-and regenerable. Run with the foodscholar env:
+Compares competing Layer-A construction methods on the foods facet, side by
+side, with a metric-driven scorecard on top (coverage, findability, nameability,
+fan-out, depth, faithfulness) plus the eyeball tree columns. Kept as a script so
+the notebook source stays reviewable and regenerable. Run with the foodscholar
+env:
 
-    /mnt/miniconda3/envs/foodscholar/bin/python scripts/build_projection_bakeoff_nb.py
+    /mnt/miniconda3/envs/foodscholar/bin/python scripts/build_layer_a_method_bakeoff_nb.py
 
-Spec: docs/superpowers/specs/2026-05-28-layer-a-projection-bakeoff-design.md
+Specs: docs/methods_layer_a_bakeoff_brief.md +
+docs/superpowers/plans/2026-06-02-layer-a-method-bakeoff-harness.md
 """
 
 from __future__ import annotations
 
 import nbformat as nbf
 
-NB_PATH = "notebooks/projection_bakeoff.ipynb"
+NB_PATH = "notebooks/layer_a_method_bakeoff.ipynb"
 md = nbf.v4.new_markdown_cell
 code = nbf.v4.new_code_cell
 cells: list = []
@@ -21,12 +24,12 @@ cells: list = []
 # ----------------------------------------------------------------- title
 cells.append(
     md(
-        """# Layer-A projection bake-off — foods facet
+        """# Layer-A method bake-off — foods facet
 
-The current projection produces a flat, un-navigable foods facet, and the
-re-tiering patch made it worse. The methodology is wrong for *browsing*, so this
-notebook renders **competing projection methodologies on the same foods data,
-side by side, judged by eye**. No production code until one wins.
+This notebook renders **competing Layer-A construction methods on the same foods
+data, side by side**, with a **metric-driven scorecard on top** (coverage,
+findability, nameability, fan-out, depth, faithfulness, llm-calls) so methods are
+compared on numbers, not just by eye. No production code until one wins.
 
 **The reframe under test:** stop deriving the browse tree from corpus support.
 Choose a category **backbone** first (designed for browsing), then **attach**
@@ -191,7 +194,12 @@ def stats_line(top_fanout, depth, homed_chunks, total_chunks, n_empty, n_multi):
             f"<b>{n_multi}</b> multi-home chunks")
 
 
+# Bake-off harness: wrap each method's tree into a MethodResult for the scorecard.
+from foodscholar.layer_a.bakeoff.result import from_children_map, from_shelves
+
 COLUMNS = []  # each: {"title","stats","tree"}
+RESULTS = []  # each: a MethodResult, for the cross-method scorecard
+MENTIONED = set(TERM_DOC_FREQ)  # corpus-mentioned food leaves (shared denominator)
 TOTAL_FOOD_CHUNKS = len(CHUNK_TERMS)
 print("helpers ready")'''
     )
@@ -226,6 +234,7 @@ COLUMNS.append({
     "stats": stats_line(base_fanout, base_depth, TOTAL_FOOD_CHUNKS, TOTAL_FOOD_CHUNKS, base_empty, 0),
     "tree": base_tree,
 })
+RESULTS.append(from_shelves("0 — Baseline", base_shelves, ontology=api, mentioned_leaves=MENTIONED))
 print(f"baseline: {len(base_shelves)} shelves, top fan-out {base_fanout}, depth {base_depth}")'''
     )
 )
@@ -290,6 +299,11 @@ COLUMNS.append({
     "stats": stats_line(cut_fanout, CUT_DEPTH, homed, TOTAL_FOOD_CHUNKS, cut_empty, 0),
     "tree": cut_tree,
 })
+RESULTS.append(from_children_map(
+    "2 — Structural cut", root=FOOD_PRODUCT, children_map=cut_children,
+    counts=dict(cut_counts), labels={n: api.id_to_label(n) or n for n in cut_nodes},
+    ontology=api, mentioned_leaves=MENTIONED,
+))
 print(f"structural cut: {len(cut_nodes)} nodes, top fan-out {cut_fanout}, {cut_empty} empty")'''
     )
 )
@@ -340,6 +354,10 @@ cells.append(
         "stats": stats_line(fanout, 2, homed_chunks, TOTAL_FOOD_CHUNKS, n_empty, len(multi_home)),
         "tree": tree,
     })
+    RESULTS.append(from_children_map(
+        title.split(" —")[0].strip(), root=ROOT, children_map=children,
+        counts=counts, labels=labels, ontology=api, mentioned_leaves=MENTIONED,
+    ))
     return multi_home
 
 
@@ -494,6 +512,10 @@ def controlled_backbone_column(title, backbone_ids):
         ),
         "tree": tree,
     })
+    RESULTS.append(from_children_map(
+        title.split(" —")[0].strip(), root=ROOT, children_map=children,
+        counts=counts, labels=labels, ontology=api, mentioned_leaves=MENTIONED,
+    ))
     return multi_home
 
 
@@ -601,8 +623,57 @@ COLUMNS.append({
               + "<br><u>top category overlaps:</u>" + overlap_html),
     "tree": dag_tree,
 })
+RESULTS.append(from_children_map(
+    "3 — Multi-facet", root=ROOT, children_map=children, counts=counts,
+    labels=labels, ontology=api, mentioned_leaves=MENTIONED,
+))
 print(f"multi-facet: {len(multi_home)} multi-home chunks; top overlaps: "
       + ", ".join(f"{api.id_to_label(a)}∩{api.id_to_label(b2)}={n}" for (a,b2),n in top_pairs))'''
+    )
+)
+
+# ----------------------------------------------------------------- grouping + scorecard
+cells.append(
+    md(
+        """## Grouping method (from `main`) + cross-method scorecard
+
+The merged bottom-up + LLM-grouping method (`build_grouped_shelves`, on `main`)
+joins as one more entry, then every method is scored on the same metrics. The
+scorecard is the headline: faithfulness vs navigability, on numbers."""
+    )
+)
+
+cells.append(
+    code(
+        '''# The merged bottom-up + LLM grouping method (on main) as a scorecard entry.
+from foodscholar.config import BottomUpGroupingConfig
+from foodscholar.layer_a.grouping import build_grouped_shelves
+
+_grouping_shelves = build_grouped_shelves(
+    iter(chunks), api, BottomUpGroupingConfig(enabled=True),
+    facet="foods", min_link_confidence=0.0, llm=fs.llm,
+)
+GROUPING_RESULT = from_shelves("grouping (main)", _grouping_shelves,
+                               ontology=api, mentioned_leaves=MENTIONED)
+RESULTS.append(GROUPING_RESULT)
+print(f"grouping column: {len(_grouping_shelves)} shelves")'''
+    )
+)
+
+cells.append(
+    code(
+        '''# ---- Cross-method scorecard: every method on the same metrics --------------
+from IPython.display import HTML
+from foodscholar.layer_a.bakeoff.metrics import sample_query_leaves
+from foodscholar.layer_a.bakeoff.scorecard import build_scorecard, render_scorecard_html
+
+QUERY_LEAVES = sample_query_leaves(dict(TERM_DOC_FREQ), n=100)
+SCORECARD = build_scorecard(
+    RESULTS, mentioned_leaves=MENTIONED, query_leaves=QUERY_LEAVES, k=3,
+    llm=(fs.llm if HAVE_GROQ else None), nameability_sample=25,
+)
+print("methods scored:", [row["method"] for row in SCORECARD])
+display(HTML(render_scorecard_html(SCORECARD)))'''
     )
 )
 
@@ -615,7 +686,7 @@ cells.append(
 
 REPORT = Template(
     """<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>Layer-A projection bake-off — foods</title><style>
+<title>Layer-A method bake-off — foods</title><style>
   body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:1500px;margin:1.5rem auto;padding:0 1rem;}
   h1{border-bottom:3px solid #4c72b0;padding-bottom:.3rem;}
   .grid{display:flex;gap:1rem;align-items:flex-start;overflow-x:auto;}
@@ -632,7 +703,7 @@ REPORT = Template(
   .path{font-size:.8rem;margin:.1rem 0;}
   .meta{color:#888;font-size:.85rem;}
 </style></head><body>
-<h1>Layer-A projection bake-off — foods facet</h1>
+<h1>Layer-A method bake-off — foods facet</h1>
 <p class="meta">{{ total }} chunks with food terms · model {{ model }} ·
 all categories are real FoodOn ids · judge by eye{% if not have_groq %} · <i>1b skipped (no GROQ_API_KEY)</i>{% endif %}</p>
 <div class="grid">
@@ -642,7 +713,7 @@ all categories are real FoodOn ids · judge by eye{% if not have_groq %} · <i>1
 </div></body></html>"""
 )
 
-out = VIZ_DIR / "projection_bakeoff_foods.html"
+out = VIZ_DIR / "layer_a_method_bakeoff_foods.html"
 out.write_text(
     REPORT.render(total=TOTAL_FOOD_CHUNKS, model=fs.llm.model_id,
                   have_groq=HAVE_GROQ, columns=COLUMNS),
