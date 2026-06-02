@@ -45,7 +45,7 @@ in `projection_bakeoff.ipynb`.
 | **1a+** | **Auto backbone + controlled expansion** | **built (`b866e45`)** | **faithful + navigable mechanical method — the control** |
 | 1b | **LLM backbone** | built | `llama-3.1-8b-instant` proposes the backbone |
 | 3* | **Bottom-up + LLM grouping** | built (`main`) | navigable, groups by label, **ignores is-a** |
-| — | **Agentic MCP editor** | **to build** | LLM reasons over the FoodOn graph; faithful by construction — see §3 |
+| — | **Agentic MCP editor** | **built (is-a core; relation-bridging next)** | LLM reasons over the FoodOn graph; faithful by construction — see §3 |
 
 (*“3” here is the `build_grouped_shelves` method from
 `bottomup_entrypoints.ipynb`, distinct from the bake-off’s multi-facet col 3.)
@@ -58,6 +58,18 @@ navigable (bounded width/depth) at once. It is the strongest existing balance an
 the baseline the agentic method has to justify itself against.
 
 ## §3 — The agentic MCP construction method
+
+> **Built (2026-06-02), is-a core.** `src/foodscholar/layer_a/bakeoff/agentic/` —
+> a throwaway relation index (`relations.py`, ~8.2k FOODON terms with non-is-a
+> relations: `derives from`, `member of`, `has ingredient`, `has defining
+> ingredient`, … loaded straight from `foodon.owl`, FOODON→FOODON only), the
+> read-only tool layer (`tools.py`: supported children, relation bridges, LCA),
+> and the DFS `KEEP`/`COLLAPSE`/`REPARENT` loop (`agent.py`) emitting a
+> `MethodResult` as a GROQ-gated scorecard column. **Relation-bridging is shown
+> to the LLM in the lens but not yet acted on** — the `EXPAND` / `other-relation`
+> reparenting is the next increment, once the is-a core is scored. A real-data
+> smoke (KEEP-all stub) homed 1,841/2,951 leaves — the ~38% gap is precisely the
+> not-under-`food product` foods that relation-bridging is meant to close.
 
 The sharpened question: **does an LLM making *local* keep/collapse/expand
 decisions, with the ability to pull in more of the graph, beat `1a+`'s mechanical
@@ -111,11 +123,11 @@ staying 100% inside FoodOn.
 > currently retains **is-a only** — the non-is-a relations this setting needs are
 > not loaded. `LLMClient` also has **no native tool-calling**, so the agent loop
 > is a manual `generate_json` loop with an `{action, args}` convention.
-> *Recommended* path for the prototype: build a **throwaway relation index** in
-> the notebook (load relations straight from the FoodOn OWL once) so the bake-off
-> can measure whether relations actually close gaps *before* investing in a
-> production loader change. Alternative: run the agent at **is-a-only** for v1.
-> **Not yet decided — revisit when speccing.**
+> **Resolved (2026-06-02):** the throwaway relation index is built
+> (`agentic/relations.py`, loads from `foodon.owl` via pronto, FOODON→FOODON
+> only) and the agent loop is the manual `generate_json` `{action}` loop. The
+> is-a core is wired and scored; *acting* on the relations (the `other-relation`
+> dial) is the next increment, gated on whether the is-a core falls short.
 
 ## §4 — The benchmark harness (extend, don't rebuild)
 
@@ -126,15 +138,19 @@ bake-off's existing "by eye" layer.
 
 **What to add to turn it into a real benchmark** (the missing "whys"):
 
+All built in `src/foodscholar/layer_a/bakeoff/` (Plan A + the `specificity`
+addition from Plan B) and rendered as a scorecard atop the tree columns:
+
 | Metric | Status | Computation |
 |---|---|---|
-| **Coverage** | ✅ exists (`%-homed`) | % of mentioned leaves reachable from a root |
-| **Fan-out** | ✅ exists | max / median children per shelf |
-| **Depth** | ✅ exists | max / median |
-| **Findability** | 🔨 add | held-out ~100 corpus-foods → min clicks root→containing shelf; median / p90 / %≤K |
-| **Nameability** | 🔨 add | LLM-judge a random sample of shelf labels (recognizable y/n) → % |
-| **Faithfulness** | 🔨 add | % of parent edges is-a / other-relation / fabricated (trivially is-a for projection methods; the discriminator for grouping + agentic) |
-| **Reproducibility / cost** | 🔨 add | # LLM calls; run twice → shelf-set Jaccard stability |
+| **Coverage** | ✅ built | % of mentioned leaves homed under some node (≈1.0 for any bottom-up method — *not* the discriminator; see Specificity) |
+| **Specificity** | ✅ built | mean/median is-a distance leaf→home; **the discriminator coverage isn't** — separates a flat blob (leaves dumped under distant generics) from a well-tiered tree |
+| **Fan-out** | ✅ built | max / median children per shelf |
+| **Depth** | ✅ built | max / median |
+| **Findability** | ✅ built | held-out ~100 corpus-foods → min clicks root→home; median / p90 / %≤K. *Caveat:* homes to the deepest node, so deep trees (`1a+`) score lower on %≤K than a user who stops at a recognizable tier would |
+| **Nameability** | ✅ built | LLM-judge a sample of shelf labels (recognizable y/n) → % (needs GROQ) |
+| **Faithfulness** | ✅ built | % of homed leaves is-a / other-relation / fabricated (the discriminator for grouping + agentic; needs GROQ to differ) |
+| **Reproducibility / cost** | ✅ built (cost) | # LLM calls per method; (run-twice Jaccard available via `reproducibility`) |
 
 **Findability query set:** ~100 corpus-mentioned foods, stratified common/rare,
 held out from any prompt. Honest because a food with no chunks can't be found by
