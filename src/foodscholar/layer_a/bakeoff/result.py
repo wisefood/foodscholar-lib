@@ -19,8 +19,23 @@ class MethodResult:
     counts: dict[str, int]
     leaf_home: dict[str, str]
     home_edge_type: dict[str, str]
+    home_distance: dict[str, int] = field(default_factory=dict)  # leaf -> is-a steps to its home
     llm_calls: int = 0
     audit: list[dict] = field(default_factory=list)
+
+
+def home_distance(leaf: str, home: str, ontology: FoodOnAPI) -> int:
+    """Number of is-a steps from `leaf` up to its `home` node (0 if home == leaf).
+
+    Shared by every adapter + the agentic method so the distance definition stays
+    identical across methods. Counts the leaf's ancestors that lie at-or-below
+    `home` — i.e. the nodes on the path from leaf up to and including home."""
+    if home == leaf:
+        return 0
+    return len([
+        a for a in ontology.id_to_ancestors(leaf)
+        if a == home or ontology.is_subclass_of(a, home)
+    ])
 
 
 def node_depths(result: MethodResult) -> dict[str, int]:
@@ -66,16 +81,18 @@ def from_children_map(
         tree_nodes.update(kids)
     leaf_home: dict[str, str] = {}
     home_edge_type: dict[str, str] = {}
+    home_dist: dict[str, int] = {}
     for leaf in mentioned_leaves:
         home = _deepest_tree_home(leaf, tree_nodes, ontology)
         if home is not None:
             leaf_home[leaf] = home
             home_edge_type[leaf] = "is-a"
+            home_dist[leaf] = home_distance(leaf, home, ontology)
     return MethodResult(
         name=name, root=root,
         edges={p: list(kids) for p, kids in children_map.items()},
         labels=dict(labels), counts=dict(counts),
-        leaf_home=leaf_home, home_edge_type=home_edge_type,
+        leaf_home=leaf_home, home_edge_type=home_edge_type, home_distance=home_dist,
     )
 
 
@@ -109,21 +126,28 @@ def from_shelves(
     shelf_nodes = {node_of[s.shelf_id] for s in shelves if s.foodon_id}
     leaf_home: dict[str, str] = {}
     home_edge_type: dict[str, str] = {}
+    home_dist: dict[str, int] = {}
     for leaf in mentioned_leaves:
         home_shelf = next((s for s in shelves if leaf in s.see_also), None)
         if home_shelf is not None:
             home_node = node_of[home_shelf.shelf_id]
             leaf_home[leaf] = home_node
             anchor = home_shelf.foodon_id
-            home_edge_type[leaf] = (
-                "is-a" if anchor and ontology.is_subclass_of(leaf, anchor) else "fabricated"
-            )
+            if anchor and ontology.is_subclass_of(leaf, anchor):
+                home_edge_type[leaf] = "is-a"
+                home_dist[leaf] = home_distance(leaf, anchor, ontology)
+            else:
+                # fabricated: leaf isn't structurally under the anchor → treat as
+                # maximally-far (penalizes label-grouping in specificity).
+                home_edge_type[leaf] = "fabricated"
+                home_dist[leaf] = len(ontology.id_to_ancestors(leaf))
             continue
         home = _deepest_tree_home(leaf, shelf_nodes, ontology)
         if home is not None:
             leaf_home[leaf] = home
             home_edge_type[leaf] = "is-a"
+            home_dist[leaf] = home_distance(leaf, home, ontology)
     return MethodResult(
         name=name, root=root_id, edges=edges, labels=labels, counts=counts,
-        leaf_home=leaf_home, home_edge_type=home_edge_type,
+        leaf_home=leaf_home, home_edge_type=home_edge_type, home_distance=home_dist,
     )
