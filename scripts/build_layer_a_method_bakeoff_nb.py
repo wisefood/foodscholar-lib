@@ -593,16 +593,16 @@ homed, multi_home, unhomed = lift_to_backbone(auto_backbone)
 # Multi-home now means: a chunk's DIFFERENT terms map to different backbones
 # (already captured). For the DAG view, show each backbone with its full homed
 # count (chunks counted under every category they touch — overlaps allowed).
-ROOT = "__dag_root__"
+DAG_ROOT = "__dag_root__"  # local synthetic root — must NOT shadow the global ROOT path
 children = defaultdict(list)
-counts = {ROOT: TOTAL_FOOD_CHUNKS}
-labels = {ROOT: "foods (multi-facet)"}
+counts = {DAG_ROOT: TOTAL_FOOD_CHUNKS}
+labels = {DAG_ROOT: "foods (multi-facet)"}
 for b in auto_backbone:
-    children[ROOT].append(b)
+    children[DAG_ROOT].append(b)
     counts[b] = len(homed.get(b, set()))
     labels[b] = api.id_to_label(b) or b
 
-dag_tree = render_tree_from_edges(ROOT, children, counts, lambda n: labels.get(n, n),
+dag_tree = render_tree_from_edges(DAG_ROOT, children, counts, lambda n: labels.get(n, n),
                                   max_depth=1, open_depth=1)
 # overlap stat: how many chunks land in >1 backbone, and the worst pair
 pair = Counter()
@@ -624,7 +624,7 @@ COLUMNS.append({
     "tree": dag_tree,
 })
 RESULTS.append(from_children_map(
-    "3 — Multi-facet", root=ROOT, children_map=children, counts=counts,
+    "3 — Multi-facet", root=DAG_ROOT, children_map=children, counts=counts,
     labels=labels, ontology=api, mentioned_leaves=MENTIONED,
 ))
 print(f"multi-facet: {len(multi_home)} multi-home chunks; top overlaps: "
@@ -659,7 +659,10 @@ else:
     for cid, terms in CHUNK_TERMS.items():
         for fid in terms:
             agentic_leaf_chunks[fid].add(cid)
-    rel_index = load_relation_index(str(ROOT / "data/foodon.owl"))
+    # NB: the multi-facet cell rebinds the global ROOT to "__dag_root__", so derive
+    # the repo root from HERE (Path.cwd(), never rebound) rather than ROOT.
+    repo_root = HERE if (HERE / "data" / "foodon.owl").exists() else HERE.parent
+    rel_index = load_relation_index(str(repo_root / "data" / "foodon.owl"))
     print(f"relation index: {len(rel_index)} FOODON terms with non-is-a relations")
     AGENTIC_RESULT = build_agentic_result(
         dict(agentic_leaf_chunks), api, relation_index=rel_index, llm=fs.llm,
