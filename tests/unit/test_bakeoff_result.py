@@ -54,3 +54,26 @@ def test_from_children_map_homes_leaves_to_deepest_tree_ancestor():
     assert r.leaf_home["TEST:0000006"] == "TEST:0000002"  # apple under plant food
     assert r.leaf_home["TEST:0000011"] == "TEST:0000003"  # dairy under animal food
     assert r.home_edge_type["TEST:0000006"] == "is-a"
+
+
+from foodscholar.io.graph import Shelf
+from foodscholar.layer_a.bakeoff.result import from_shelves
+
+
+def test_from_shelves_groups_mark_nonancestor_membership_fabricated():
+    api = _mini_foodon()
+    root = Shelf(shelf_id="facet:foods", label="Foods", facet="foods", depth=0)
+    fruit = Shelf(
+        shelf_id="foodon:TEST:0000004", label="fruit", display_label="Fruits",
+        facet="foods", depth=1, foodon_id="TEST:0000004",
+        parent_shelf_id="facet:foods", chunk_count=3,
+        see_also=["TEST:0000006", "TEST:0000009"],  # apple (is-a), peanut (not)
+    )
+    r = from_shelves("grouping", [root, fruit], ontology=api,
+                     mentioned_leaves={"TEST:0000006", "TEST:0000009"})
+    assert r.root == "facet:foods"
+    assert r.edges["facet:foods"] == ["TEST:0000004"]
+    assert r.leaf_home["TEST:0000006"] == "TEST:0000004"
+    assert r.home_edge_type["TEST:0000006"] == "is-a"        # apple ⊂ fruit
+    assert r.home_edge_type["TEST:0000009"] == "fabricated"  # peanut ⊄ fruit
+    assert r.labels["TEST:0000004"] == "Fruits"              # display_label preferred
