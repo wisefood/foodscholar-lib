@@ -28,3 +28,31 @@ def test_tree_depth_max_and_median():
     mx, med = tree_depth(_toy())
     assert mx == 2          # A1/A2 at depth 2
     assert med == 2.0       # home-node depths {A1:2, A2:2, B:1} -> max 2, median 2.0
+
+
+from foodscholar.layer_a.bakeoff.metrics import findability, sample_query_leaves
+
+
+def test_findability_clicks_from_root():
+    r = _toy()  # depths: A1=2, A2=2, B=1
+    out = findability(r, ["A1", "A2", "B"], k=2)
+    assert out["median_clicks"] == 2.0
+    assert out["p90_clicks"] == 2
+    assert out["pct_within_k"] == 1.0
+    assert out["pct_reachable"] == 1.0
+
+
+def test_findability_unreachable_leaf_counts_against_reachable():
+    r = _toy()
+    out = findability(r, ["A1", "X"], k=2)
+    assert out["pct_reachable"] == 0.5
+    assert out["pct_within_k"] == 0.5
+
+
+def test_sample_query_leaves_is_deterministic_and_stratified():
+    freq = {"a": 100, "b": 50, "c": 1, "d": 1, "e": 1}
+    s1 = sample_query_leaves(freq, n=4)
+    s2 = sample_query_leaves(freq, n=4)
+    assert s1 == s2
+    assert "a" in s1 and "c" in s1
+    assert len(s1) == 4
