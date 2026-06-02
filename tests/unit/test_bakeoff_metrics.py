@@ -76,3 +76,35 @@ def test_reproducibility_jaccard_of_node_sets():
     assert reproducibility(a, b) == 1.0
     b.edges = {"root": ["A"], "A": ["A1"]}
     assert reproducibility(a, b) < 1.0
+
+
+from foodscholar.layer_a.bakeoff.metrics import nameability
+
+
+class _FakeLLM:
+    model_id = "fake"
+
+    def __init__(self, verdicts):
+        self._verdicts = verdicts  # dict label -> bool
+
+    def generate(self, prompt, max_tokens=1024):
+        return ""
+
+    def generate_json(self, prompt, schema, max_tokens=1024):
+        return {"verdicts": [
+            {"label": lbl, "recognizable": ok} for lbl, ok in self._verdicts.items()
+        ]}
+
+
+def test_nameability_fraction_recognizable():
+    r = _toy()  # shelf labels: Fruit, Apple, Olive, Dairy (root 'Foods' excluded)
+    llm = _FakeLLM({"Apple": True, "Dairy": True, "Fruit": True, "Olive": False})
+    score = nameability(r, llm, sample=10)
+    assert score == 0.75
+
+
+def test_nameability_zero_when_llm_raises():
+    class Boom(_FakeLLM):
+        def generate_json(self, prompt, schema, max_tokens=1024):
+            raise RuntimeError("no llm")
+    assert nameability(_toy(), Boom({}), sample=10) == 0.0
