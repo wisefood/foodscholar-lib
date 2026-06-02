@@ -632,6 +632,45 @@ print(f"multi-facet: {len(multi_home)} multi-home chunks; top overlaps: "
     )
 )
 
+# ----------------------------------------------------------------- agentic (Plan B)
+cells.append(
+    md(
+        """## Agentic MCP method (Plan B) — GROQ-gated
+
+An LLM agent walks the FoodOn support DAG and makes local KEEP/COLLAPSE/REPARENT
+decisions through a read-only tool layer. Membership stays is-a (this increment
+shows relation bridges in the lens but does not yet act on them). Skipped without
+`GROQ_API_KEY`."""
+    )
+)
+
+cells.append(
+    code(
+        '''# Agentic method (Plan B). Uses the SAME food-product-filtered leaf universe
+# (CHUNK_TERMS) as the other columns, so the scorecard denominator is consistent.
+AGENTIC_RESULT = None
+if not HAVE_GROQ:
+    print("GROQ_API_KEY not set — skipping agentic method.")
+else:
+    from foodscholar.layer_a.bakeoff.agentic.relations import load_relation_index
+    from foodscholar.layer_a.bakeoff.agentic.agent import build_agentic_result
+
+    agentic_leaf_chunks = defaultdict(set)
+    for cid, terms in CHUNK_TERMS.items():
+        for fid in terms:
+            agentic_leaf_chunks[fid].add(cid)
+    rel_index = load_relation_index(str(ROOT / "data/foodon.owl"))
+    print(f"relation index: {len(rel_index)} FOODON terms with non-is-a relations")
+    AGENTIC_RESULT = build_agentic_result(
+        dict(agentic_leaf_chunks), api, relation_index=rel_index, llm=fs.llm,
+        root=FOOD_PRODUCT, min_support=25, max_depth=6, max_children=12,
+    )
+    RESULTS.append(AGENTIC_RESULT)
+    print(f"agentic: {len(AGENTIC_RESULT.edges)} internal nodes, "
+          f"{AGENTIC_RESULT.llm_calls} llm calls, {len(AGENTIC_RESULT.leaf_home)} leaves homed")'''
+    )
+)
+
 # ----------------------------------------------------------------- grouping + scorecard
 cells.append(
     md(
