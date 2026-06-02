@@ -1,0 +1,41 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    container_name: elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - wisefood-net
+
+  neo4j:
+    image: neo4j:5.20
+    container_name: neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/password123"
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - wisefood-net
+
+volumes:
+  elasticsearch_data:
+    external: true
+  neo4j_data:
+    external: true
+  neo4j_logs:
+    external: true
+
+networks:
+  wisefood-net:
+    driver: bridge

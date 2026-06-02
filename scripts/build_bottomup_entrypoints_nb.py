@@ -50,7 +50,7 @@ cells.append(
         r'''import html as _html
 import os
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from foodscholar.config import FoodScholarConfig
@@ -142,7 +142,29 @@ def concept_key(fid) -> str:
     return " ".join(toks) or l
 
 
+_SYN_BAD = re.compile(r"\d|\(|,|;|:")  # codes / parenthetical / list-y synonyms
+
+
+def _clean_synonym(fid):
+    """Best clean EXACT FoodOn synonym for display, or None. Projected (FoodOn's
+    own data) — prefer a short, plain synonym over the suffixed label."""
+    base = re.sub(r"\s+food product$", "", (api.id_to_label(fid) or "")).lower()
+    cands = [s for s in api.id_to_synonyms(fid, include_related=False)
+             if s and not _SYN_BAD.search(s) and 2 <= len(s) <= 30]
+    # prefer a synonym that ISN'T just the base label, shortest first
+    cands.sort(key=len)
+    for s in cands:
+        if s.lower() != base:
+            return s
+    return cands[0] if cands else None
+
+
 def clean_label(fid) -> str:
+    """Display label: FoodOn synonym if a clean one exists, else strip the
+    ' food product' suffix, else raw label. Fully FoodOn-sourced (no invention)."""
+    syn = _clean_synonym(fid)
+    if syn:
+        return syn
     lbl = api.id_to_label(fid) or fid
     return re.sub(r"\s+food product$", "", lbl)
 
@@ -467,6 +489,333 @@ group_chunk = Counter({group_label[e]: c for e, c in entries.items() if e in gro
 print("group sizes (chunks, by semantic assignment):")
 for g, c in group_chunk.most_common():
     print(f"   {c:5d}  {g}")'''
+    )
+)
+
+cells.append(
+    md(
+        """## Rule 4 — PROJECTED depth-preserving Layer A (the closing approach)
+
+Everything here is projected from FoodOn — entities, structure, depth, and labels:
+
+- **Bottom-up coverage:** every corpus-mentioned leaf is kept.
+- **Loosened support floor `K`:** a FoodOn node survives if `≥ K` distinct chunks
+  reach it or a mentioned descendant. Low `K` keeps the mid-level grouping tiers
+  that aggressive pruning used to dissolve.
+- **Keep FoodOn's real is-a structure + depth:** the tree is the surviving FoodOn
+  subtree under `food product`; each node's parent is its nearest surviving
+  is-a ancestor. No flattening, no invented tiers.
+- **Leaves attach by is-a** (a leaf's entry is itself; its ancestors are the
+  browsable tiers above it).
+- **Labels from FoodOn synonyms** (`clean_label`): synonym → strip-suffix → raw.
+  No LLM, no invention.
+
+We render the natural tree at a chosen `K` and print the depth/width profile so
+the floor and any depth cap can be decided by eye. Output:
+`data/viz/layer_a_projected_foods.html`."""
+    )
+)
+
+cells.append(
+    code(
+        r'''import html as _html2
+
+K_FLOOR = 5  # loosened support floor (probe showed K=5 → ~460 grouping tiers, fan-out ~26)
+
+# Node support = distinct chunks reaching the node or any MENTIONED descendant.
+node_chunks = {}
+for leaf, n in DIRECT.items():
+    chunks = DIRECT_CHUNKS.get(leaf, set())
+    node_chunks.setdefault(leaf, set()).update(chunks)
+    for a in api.id_to_ancestors(leaf):
+        if a in api:
+            node_chunks.setdefault(a, set()).update(chunks)
+node_support = {fid: len(s) for fid, s in node_chunks.items()}
+
+# Survivors: food-product descendants with support >= K, PLUS every mentioned leaf
+# (coverage: a leaf is never dropped even if below K).
+under_fp = lambda f: f == FOOD_PRODUCT or api.is_subclass_of(f, FOOD_PRODUCT)
+survivors = {f for f, sup in node_support.items() if sup >= K_FLOOR and under_fp(f)}
+survivors |= {leaf for leaf in DIRECT if under_fp(leaf)}
+survivors.add(FOOD_PRODUCT)
+
+# Projected parent = nearest surviving is-a ancestor (preserves real depth).
+def nearest_surviving_parent(fid):
+    ancs = [a for a in api.id_to_ancestors(fid) if a in survivors and a != fid]
+    if not ancs:
+        return None
+    # nearest = the ancestor with the MOST ancestors itself (deepest / closest above)
+    return max(ancs, key=lambda a: len(api.id_to_ancestors(a)))
+
+# Parent map (nearest surviving is-a ancestor) + children, rebuildable after curation.
+parent_of = {f: (nearest_surviving_parent(f) or FOOD_PRODUCT) for f in survivors if f != FOOD_PRODUCT}
+
+def build_children(parent_map):
+    ch = defaultdict(list)
+    for f, p in parent_map.items():
+        ch[p].append(f)
+    return ch
+
+proj_children = build_children(parent_of)
+
+def recompute(tag):
+    """Depth + stats over the current proj_children. Returns nothing; prints + sets globals."""
+    global proj_depth, depth_dist, fanout, n_internal
+    proj_depth = {FOOD_PRODUCT: 0}
+    stack = [(FOOD_PRODUCT, 0)]
+    while stack:
+        node, d = stack.pop()
+        proj_depth[node] = d
+        for c in proj_children.get(node, []):
+            stack.append((c, d + 1))
+    depth_dist = Counter(proj_depth.get(f, 0) for f in proj_depth)
+    fanout = sorted((len(v) for v in proj_children.values()), reverse=True)
+    n_internal = sum(1 for f in proj_children if proj_children.get(f))
+    print(f"[{tag}] K={K_FLOOR}: {len(proj_depth)} nodes | {n_internal} grouping tiers | "
+          f"max depth {max(proj_depth.values())} | top fan-out {fanout[:8]}")
+    print(f"   depth dist: {dict(sorted(depth_dist.items()))}")
+
+def subtree_chunks(node):
+    s = set(DIRECT_CHUNKS.get(node, set()))
+    for ch in proj_children.get(node, []):
+        s |= subtree_chunks(ch)
+    return s
+
+recompute("raw is-a")
+print(f"   every mentioned leaf present: {all(l in survivors for l in DIRECT if under_fp(l))}")'''
+    )
+)
+
+cells.append(
+    md(
+        """### Rule 4b — LLM tier-curation (keep-tier vs demote), real FoodOn nodes only
+
+The raw is-a tree is faithful but noisy: at one parent, real sub-categories
+(`berry`, `citrus fruit`) sit beside specific foods (`banana`, `mango`),
+botanical tiers (`solanaceous fruit`, `pomes`), and junk (`produce (raw)`).
+
+Per parent with many children, the LLM judges each child **keep-as-navigation-tier
+vs demote** — choosing only among the real FoodOn nodes we hand it (by index). A
+**demoted** node is spliced out: its children re-home to its nearest *kept*
+ancestor; it survives as a leaf only if it has direct chunks. Membership stays
+is-a (projected); the LLM only decides tier-vs-leaf. Degrades to a heuristic
+(demote botanical/junk labels) without `GROQ_API_KEY`."""
+    )
+)
+
+cells.append(
+    code(
+        r'''# Heuristic tier-vs-leaf judgment (stand-in / fallback): demote botanical taxonomy
+# and junk; keep recognizable category words.
+_BOTANICAL = ("solanaceous", "pome", "pomes", "cucurbit", "drupe", "aggregate fruit",
+              "rosaceae", "brassica", "allium", "by taxonomy", "true berry", "false fruit")
+_TIER_WORDS = ("vegetable", "fruit", "berry", "citrus", "stone fruit", "melon", "nut",
+               "seed", "grain", "cereal", "legume", "bean", "milk", "cheese", "meat",
+               "poultry", "fish", "seafood", "oil", "fat", "bread", "dairy", "egg",
+               "beverage", "juice", "herb", "spice", "sauce", "soup", "root vegetable",
+               "leafy", "shellfish")
+
+def heuristic_keep_tier(fid):
+    """CONSERVATIVE fallback: demote ONLY clear botanical/organizational/junk
+    labels; keep everything else as a tier. (The LLM is the real judge — an
+    aggressive heuristic over-demotes and blows up fan-out when leaves re-home.)"""
+    l = (api.id_to_label(fid) or "").lower()
+    if organizational(fid):
+        return False
+    if any(b in l for b in _BOTANICAL):
+        return False
+    return True  # keep by default — only the LLM aggressively prunes tiers
+
+def llm_keep_tiers(parent, children):
+    """Return the subset of `children` to KEEP as tiers. LLM picks by index."""
+    if not HAVE_GROQ:
+        return {c for c in children if heuristic_keep_tier(c)}
+    schema = {"type": "object", "properties": {"keep": {"type": "array",
+              "items": {"type": "integer"}}}, "required": ["keep"]}
+    blocks = "\n".join(f"  {i}. {clean_label(c)}  ({_sub(c)} chunks)"
+                       for i, c in enumerate(children, 1))
+    prompt = (
+        f"Under the food category {clean_label(parent)!r}, which of these are real "
+        f"NAVIGATION SUB-CATEGORIES a person would browse (e.g. 'berry', 'citrus "
+        f"fruit', 'root vegetable') versus specific foods, botanical/scientific "
+        f"groupings ('solanaceous fruit', 'pomes'), or junk ('produce (raw)') that "
+        f"should be demoted to leaves? Keep only genuine browse sub-categories.\n"
+        f"{blocks}\n\nReturn JSON {{\"keep\": [<indices to keep as sub-category>]}}."
+    )
+    try:
+        raw_idx = fs.llm.generate_json(prompt, schema, max_tokens=512).get("keep", [])
+    except Exception:
+        return {c for c in children if heuristic_keep_tier(c)}
+    # Groq structured output sometimes returns indices as strings — coerce to int.
+    keep_idx = set()
+    for x in raw_idx:
+        try:
+            keep_idx.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    return {children[i - 1] for i in keep_idx if 1 <= i <= len(children)}
+
+
+# Curate: for each internal node, decide which children stay tiers; demote the rest
+# (splice out — their children re-home to the nearest KEPT ancestor). Iterate top-down.
+CURATE_MIN_CHILDREN = 6  # only bother curating parents wider than this
+def _sub(node):  # subtree size cache (re-declared so this cell is self-contained)
+    s = SUB_CACHE.get(node)
+    if s is None:
+        s = len(subtree_chunks(node)); SUB_CACHE[node] = s
+    return s
+SUB_CACHE = {}
+
+kept_tier = set()   # fids confirmed as tiers
+demoted = set()     # fids spliced out as tiers (still leaves if direct chunks)
+# walk parents by depth (shallow first) so re-homing lands on already-decided tiers
+for parent in sorted(proj_children, key=lambda p: proj_depth.get(p, 0)):
+    kids = [c for c in proj_children.get(parent, []) if proj_children.get(c)]  # only sub-trees are tier candidates
+    if len(proj_children.get(parent, [])) < CURATE_MIN_CHILDREN or not kids:
+        continue
+    keep = llm_keep_tiers(parent, kids)
+    for c in kids:
+        (kept_tier if c in keep else demoted).add(c)
+
+# Rebuild parent_of: a demoted node is removed as a tier — its children point to the
+# demoted node's parent (nearest kept ancestor, found transitively).
+def nearest_kept(fid):
+    p = parent_of.get(fid, FOOD_PRODUCT)
+    while p in demoted:
+        p = parent_of.get(p, FOOD_PRODUCT)
+    return p
+
+new_parent = {}
+for f in survivors:
+    if f == FOOD_PRODUCT:
+        continue
+    if f in demoted and not DIRECT_CHUNKS.get(f):
+        continue  # spliced out entirely (no direct chunks → not even a leaf)
+    new_parent[f] = nearest_kept(f)
+parent_of = new_parent
+proj_children = build_children(parent_of)
+SUB_CACHE = {}  # subtree sizes change after re-homing
+recompute("curated")
+print(f"   kept {len(kept_tier)} tiers, demoted {len(demoted)} "
+      f"({'LLM' if HAVE_GROQ else 'heuristic'})")
+
+# Single-child / near-duplicate chain collapse: FoodOn has chains of near-identical
+# nodes (apple / apple (whole) / apple food product) that render as
+# `apple ← apple ← apple`. Collapse a parent INTO its child when the parent has
+# exactly one child AND (parent has no direct chunks of its own OR shares the
+# child's concept_key). The child takes the parent's parent. Iterate to fixed point.
+collapsed = 0
+changed = True
+while changed:
+    changed = False
+    for parent in list(proj_children):
+        if parent == FOOD_PRODUCT:
+            continue
+        kids = proj_children.get(parent, [])
+        # Same-label/concept child: merge even if the parent has other children
+        # (the apple/apple/apple case — a near-duplicate child folds into parent).
+        # Compare on the DISPLAY label too, since FoodOn near-dups share a label
+        # even when concept_key differs slightly.
+        pk, pl = concept_key(parent), clean_label(parent).lower()
+        same_kids = [c for c in kids
+                     if concept_key(c) == pk or clean_label(c).lower() == pl]
+        if same_kids:
+            child = same_kids[0]
+            # re-home the merged child's children to `parent`, then drop child
+            for gc in proj_children.get(child, []):
+                parent_of[gc] = parent
+            parent_of.pop(child, None)
+            proj_children = build_children(parent_of)
+            collapsed += 1
+            changed = True
+            break
+        if len(kids) != 1:
+            continue
+        child = kids[0]
+        same = concept_key(parent) == concept_key(child)
+        no_own = not DIRECT_CHUNKS.get(parent)
+        if not (same or no_own):
+            continue
+        # rewire child to parent's parent; drop parent
+        gp = parent_of.get(parent, FOOD_PRODUCT)
+        parent_of[child] = gp
+        parent_of.pop(parent, None)
+        proj_children = build_children(parent_of)
+        collapsed += 1
+        changed = True
+        break
+SUB_CACHE = {}
+recompute("collapsed")
+print(f"   collapsed {collapsed} single-child / near-duplicate chain links")'''
+    )
+)
+
+cells.append(
+    code(
+        r'''# Render the projected subtree as a collapsible <details> tree with synonym labels.
+SUB_CACHE = {}
+def _sub(node):
+    if node not in SUB_CACHE:
+        SUB_CACHE[node] = len(subtree_chunks(node))
+    return SUB_CACHE[node]
+
+def render_node(node, rel, max_depth=None, open_depth=1, max_children=40):
+    label = _html2.escape(clean_label(node))
+    kids = sorted(proj_children.get(node, []), key=lambda c: -_sub(c))
+    nch = len(kids)
+    direct = len(DIRECT_CHUNKS.get(node, set()))
+    badge = (f"<span class='c'>{nch} sub · {_sub(node):,} chunks"
+             + (f" · {direct} direct" if direct else "") + "</span>")
+    if not kids or (max_depth is not None and rel >= max_depth):
+        extra = f" <span class='m'>(+{nch} below)</span>" if nch else ""
+        return f"<li>{label}{badge}{extra}</li>"
+    shown = kids[:max_children]
+    hidden = nch - len(shown)
+    inner = "".join(render_node(c, rel + 1, max_depth, open_depth, max_children) for c in shown)
+    if hidden:
+        inner += f"<li class='m'>+{hidden} more…</li>"
+    op = " open" if rel < open_depth else ""
+    return f"<li><details{op}><summary><b>{label}</b>{badge}</summary><ul>{inner}</ul></details></li>"
+
+# DEPTH_CAP: None = natural depth (decide cap after seeing it). Set an int to cap.
+DEPTH_CAP = None
+proj_tree = f"<ul class='ftree'>{render_node(FOOD_PRODUCT, 0, max_depth=DEPTH_CAP)}</ul>"
+
+from jinja2 import Template
+PROJ_REPORT = Template("""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Layer A — projected (depth-preserving)</title><style>
+  body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:1100px;margin:1.5rem auto;padding:0 1rem;}
+  h1{border-bottom:3px solid #4c72b0;padding-bottom:.3rem;}
+  .meta{color:#888;font-size:.85rem;} .stat{background:#f5f7fa;padding:.5rem .8rem;border-radius:6px;font-size:.85rem;}
+  ul.ftree,ul.ftree ul{list-style:none;margin:0;padding-left:1rem;border-left:1px dotted #cbd2dc;}
+  ul.ftree{padding-left:0;border-left:none;} ul.ftree li{margin:.1rem 0;font-size:.86rem;}
+  ul.ftree summary{cursor:pointer;} .c{color:#8a93a0;font-size:.8em;margin-left:.35rem;} .m{color:#c44e52;font-size:.82em;font-style:italic;}
+</style></head><body>
+<h1>Layer A — projected, depth-preserving (foods)</h1>
+<p class="meta">Fully projected from FoodOn: entities, is-a structure, depth, and synonym labels. Support floor K={{k}}, depth cap={{cap}}.</p>
+<div class="stat">{{ nodes }} surviving FoodOn nodes · {{ internal }} grouping tiers · max depth {{ maxd }} · top fan-out {{ fan }}<br>
+depth distribution: {{ ddist }}</div>
+{{ tree }}
+</body></html>""")
+
+proj_out = VIZ_DIR / "layer_a_projected_foods.html"
+proj_out.write_text(PROJ_REPORT.render(
+    k=K_FLOOR, cap=DEPTH_CAP, nodes=len(survivors), internal=n_internal,
+    maxd=max(proj_depth.values()), fan=fanout[:6], ddist=dict(sorted(depth_dist.items())),
+    tree=proj_tree), encoding="utf-8")
+print(f"wrote {proj_out} ({proj_out.stat().st_size/1024:.0f} KB)")
+print("tracked foods + their FINAL (curated+collapsed) ancestor path:")
+for nm in ("apple", "bean", "mackerel", "broccoli", "cow milk"):
+    fid = api.name_to_id(nm)
+    # a tracked leaf may have been merged away by collapse — follow to a present node
+    cur = fid
+    while cur is not None and cur not in parent_of and cur != FOOD_PRODUCT:
+        cur = nearest_surviving_parent(cur)
+    path = []
+    while cur is not None and len(path) < 6:
+        path.append(clean_label(cur))
+        cur = parent_of.get(cur) if cur != FOOD_PRODUCT else None
+    print(f"   {nm}: " + " ← ".join(path))'''
     )
 )
 
