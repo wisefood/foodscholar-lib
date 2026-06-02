@@ -78,3 +78,30 @@ def sample_query_leaves(leaf_freq: dict[str, int], *, n: int) -> list[str]:
     head = n // 2
     tail = n - head
     return by_freq[:head] + by_freq[head:head + tail]
+
+
+def faithfulness(result: MethodResult) -> dict[str, float]:
+    """Fraction of homed leaves whose membership edge is is-a / other-relation /
+    fabricated. is-a + other-relation = 'within FoodOn'; fabricated = invented."""
+    cats = {"is-a": 0, "other-relation": 0, "fabricated": 0}
+    for etype in result.home_edge_type.values():
+        if etype in cats:
+            cats[etype] += 1
+    total = sum(cats.values()) or 1
+    return {k: v / total for k, v in cats.items()}
+
+
+def _all_nodes(result: MethodResult) -> set[str]:
+    nodes = {result.root, *result.edges.keys()}
+    for kids in result.edges.values():
+        nodes.update(kids)
+    return nodes
+
+
+def reproducibility(a: MethodResult, b: MethodResult) -> float:
+    """Jaccard similarity of the two runs' node-id sets (1.0 = identical)."""
+    na, nb = _all_nodes(a), _all_nodes(b)
+    union = na | nb
+    if not union:
+        return 1.0
+    return len(na & nb) / len(union)

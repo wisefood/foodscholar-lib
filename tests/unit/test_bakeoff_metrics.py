@@ -56,3 +56,23 @@ def test_sample_query_leaves_is_deterministic_and_stratified():
     assert s1 == s2
     assert "a" in s1 and "c" in s1
     assert len(s1) == 4
+
+
+from foodscholar.layer_a.bakeoff.metrics import faithfulness, reproducibility
+
+
+def test_faithfulness_tallies_home_edge_types():
+    r = _toy()
+    r.home_edge_type = {"A1": "is-a", "A2": "is-a", "B": "fabricated"}
+    f = faithfulness(r)
+    assert f["is-a"] == 2 / 3
+    assert f["fabricated"] == 1 / 3
+    assert f["other-relation"] == 0.0
+
+
+def test_reproducibility_jaccard_of_node_sets():
+    a = _toy()
+    b = _toy()
+    assert reproducibility(a, b) == 1.0
+    b.edges = {"root": ["A"], "A": ["A1"]}
+    assert reproducibility(a, b) < 1.0
