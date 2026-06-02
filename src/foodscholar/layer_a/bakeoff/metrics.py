@@ -37,7 +37,7 @@ def tree_depth(result: MethodResult) -> tuple[int, float]:
 def _percentile(sorted_vals: list[float], pct: float) -> float:
     if not sorted_vals:
         return 0.0
-    idx = min(len(sorted_vals) - 1, int(round((pct / 100) * (len(sorted_vals) - 1))))
+    idx = min(len(sorted_vals) - 1, round((pct / 100) * (len(sorted_vals) - 1)))
     return sorted_vals[idx]
 
 
