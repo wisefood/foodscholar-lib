@@ -54,7 +54,8 @@ def test_sample_query_leaves_is_deterministic_and_stratified():
     s1 = sample_query_leaves(freq, n=4)
     s2 = sample_query_leaves(freq, n=4)
     assert s1 == s2
-    assert "a" in s1 and "c" in s1
+    assert s1 == ["a", "b", "d", "e"]  # 2 most-frequent + 2 rarest (stratified)
+    assert "a" in s1 and "e" in s1     # a common and a rare leaf both sampled
     assert len(s1) == 4
 
 
