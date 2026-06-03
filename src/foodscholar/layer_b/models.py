@@ -36,6 +36,12 @@ class ThemeCandidate(BaseModel):
     foodon_ids: set[str] = Field(default_factory=set)
     centroid_embedding: list[float] | None = None
     discovered_by: DiscoveredBy = "leiden"
+    origin_shelf_id: str | None = None
+    """The shelf this candidate's graph was built from, when the pass ran
+    per-shelf. Set for per-shelf Pass 1 (and Pass 2, which is always per-shelf);
+    `None` for global Pass 1, where the community spans shelves and has no single
+    origin. When set, the theme attaches to exactly this shelf rather than the
+    union of its member chunks' shelves (which over-attaches via lifted chunks)."""
 
 
 class MergeDecision(BaseModel):
