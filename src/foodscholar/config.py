@@ -381,6 +381,21 @@ class LayerAConfig(BaseModel):
             "nutrients",
         ]
     )
+    projection: Literal["backbone", "prune"] = "backbone"
+    """Layer A construction method. ``"backbone"`` (1a+, default): backbone-first
+    controlled expansion — pick the facet root's supported children, expand down
+    real FoodOn tiers with filing-tier collapse, single-parent, and empty-leaf
+    prune. ``"prune"``: the older support-driven cascade (umbrella + threshold +
+    single-child collapse). Both are is-a faithful; backbone is the validated one."""
+
+    backbone_max_children: int = 12
+    """Max children shown per node under the ``"backbone"`` projection (fan-out cap)."""
+
+    alias_shelves: bool = True
+    """Run an LLM aliasing pass after projection to give jargon-labelled shelves a
+    human-facing `display_label` for browsable navigation. Additive — never changes
+    labels/ids/structure. No-op when no LLM is attached."""
+
     facet_overrides: dict[Facet, FacetConfig] = Field(default_factory=dict)
     """Per-facet overrides on top of the globals above. A facet not in this
     dict uses globals verbatim."""
@@ -542,6 +557,16 @@ class LayerBConfig(BaseModel):
     min_embedded_fraction: float = 0.80
     """Skip shelves where < this fraction of chunks have embeddings —
     clustering a biased subsample is worse than not clustering at all."""
+
+    pass1_mode: Literal["global", "per_shelf"] = "global"
+    """How Pass 1 (similarity) scopes its kNN graph + Leiden run.
+
+    - ``"global"`` (default): one graph over ALL attached chunks in the facet.
+      Finds cross-shelf bridges — a theme's ``shelf_ids`` can have length ≥ 2.
+    - ``"per_shelf"``: a separate graph + Leiden per shelf. Every Pass-1 theme
+      is single-shelf; cross-shelf bridges are NOT discovered. Useful for the
+      bake-off (compare against ``"global"``) and matches the intent the
+      ``global_similarity_max_chunks`` fallback docstring already promised."""
 
     similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
     relatedness: RelatednessConfig = Field(default_factory=RelatednessConfig)

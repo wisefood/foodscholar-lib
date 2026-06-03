@@ -1,19 +1,29 @@
-"""Assemble notebooks/projection_bakeoff.ipynb from source cells.
+"""Assemble notebooks/layer_a_method_bakeoff.ipynb from source cells.
 
-Compares competing Layer-A projection methodologies on the foods facet, side by
-side, judged by eye. Kept as a script so the notebook source stays reviewable
-and regenerable. Run with the foodscholar env:
+Compares competing Layer-A construction methods on the foods facet, side by
+side, with a metric-driven scorecard on top (coverage, findability, nameability,
+fan-out, depth, faithfulness) plus the eyeball tree columns. Kept as a script so
+the notebook source stays reviewable and regenerable. Run with the foodscholar
+env:
 
-    /mnt/miniconda3/envs/foodscholar/bin/python scripts/build_projection_bakeoff_nb.py
+    /mnt/miniconda3/envs/foodscholar/bin/python scripts/build_layer_a_method_bakeoff_nb.py
 
-Spec: docs/superpowers/specs/2026-05-28-layer-a-projection-bakeoff-design.md
+Specs: docs/methods_layer_a_bakeoff_brief.md +
+docs/superpowers/plans/2026-06-02-layer-a-method-bakeoff-harness.md
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path as _Path
+
+# This script was archived under research/. Put research/ on the path so the
+# relocated bake-off package imports as `bakeoff` (was foodscholar.layer_a.bakeoff).
+sys.path.insert(0, str(_Path(__file__).resolve().parent))
+
 import nbformat as nbf
 
-NB_PATH = "notebooks/projection_bakeoff.ipynb"
+NB_PATH = "notebooks/layer_a_method_bakeoff.ipynb"
 md = nbf.v4.new_markdown_cell
 code = nbf.v4.new_code_cell
 cells: list = []
@@ -21,12 +31,12 @@ cells: list = []
 # ----------------------------------------------------------------- title
 cells.append(
     md(
-        """# Layer-A projection bake-off — foods facet
+        """# Layer-A method bake-off — foods facet
 
-The current projection produces a flat, un-navigable foods facet, and the
-re-tiering patch made it worse. The methodology is wrong for *browsing*, so this
-notebook renders **competing projection methodologies on the same foods data,
-side by side, judged by eye**. No production code until one wins.
+This notebook renders **competing Layer-A construction methods on the same foods
+data, side by side**, with a **metric-driven scorecard on top** (coverage,
+findability, nameability, fan-out, depth, faithfulness, llm-calls) so methods are
+compared on numbers, not just by eye. No production code until one wins.
 
 **The reframe under test:** stop deriving the browse tree from corpus support.
 Choose a category **backbone** first (designed for browsing), then **attach**
@@ -104,7 +114,6 @@ def chunk_food_terms(c):
     # keep only terms under food product (the foods sub-ontology)
     return {f for f in fids if f == FOOD_PRODUCT or api.is_subclass_of(f, FOOD_PRODUCT)}
 
-
 CHUNK_TERMS = {c.chunk_id: chunk_food_terms(c) for c in chunks}
 CHUNK_TERMS = {cid: t for cid, t in CHUNK_TERMS.items() if t}
 TERM_DOC_FREQ = Counter()
@@ -160,16 +169,25 @@ def lift_to_backbone(backbone_ids):
             multi_home[cid] = hits
     return homed, multi_home, unhomed
 
-
 # ---- tree rendering ----------------------------------------------------------
 def render_tree_from_edges(root_id, children_map, count_map, label_fn,
-                           max_depth=4, open_depth=1, max_children=18):
-    """Generic nested <details> renderer over an explicit children_map."""
+                           max_depth=4, open_depth=1, max_children=18,
+                           direct_map=None):
+    """Generic nested <details> renderer over an explicit children_map.
+
+    `count_map[nid]` is the TOTAL distinct chunks under nid (direct + via
+    descendants). When `direct_map` is given, the badge breaks it down as
+    `Chunks: total (D: direct | L: lifted)` where lifted = total - direct."""
     def node(nid, rel):
         kids = sorted(children_map.get(nid, []), key=lambda c: -count_map.get(c, 0))
         nch = len(kids)
         cnt = count_map.get(nid, 0)
-        badge = f"<span class='c'>{nch} sub · {cnt:,} chunks</span>"
+        if direct_map is not None:
+            d = direct_map.get(nid, 0)
+            lifted = max(cnt - d, 0)
+            badge = f"<span class='c'>{nch} sub · Chunks: {cnt:,} (D: {d:,} | L: {lifted:,})</span>"
+        else:
+            badge = f"<span class='c'>{nch} sub · {cnt:,} chunks</span>"
         empty = " empty" if cnt == 0 else ""
         label = _html.escape(label_fn(nid))
         if nch == 0 or rel >= max_depth:
@@ -183,173 +201,28 @@ def render_tree_from_edges(root_id, children_map, count_map, label_fn,
         return f"<li class='{empty}'><details{op}><summary><b>{label}</b>{badge}</summary><ul>{inner}</ul></details></li>"
     return f"<ul class='ftree'>{node(root_id, 0)}</ul>"
 
-
 def stats_line(top_fanout, depth, homed_chunks, total_chunks, n_empty, n_multi):
     pct = 100 * homed_chunks / total_chunks if total_chunks else 0
     return (f"top fan-out <b>{top_fanout}</b> · depth <b>{depth}</b> · "
             f"<b>{pct:.0f}%</b> chunks homed · <b>{n_empty}</b> empty cats · "
             f"<b>{n_multi}</b> multi-home chunks")
 
+# Bake-off harness: wrap each method's tree into a MethodResult for the scorecard.
+from bakeoff.result import from_children_map, from_shelves
 
 COLUMNS = []  # each: {"title","stats","tree"}
+RESULTS = []  # each: a MethodResult, for the cross-method scorecard
+MENTIONED = set(TERM_DOC_FREQ)  # corpus-mentioned food leaves (shared denominator)
 TOTAL_FOOD_CHUNKS = len(CHUNK_TERMS)
 print("helpers ready")'''
     )
 )
 
 # ----------------------------------------------------------------- Col 0 baseline
-cells.append(md("## Col 0 — Baseline (current `build_layer_a`)"))
-
-cells.append(
-    code(
-        '''fs.build_layer_a()
-base_shelves = [s for s in fs.graph_store.list_shelves() if s.facet == "foods"]
-base_by_id = {s.shelf_id: s for s in base_shelves}
-base_children = defaultdict(list)
-for s in base_shelves:
-    if s.parent_shelf_id:
-        base_children[s.parent_shelf_id].append(s.shelf_id)
-base_counts = {s.shelf_id: s.chunk_count for s in base_shelves}
-base_root = next((s.shelf_id for s in base_shelves if s.parent_shelf_id is None), None)
-
-
-def base_label(sid):
-    return base_by_id[sid].label if sid in base_by_id else sid
-
-
-base_tree = render_tree_from_edges(base_root, base_children, base_counts, base_label)
-base_fanout = max((len(v) for v in base_children.values()), default=0)
-base_depth = max((s.depth for s in base_shelves), default=0)
-base_empty = sum(1 for s in base_shelves if s.chunk_count == 0)
-COLUMNS.append({
-    "title": "0 — Baseline (current build)",
-    "stats": stats_line(base_fanout, base_depth, TOTAL_FOOD_CHUNKS, TOTAL_FOOD_CHUNKS, base_empty, 0),
-    "tree": base_tree,
-})
-print(f"baseline: {len(base_shelves)} shelves, top fan-out {base_fanout}, depth {base_depth}")'''
-    )
-)
 
 # ----------------------------------------------------------------- Col 2 structural cut
-cells.append(
-    md(
-        """## Col 2 — Structural cut (no support collapse)
-
-Take FoodOn's real hierarchy under `food product` and cut it at a fixed depth
-horizon, keeping the **real intermediate tiers** regardless of support. Parent
-edges are FoodOn's own is-a edges (single-parent pick for the tree), not
-nearest-*surviving*-ancestor. Counts are evidence lifted to each node."""
-    )
-)
-
-cells.append(
-    code(
-        '''# Real FoodOn subtree under food product, capped at CUT_DEPTH levels.
-CUT_DEPTH = 3  # levels below food product to keep as the browse tree
-
-# Build the node set: food product + descendants within CUT_DEPTH.
-cut_nodes = {FOOD_PRODUCT}
-frontier = {FOOD_PRODUCT}
-for _ in range(CUT_DEPTH):
-    nxt = set()
-    for n in frontier:
-        for c in api.id_to_children(n):
-            if c in api:
-                cut_nodes.add(c)
-                nxt.add(c)
-    frontier = nxt
-
-# Single-parent tree edges: each node's parent = its FoodOn parent that's in cut_nodes.
-cut_children = defaultdict(list)
-for n in cut_nodes:
-    if n == FOOD_PRODUCT:
-        continue
-    parents = [p for p in api.id_to_parents(n) if p in cut_nodes]
-    parent = parents[0] if parents else FOOD_PRODUCT
-    cut_children[parent].append(n)
-
-# Counts: lift every chunk term to the deepest cut-node ancestor it has.
-cut_counts = Counter()
-for cid, terms in CHUNK_TERMS.items():
-    nodes = set()
-    for fid in terms:
-        ancs = [a for a in ([fid] + api.id_to_ancestors(fid)) if a in cut_nodes]
-        if ancs:
-            nodes.add(max(ancs, key=lambda a: len(api.id_to_ancestors(a))))
-    for nd in nodes:
-        cut_counts[nd] += 1
-
-cut_tree = render_tree_from_edges(FOOD_PRODUCT, cut_children, cut_counts,
-                                  lambda n: api.id_to_label(n) or n)
-cut_fanout = max((len(v) for v in cut_children.values()), default=0)
-cut_empty = sum(1 for n in cut_nodes if cut_counts.get(n, 0) == 0)
-homed = sum(1 for cid, terms in CHUNK_TERMS.items()
-            if any(a in cut_nodes for fid in terms for a in [fid] + api.id_to_ancestors(fid)))
-COLUMNS.append({
-    "title": f"2 — Structural cut (depth {CUT_DEPTH})",
-    "stats": stats_line(cut_fanout, CUT_DEPTH, homed, TOTAL_FOOD_CHUNKS, cut_empty, 0),
-    "tree": cut_tree,
-})
-print(f"structural cut: {len(cut_nodes)} nodes, top fan-out {cut_fanout}, {cut_empty} empty")'''
-    )
-)
 
 # ----------------------------------------------------------------- Col 1a/1b backbone
-cells.append(
-    md(
-        """## Col 1a / 1b — Backbone-first (support decorates)
-
-Choose a small top-level category backbone, then lift every chunk to its nearest
-backbone node. The tree is exactly two tiers (backbone → its FoodOn children
-that have evidence), so it's browsable by construction. **1a** picks the
-backbone by a structural rule; **1b** asks the LLM to propose it."""
-    )
-)
-
-cells.append(
-    code(
-        '''def backbone_column(title, backbone_ids):
-    backbone_ids = [b for b in backbone_ids if b in api]
-    homed, multi_home, unhomed = lift_to_backbone(backbone_ids)
-    # tree: synthetic root -> backbone nodes -> (their direct FoodOn children w/ evidence)
-    ROOT = "__backbone_root__"
-    children = defaultdict(list)
-    counts = {}
-    labels = {ROOT: "foods"}
-    counts[ROOT] = sum(len(v) for v in homed.values())
-    for b in backbone_ids:
-        children[ROOT].append(b)
-        counts[b] = len(homed.get(b, set()))
-        labels[b] = api.id_to_label(b) or b
-        # second tier: backbone's FoodOn children that themselves got evidence
-        for c in api.id_to_children(b):
-            ev = sum(1 for cid, terms in CHUNK_TERMS.items()
-                     if c in terms or any(c == a for fid in terms for a in api.id_to_ancestors(fid)))
-            if ev > 0:
-                children[b].append(c)
-                counts[c] = ev
-                labels[c] = api.id_to_label(c) or c
-
-    tree = render_tree_from_edges(ROOT, children, counts, lambda n: labels.get(n, n),
-                                  max_depth=2, open_depth=1)
-    fanout = max(len(children.get(ROOT, [])), max((len(children.get(b, [])) for b in backbone_ids), default=0))
-    n_empty = sum(1 for b in backbone_ids if counts.get(b, 0) == 0)
-    homed_chunks = TOTAL_FOOD_CHUNKS - len(unhomed)
-    COLUMNS.append({
-        "title": title,
-        "stats": stats_line(fanout, 2, homed_chunks, TOTAL_FOOD_CHUNKS, n_empty, len(multi_home)),
-        "tree": tree,
-    })
-    return multi_home
-
-
-# 1a — auto backbone = the direct children of food product (10 real FoodOn cats).
-auto_backbone = api.id_to_children(FOOD_PRODUCT)
-MULTI_HOME_1A = backbone_column(f"1a — Auto backbone ({len(auto_backbone)} cats)", auto_backbone)
-print(f"1a auto backbone: {[api.id_to_label(b) for b in auto_backbone]}")
-print(f"1a multi-home chunks: {len(MULTI_HOME_1A)} / {TOTAL_FOOD_CHUNKS}")'''
-    )
-)
 
 cells.append(
     md(
@@ -366,7 +239,8 @@ cells.append(
     code(
         '''# 1a+ — same auto backbone, but expand large buckets with constrained tiers.
 # Counts are chunk support for each FoodOn node or any of its descendants.
-NODE_CHUNKS = defaultdict(set)
+NODE_CHUNKS = defaultdict(set)   # node -> distinct chunks under it (direct OR via descendants)
+DIRECT_CHUNKS = defaultdict(set) # node -> distinct chunks that mention it EXACTLY (direct)
 TERM_ROLLUPS = {}
 for fid in TERM_DOC_FREQ:
     rollups = [fid] + [
@@ -377,19 +251,25 @@ for fid in TERM_DOC_FREQ:
 
 for cid, terms in CHUNK_TERMS.items():
     for fid in terms:
+        DIRECT_CHUNKS[fid].add(cid)
         for nd in TERM_ROLLUPS.get(fid, ()):
             NODE_CHUNKS[nd].add(cid)
 
 
+def dl_maps(node_ids):
+    """(total_map, direct_map) over `node_ids`, both distinct-chunk counts.
+    total = chunks under node (direct + descendants); direct = chunks mentioning
+    the exact FoodOn id. No node double-counts (set semantics)."""
+    total = {n: len(NODE_CHUNKS.get(n, ())) for n in node_ids}
+    direct = {n: len(DIRECT_CHUNKS.get(n, ())) for n in node_ids}
+    return total, direct
+
 EXPAND_MIN_CHUNKS = 25
 EXPAND_MAX_DEPTH = 6       # root -> backbone -> ... -> concrete high-support terms
 EXPAND_MAX_CHILDREN = 12   # hard cap per opened parent
-EXPAND_MIN_CHILDREN = 2    # skip pure filing chains when possible
-
 
 def node_support(fid):
     return len(NODE_CHUNKS.get(fid, set()))
-
 
 def supported_children(fid):
     kids = []
@@ -401,14 +281,12 @@ def supported_children(fid):
             kids.append(child)
     return kids
 
-
 def evidence_descendant_count(fid):
     """How many distinct directly mentioned FoodOn terms live under this node."""
     return sum(
         1 for term_id, n in TERM_DOC_FREQ.items()
         if n > 0 and (term_id == fid or api.is_subclass_of(term_id, fid))
     )
-
 
 def display_rank(fid):
     # Prefer useful grouping nodes first, then high-support concrete terms.
@@ -419,26 +297,59 @@ def display_rank(fid):
         -(len(api.id_to_label(fid) or fid)),
     )
 
+def resolve_filing_tier(fid):
+    """Descend through single-child filing tiers that carry NO direct chunks of
+    their own, returning the first meaningful node.
 
-def collapsed_supported_children(fid, *, depth_left):
-    """Return display children, skipping low-value single-child filing chains.
-
-    If FoodOn says A -> B -> C but B is the only supported child and B is not
-    directly evidenced, the projection may show C under A. This keeps navigation
-    shorter while all displayed nodes remain real FoodOn ids.
-    """
-    kids = supported_children(fid)
+    A node with 0 direct chunks and exactly one supported child is a pure filing
+    tier (e.g. `maize kernel` over `corn kernel`); we show its descendant instead.
+    Faithful — the kept node is still a real is-a descendant. Chains of any length
+    collapse, and a node that branches (>=2 children) or has direct chunks stops
+    the descent (it's a real grouping / leaf)."""
+    seen = set()
     while (
-        depth_left > 1
-        and len(kids) == 1
-        and TERM_DOC_FREQ.get(kids[0], 0) == 0
-        and len(supported_children(kids[0])) >= EXPAND_MIN_CHILDREN
+        fid not in seen
+        and TERM_DOC_FREQ.get(fid, 0) == 0      # no direct chunks of its own
+        and len(supported_children(fid)) == 1   # a single-child filing tier
     ):
-        fid = kids[0]
-        kids = supported_children(fid)
-        depth_left -= 1
-    return sorted(kids, key=display_rank, reverse=True)[:EXPAND_MAX_CHILDREN]
+        seen.add(fid)
+        fid = supported_children(fid)[0]
+    return fid
 
+
+def collapsed_supported_children(fid):
+    """Display children of `fid`, with each child resolved through filing tiers so
+    e.g. `Corn -> maize kernel(0) -> corn kernel(83)` shows `corn kernel` directly
+    under `Corn`. Deduped (two tiers can resolve to the same node), ranked, capped."""
+    out, seen = [], set()
+    for child in supported_children(fid):
+        resolved = resolve_filing_tier(child)
+        if resolved not in seen:
+            seen.add(resolved)
+            out.append(resolved)
+    return sorted(out, key=display_rank, reverse=True)[:EXPAND_MAX_CHILDREN]
+
+
+def prune_empty_leaves(children, root):
+    """Remove display-leaf nodes that have NO displayed descendants and NO direct
+    chunks (pure filing dead-ends). Cascades: a parent left empty + zero-direct is
+    pruned in turn. `root` is never pruned. Mutates and returns `children`."""
+    changed = True
+    while changed:
+        changed = False
+        for parent in list(children):
+            kept = []
+            for c in children[parent]:
+                is_leaf = not children.get(c)
+                if is_leaf and c != root and len(DIRECT_CHUNKS.get(c, ())) == 0:
+                    changed = True  # prune: empty filing dead-end
+                else:
+                    kept.append(c)
+            if kept:
+                children[parent] = kept
+            else:
+                del children[parent]  # parent now childless; drop its edge list
+    return children
 
 def controlled_backbone_column(title, backbone_ids):
     backbone_ids = [b for b in backbone_ids if b in api]
@@ -448,39 +359,49 @@ def controlled_backbone_column(title, backbone_ids):
     children = defaultdict(list)
     counts = {ROOT: sum(len(v) for v in homed.values())}
     labels = {ROOT: "foods"}
-    seen_edges = set()
-
-    def add_edge(parent, child):
-        edge = (parent, child)
-        if edge not in seen_edges:
-            children[parent].append(child)
-            seen_edges.add(edge)
+    # FoodOn is a multi-parent DAG (e.g. broccoli is-a 3 categories). Project to a
+    # single-parent TREE: each node is placed under exactly ONE parent — the first
+    # to reach it in this support-sorted DFS — so a node (and its chunks) never
+    # appears twice. Matches the structural-cut column + production prune.
+    placed: set[str] = set()
 
     def expand(parent, rel_depth):
         if rel_depth >= EXPAND_MAX_DEPTH:
             return
-        depth_left = EXPAND_MAX_DEPTH - rel_depth
-        kids = collapsed_supported_children(parent, depth_left=depth_left)
-        for child in kids:
-            add_edge(parent, child)
+        for child in collapsed_supported_children(parent):
+            if child in placed:
+                continue
+            placed.add(child)
+            children[parent].append(child)
             counts[child] = node_support(child)
             labels[child] = api.id_to_label(child) or child
             expand(child, rel_depth + 1)
 
     for b in sorted(backbone_ids, key=display_rank, reverse=True):
-        add_edge(ROOT, b)
+        if b in placed:
+            continue
+        placed.add(b)
+        children[ROOT].append(b)
         counts[b] = len(homed.get(b, set()))
         labels[b] = api.id_to_label(b) or b
         expand(b, 1)
 
+    # Faithful view cleanup: drop empty filing dead-ends (no descendants, no direct
+    # chunks). Collapse of single-child tiers already happened in expand().
+    prune_empty_leaves(children, ROOT)
+
+    tree_node_ids = {ROOT, *children, *(c for kids in children.values() for c in kids)}
+    total_map, direct_map = dl_maps(tree_node_ids)
+    total_map[ROOT] = TOTAL_FOOD_CHUNKS  # synthetic root carries all food chunks
     tree = render_tree_from_edges(
         ROOT,
         children,
-        counts,
+        total_map,
         lambda n: labels.get(n, n),
         max_depth=EXPAND_MAX_DEPTH,
         open_depth=2,
         max_children=EXPAND_MAX_CHILDREN,
+        direct_map=direct_map,
     )
     fanout = max((len(v) for v in children.values()), default=0)
     n_empty = sum(1 for b in backbone_ids if counts.get(b, 0) == 0)
@@ -494,10 +415,18 @@ def controlled_backbone_column(title, backbone_ids):
         ),
         "tree": tree,
     })
-    return multi_home
+    result = from_children_map(
+        title.split(" —")[0].strip(), root=ROOT, children_map=children,
+        counts=counts, labels=labels, ontology=api, mentioned_leaves=MENTIONED,
+    )
+    RESULTS.append(result)
+    # Return the frozen MethodResult too — the agentic alias pass reuses this exact
+    # backbone (structure + is-a homing) and only adds aliases on top of it.
+    return multi_home, result
 
-
-MULTI_HOME_1A_PLUS = controlled_backbone_column(
+# auto backbone = the direct children of food product (real FoodOn cats).
+auto_backbone = api.id_to_children(FOOD_PRODUCT)
+MULTI_HOME_1A_PLUS, BASE_1APLUS_RESULT = controlled_backbone_column(
     f"1a+ — Auto backbone + controlled expansion ({len(auto_backbone)} cats)",
     auto_backbone,
 )
@@ -509,100 +438,91 @@ print(
     )
 )
 
-cells.append(
-    code(
-        r'''# 1b — LLM-proposed backbone. The LLM proposes intuitive top-level food
-# categories BY NAME; we resolve each to a real FoodOn id (drop unresolved) so
-# we never leave FoodOn.
-LLM_BACKBONE = []
-if not HAVE_GROQ:
-    print("GROQ_API_KEY not set — skipping 1b (LLM backbone). Set it and re-run.")
-else:
-    BACKBONE_SCHEMA = {
-        "type": "object",
-        "properties": {"categories": {"type": "array", "items": {"type": "string"}}},
-        "required": ["categories"],
-    }
-    # Give the model the available FoodOn vocabulary cues: the 10 real children +
-    # a sample of high-frequency linked terms, so its names map back cleanly.
-    sample_terms = [api.id_to_label(fid) for fid, _ in TERM_DOC_FREQ.most_common(40)]
-    prompt = (
-        "Propose 12-20 intuitive TOP-LEVEL food categories for browsing a "
-        "nutrition knowledge base. Use common, human category names (e.g. "
-        "'vegetables', 'fruits', 'dairy', 'grains', 'meat', 'legumes', 'nuts and "
-        "seeds', 'seafood', 'beverages', 'oils and fats'). They must correspond "
-        "to real food groupings. Here are frequent foods in the corpus for "
-        f"context:\n{', '.join(sample_terms)}\n\n"
-        'Return JSON {"categories": ["...", ...]}.'
-    )
-    obj = fs.llm.generate_json(prompt, BACKBONE_SCHEMA, max_tokens=512)
-    proposed = obj.get("categories", [])
-    for name in proposed:
-        fid = api.name_to_id(name) or api.name_to_id(name.rstrip("s")) or api.name_to_id(name + " food product")
-        if fid is None:
-            hits = api.search(name, limit=1)
-            fid = hits[0] if hits else None
-        if fid and (fid == FOOD_PRODUCT or api.is_subclass_of(fid, FOOD_PRODUCT)):
-            LLM_BACKBONE.append(fid)
-    LLM_BACKBONE = list(dict.fromkeys(LLM_BACKBONE))  # dedupe, keep order
-    print(f"LLM proposed {len(proposed)} names → {len(LLM_BACKBONE)} resolved to FoodOn ids")
-    MULTI_HOME_1B = backbone_column(f"1b — LLM backbone ({len(LLM_BACKBONE)} cats)", LLM_BACKBONE)
-    print("resolved:", [api.id_to_label(b) for b in LLM_BACKBONE])'''
-    )
-)
-
-# ----------------------------------------------------------------- Col 3 multi-facet
+# ----------------------------------------------------------------- agentic (Plan B)
 cells.append(
     md(
-        """## Col 3 — Multi-facet (DAG), informed by multi-home stats
+        """## Agentic aliasing pass (Plan B) — GROQ-gated
 
-If chunks are frequently multi-home (Col 1a's stat), a single tree is lossy.
-Here a chunk attaches to **all** applicable backbone categories — the browse
-structure is a small DAG. We render it as the same backbone but annotate how
-much overlap there is, so 'tree vs DAG' is decided on the real numbers."""
+The agent does **one** thing: add layperson **aliases** to node labels. It does
+**not** edit structure and does **not** reparent anything — not nodes, not
+chunks. It takes the **frozen 1a+ backbone** and, through its read-only lens
+(support, supported-children, and FoodOn object-property relation bridges —
+`has defining ingredient`, `has ingredient`, `derives from`, `member of`, …),
+proposes a short everyday name for any jargon node. The relations *inform the
+wording*, never the placement. Edges, ids, original labels, and chunk homing are
+copied through unchanged — so this column scores **identically to 1a+** on
+coverage / faithfulness / specificity / findability and differs **only on
+nameability**. Skipped without `GROQ_API_KEY`."""
     )
 )
 
 cells.append(
     code(
-        '''auto_backbone = api.id_to_children(FOOD_PRODUCT)
-homed, multi_home, unhomed = lift_to_backbone(auto_backbone)
+        '''# Agentic ALIASING pass (Plan B) — aliases ONLY. Takes the frozen 1a+ backbone
+# (BASE_1APLUS_RESULT) and adds layperson aliases; structure + chunk homing are copied
+# verbatim. No node or chunk is reparented, so only nameability can differ from 1a+.
+AGENTIC_RESULT = None
+if not HAVE_GROQ:
+    print("GROQ_API_KEY not set — skipping agentic aliasing pass.")
+else:
+    from bakeoff.agentic.alias import build_aliased_result
+    from bakeoff.agentic.relations import load_relation_index
+    from bakeoff.agentic.tools import GraphTools
 
-# Multi-home now means: a chunk's DIFFERENT terms map to different backbones
-# (already captured). For the DAG view, show each backbone with its full homed
-# count (chunks counted under every category they touch — overlaps allowed).
-ROOT = "__dag_root__"
-children = defaultdict(list)
-counts = {ROOT: TOTAL_FOOD_CHUNKS}
-labels = {ROOT: "foods (multi-facet)"}
-for b in auto_backbone:
-    children[ROOT].append(b)
-    counts[b] = len(homed.get(b, set()))
-    labels[b] = api.id_to_label(b) or b
+    repo_root = HERE if (HERE / "data" / "foodon.owl").exists() else HERE.parent
+    rel_index = load_relation_index(str(repo_root / "data" / "foodon.owl"))
+    print(f"relation index: {len(rel_index)} FOODON terms with FoodOn object-property relations")
 
-dag_tree = render_tree_from_edges(ROOT, children, counts, lambda n: labels.get(n, n),
-                                  max_depth=1, open_depth=1)
-# overlap stat: how many chunks land in >1 backbone, and the worst pair
-pair = Counter()
-for cid, bs in multi_home.items():
-    for a in bs:
-        for b2 in bs:
-            if a < b2:
-                pair[(a, b2)] += 1
-top_pairs = pair.most_common(5)
-overlap_html = "".join(
-    f"<div class='path'>{api.id_to_label(a)} ∩ {api.id_to_label(b2)}: {n} chunks</div>"
-    for (a, b2), n in top_pairs
+    # Lens only — relations + rolled-up support inform the alias wording.
+    _support = {n: len(cs) for n, cs in NODE_CHUNKS.items()}
+    _tools = GraphTools(api, rel_index, node_support=_support, min_support=EXPAND_MIN_CHUNKS)
+
+    AGENTIC_RESULT = build_aliased_result(BASE_1APLUS_RESULT, tools=_tools, llm=fs.llm)
+    RESULTS.append(AGENTIC_RESULT)
+    print(f"agentic aliasing: {len(AGENTIC_RESULT.aliases)} aliases over "
+          f"{AGENTIC_RESULT.llm_calls} nodes (structure + homing identical to 1a+)")
+
+    # Same backbone as 1a+, so same D/L counts — only labels change (alias if present).
+    _nodes = {AGENTIC_RESULT.root, *AGENTIC_RESULT.edges,
+              *(c for kids in AGENTIC_RESULT.edges.values() for c in kids)}
+    _total, _direct = dl_maps(_nodes)
+    _total[AGENTIC_RESULT.root] = TOTAL_FOOD_CHUNKS
+    agentic_tree = render_tree_from_edges(
+        AGENTIC_RESULT.root, AGENTIC_RESULT.edges, _total, AGENTIC_RESULT.display,
+        max_depth=EXPAND_MAX_DEPTH, open_depth=2, max_children=EXPAND_MAX_CHILDREN,
+        direct_map=_direct,
+    )
+    _fanout = max((len(v) for v in AGENTIC_RESULT.edges.values()), default=0)
+    _depth = max((AGENTIC_RESULT.home_distance.values()), default=0)
+    COLUMNS.append({
+        "title": f"agentic (aliasing) — {len(AGENTIC_RESULT.aliases)} aliases",
+        "stats": (
+            stats_line(_fanout, EXPAND_MAX_DEPTH,
+                       TOTAL_FOOD_CHUNKS - (TOTAL_FOOD_CHUNKS - len(AGENTIC_RESULT.leaf_home)),
+                       TOTAL_FOOD_CHUNKS, 0, 0)
+            + f"<br>{len(AGENTIC_RESULT.aliases)} aliases added · structure = 1a+"
+        ),
+        "tree": agentic_tree,
+    })'''
+    )
 )
-COLUMNS.append({
-    "title": "3 — Multi-facet (DAG)",
-    "stats": (stats_line(len(auto_backbone), 1, TOTAL_FOOD_CHUNKS - len(unhomed),
-                          TOTAL_FOOD_CHUNKS, 0, len(multi_home))
-              + "<br><u>top category overlaps:</u>" + overlap_html),
-    "tree": dag_tree,
-})
-print(f"multi-facet: {len(multi_home)} multi-home chunks; top overlaps: "
-      + ", ".join(f"{api.id_to_label(a)}∩{api.id_to_label(b2)}={n}" for (a,b2),n in top_pairs))'''
+
+# ----------------------------------------------------------------- grouping + scorecard
+
+cells.append(
+    code(
+        '''# ---- Cross-method scorecard: every method on the same metrics --------------
+from IPython.display import HTML
+from bakeoff.metrics import sample_query_leaves
+from bakeoff.scorecard import build_scorecard, render_scorecard_html
+
+QUERY_LEAVES = sample_query_leaves(dict(TERM_DOC_FREQ), n=100)
+SCORECARD = build_scorecard(
+    RESULTS, mentioned_leaves=MENTIONED, query_leaves=QUERY_LEAVES, k=3,
+    llm=(fs.llm if HAVE_GROQ else None), nameability_sample=25,
+)
+print("methods scored:", [row["method"] for row in SCORECARD])
+display(HTML(render_scorecard_html(SCORECARD)))'''
     )
 )
 
@@ -615,7 +535,7 @@ cells.append(
 
 REPORT = Template(
     """<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>Layer-A projection bake-off — foods</title><style>
+<title>Layer-A method bake-off — foods</title><style>
   body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:1500px;margin:1.5rem auto;padding:0 1rem;}
   h1{border-bottom:3px solid #4c72b0;padding-bottom:.3rem;}
   .grid{display:flex;gap:1rem;align-items:flex-start;overflow-x:auto;}
@@ -632,9 +552,9 @@ REPORT = Template(
   .path{font-size:.8rem;margin:.1rem 0;}
   .meta{color:#888;font-size:.85rem;}
 </style></head><body>
-<h1>Layer-A projection bake-off — foods facet</h1>
+<h1>Layer-A method bake-off — foods facet</h1>
 <p class="meta">{{ total }} chunks with food terms · model {{ model }} ·
-all categories are real FoodOn ids · judge by eye{% if not have_groq %} · <i>1b skipped (no GROQ_API_KEY)</i>{% endif %}</p>
+all categories are real FoodOn ids · judge by eye{% if not have_groq %} · <i>agentic aliasing skipped (no GROQ_API_KEY)</i>{% endif %}</p>
 <div class="grid">
 {% for c in columns %}
   <div class="col"><h2>{{ c.title }}</h2><div class="stats">{{ c.stats }}</div>{{ c.tree }}</div>
@@ -642,7 +562,7 @@ all categories are real FoodOn ids · judge by eye{% if not have_groq %} · <i>1
 </div></body></html>"""
 )
 
-out = VIZ_DIR / "projection_bakeoff_foods.html"
+out = VIZ_DIR / "layer_a_method_bakeoff_foods.html"
 out.write_text(
     REPORT.render(total=TOTAL_FOOD_CHUNKS, model=fs.llm.model_id,
                   have_groq=HAVE_GROQ, columns=COLUMNS),

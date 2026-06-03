@@ -108,8 +108,8 @@ class FakeLLM:
 # Task 5 — propose_groups
 # ---------------------------------------------------------------------------
 
-from foodscholar.layer_a.grouping import propose_groups, Group
 from foodscholar.config import FrozenGroup
+from foodscholar.layer_a.grouping import Group, propose_groups
 
 
 def test_propose_groups_resolves_names_to_real_foodon_ids():
@@ -136,7 +136,8 @@ def test_propose_groups_uses_frozen_when_provided():
 # Task 6 — assign_leaves
 # ---------------------------------------------------------------------------
 
-from foodscholar.layer_a.grouping import assign_leaves, clean_label as _cl
+from foodscholar.layer_a.grouping import assign_leaves
+from foodscholar.layer_a.grouping import clean_label as _cl
 
 
 def test_assign_leaves_maps_by_label():
@@ -261,7 +262,6 @@ def test_build_grouped_shelves_no_shelf_id_collision_when_anchor_is_also_unassig
 # ---------------------------------------------------------------------------
 
 from foodscholar.layer_a.builder import build_shelves
-from foodscholar.config import LayerAConfig
 from foodscholar.storage.memory import InMemoryChunkStore
 
 

@@ -20,10 +20,10 @@ import pytest
 
 pytest.importorskip("elasticsearch")
 
-from elasticsearch import Elasticsearch  # noqa: E402 (import guarded above)
+from elasticsearch import Elasticsearch
 
-from foodscholar.io.chunk import Chunk  # noqa: E402
-from foodscholar.storage.elastic import ElasticChunkStore  # noqa: E402
+from foodscholar.io.chunk import Chunk
+from foodscholar.storage.elastic import ElasticChunkStore
 
 _ES_URL = "http://localhost:9200"
 _INDEX_PREFIX = "fs_test_knn_"
@@ -164,3 +164,13 @@ def test_knn_search_chunks_exclude_ids_removes_specified(store: ElasticChunkStor
     result_ids = [cid for cid, _ in results]
     for eid in excluded:
         assert eid not in result_ids, f"excluded id {eid!r} still in results: {result_ids}"
+
+
+def test_init_idempotent_under_create_race(store: ElasticChunkStore):
+    """init() must not raise if the index appears between its exists() check and
+    create() — the `resource_already_exists` race. The `store` fixture already
+    created the index; forcing exists()->False drives init() down the create path
+    against an existing index, which must be swallowed rather than raised."""
+    store._es.indices.exists = lambda index: False  # force the create branch
+    store.init()  # must NOT raise resource_already_exists_exception
+    assert store._ensured_init is True

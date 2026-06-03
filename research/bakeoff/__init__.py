@@ -1,0 +1,15 @@
+"""Layer-A method bake-off harness: a common MethodResult + pure metrics.
+
+See docs/methods_layer_a_bakeoff_brief.md. Every construction method emits a
+MethodResult via an adapter; metrics consume only that struct so methods are
+scored on identical footing.
+"""
+
+from bakeoff.result import (
+    MethodResult,
+    from_children_map,
+    from_shelves,
+    node_depths,
+)
+
+__all__ = ["MethodResult", "from_children_map", "from_shelves", "node_depths"]

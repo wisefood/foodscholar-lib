@@ -48,12 +48,19 @@ Sample passages:
 Reply with only the label."""
 
 
-# Token regex for c-TF-IDF garbage filtering. Drops:
-#   - tokens containing any digit (OCR codes like "h18567", "1234abc")
-#   - tokens of length < 3 (junk like "a", "of" — though sklearn stopwords
-#     mostly handles these)
-#   - tokens that are pure uppercase length >= 4 (ontology-id leakage)
+# Single-token garbage check for c-TF-IDF terms. A token is garbage if it:
+#   - contains any digit (OCR codes like "h18567", "1234abc")
+#   - is length < 3 (junk like "a", "of" — though sklearn stopwords mostly
+#     handles these)
+#   - is pure uppercase/digit length >= 4 (ontology-id leakage)
 _GARBAGE_TOKEN = re.compile(r"\d|^.{1,2}$|^[A-Z0-9]{4,}$")
+
+
+def _is_garbage_term(term: str) -> bool:
+    """A uni-/bi-gram is garbage if ANY of its whitespace tokens is garbage.
+    The per-token check matters for bigrams: "x intake" or "intake mg" must be
+    dropped even though the whole string is >= 3 chars."""
+    return any(_GARBAGE_TOKEN.search(tok) for tok in term.split())
 
 
 def label_by_keywords(
@@ -84,7 +91,7 @@ def label_by_keywords(
     X = vec.fit_transform(docs)
     terms = vec.get_feature_names_out()
     # Drop OCR codes / ontology-id leakage / 1-2 char fragments before ranking.
-    keep_mask = [not _GARBAGE_TOKEN.search(t) for t in terms]
+    keep_mask = [not _is_garbage_term(t) for t in terms]
     out: dict[int, list[str]] = {}
     for i, tid in enumerate(theme_ids):
         row = X[i].toarray().ravel()

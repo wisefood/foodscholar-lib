@@ -202,11 +202,18 @@ foodscholar version
 
 ## Testing
 
+Run in the `foodscholar` conda env (Python 3.11). The `base` env's older numpy is
+incompatible with newer Pythons and fails to import — use the project env:
+
 ```bash
+conda activate foodscholar     # Python 3.11; see "Install" above
 pytest                       # unit tests only
 pytest -m integration        # requires docker-compose: ES + Neo4j
 ruff check src tests
 ```
+
+Method-selection provenance (the Layer A bake-off harness) lives under `research/`
+and is not shipped; run it with `pytest research/`.
 
 ## Layout
 

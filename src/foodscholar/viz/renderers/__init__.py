@@ -35,3 +35,10 @@ def matplotlib(**kwargs) -> Renderer:  # type: ignore[no-untyped-def]
     from foodscholar.viz.renderers.matplotlib_renderer import MatplotlibRenderer
 
     return MatplotlibRenderer(**kwargs)
+
+
+def tree(**kwargs) -> Renderer:  # type: ignore[no-untyped-def]
+    """Lazy constructor for `TreeRenderer`. Self-contained HTML, no deps."""
+    from foodscholar.viz.renderers.tree_renderer import TreeRenderer
+
+    return TreeRenderer()
