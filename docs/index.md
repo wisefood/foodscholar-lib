@@ -19,19 +19,21 @@ flowchart LR
     C --> Q
 ```
 
-- **Layer A — Backbone.** A curated, multi-facet semantic menu projected from the
-  [FoodOn](https://foodon.org) ontology (foods, health, nutrients, dietary
-  patterns, allergies, sustainability).
-- **Layer B — Themes.** Fine-grained topic communities discovered **per shelf** by
-  two complementary passes — embedding similarity and entity relatedness — then merged.
-- **Layer C — Write-ups.** LLM-generated cards attached to every shelf and theme,
-  with **every claim cited back** to the source chunks.
+- **[Layer A — Backbone](concepts/layer-a-backbone.md).** A curated, multi-facet
+  semantic menu projected from the [FoodOn](https://foodon.org) ontology (foods,
+  health, nutrients, dietary patterns, allergies, sustainability).
+- **[Layer B — Themes](concepts/layer-b-themes.md).** Fine-grained topic communities
+  discovered **per shelf** by two complementary passes — embedding similarity and
+  entity relatedness — then merged.
+- **[Layer C — Cards](concepts/layer-c-cards.md).** LLM-generated write-ups attached to
+  every shelf and theme, with **every claim cited back** to the source chunks.
 
-New here? Start with [](getting-started/quickstart.md).
+New here? Start with [](getting-started/quickstart.md), then read
+[](concepts/architecture.md) for the whole picture.
 
 ```{note}
-These docs are being built out. The **Getting started** section below is complete;
-**Concepts**, **Guides**, and the **API reference** are being filled in next.
+These docs are being built out. **Getting started** and **Concepts** are complete;
+**Guides** and the **API reference** are being filled in next.
 ```
 
 ```{toctree}
@@ -41,4 +43,17 @@ These docs are being built out. The **Getting started** section below is complet
 getting-started/installation
 getting-started/quickstart
 getting-started/configuration
+```
+
+```{toctree}
+:caption: Concepts
+:maxdepth: 2
+
+concepts/architecture
+concepts/corpus-input
+concepts/annotation
+concepts/ontology
+concepts/layer-a-backbone
+concepts/layer-b-themes
+concepts/layer-c-cards
 ```
