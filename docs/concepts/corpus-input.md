@@ -89,7 +89,7 @@ class Chunk(BaseModel):
 
     embedding: list[float] | None        # filled by fs.embed()
     mentions: list[Mention]              # from NEL CSV or live NER
-    entity_links: list[EntityLink]       # from NEL CSV or the tiered linker
+    entity_links: list[EntityLink]       # from NEL CSV or the dense linker
     shelf_ids: list[str]                 # Layer A attachment (denorm)
     theme_ids: list[str]                 # Layer B attachment (denorm)
 ```
@@ -100,7 +100,7 @@ class Chunk(BaseModel):
 # 1. Real stores: ingest chunk CSVs + attach NEL annotations (no models run)
 fs.ingest("data/corpus", nel_dir="data/ner")
 
-# 2. Real stores, live annotation: omit nel_dir to run NER + the tiered linker
+# 2. Real stores, live annotation: omit nel_dir to run NER + the dense linker
 fs.ingest("data/corpus")        # then fs.embed(); fs.annotate() as needed
 
 # 3. Offline: a prebuilt annotated Parquet snapshot (in-memory backend, no ES)

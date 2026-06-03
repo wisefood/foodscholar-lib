@@ -9,14 +9,14 @@ that the corpus actually talks about.
 ```{mermaid}
 flowchart LR
     Ch[Chunk] -->|NER| Me[Mentions]
-    Me -->|tiered linker| Ids[FoodOn IDs]
+    Me -->|dense linker| Ids[FoodOn IDs]
     Ids -->|walk ancestors| Sup[Support table]
     Sup -->|project + prune| Sh[Shelves]
     Ch -.attach.-> Sh
 ```
 
 1. **Link.** Each chunk's mentions are linked to FoodOn IDs by the
-   [tiered linker](annotation.md). FoodOn is a ~39k-term ontology with a real
+   [dense linker](annotation.md). FoodOn is a ~39k-term ontology with a real
    `is-a` hierarchy: `olive oil → vegetable oil → … → food product`.
 2. **Collect support.** For every linked ID, walk its FoodOn ancestors and tally how
    many chunks mention each class **directly** vs. via a **descendant** (*lifted*
@@ -42,16 +42,34 @@ facet is by far the richest (a few hundred shelves); the others are sparser.
 ## The projection method
 
 Layer A's construction method is selected by `config.layer_a.projection`. The
-production default is **`"backbone"`** — the *1a+ backbone projection*:
+production default is **`"backbone"`** — the *1a+ backbone projection* (the name is from
+the method [bake-off](glossary.md): method "1a" plus refinements):
 
 - Start from the facet root's **supported children** (the backbone).
-- Expand down the *real* FoodOn tiers, but **collapse single-child filing tiers**
-  (organizational classes with one child add depth without aiding navigation).
-- Place every node under a **single parent**, **cap fan-out** (`backbone_max_children`),
-  and **prune empty dead-ends**.
+- Expand down the *real* FoodOn tiers, but **collapse single-child [filing
+  tiers](glossary.md)** — organizational classes with one child that add depth without
+  aiding navigation.
+- Place every node under a **single parent**, **cap fan-out** (`backbone_max_children`;
+  overflow children fold into the nearest kept ancestor, never dropped silently), and
+  **prune empty dead-ends**.
 
 The result is **faithful**: every shelf is a real FoodOn class, the tree's edges are
 real `is-a` relations, and original labels/IDs are untouched.
+
+```{mermaid}
+flowchart LR
+    subgraph raw[Raw FoodOn subtree]
+      r0[food product] --> r1[…186 siblings…]
+      r0 --> r2[milk or milk based food product]
+      r2 --> r3[dairy food product]
+      r3 --> r4[mammalian milk product]
+    end
+    subgraph bb[Backbone projection]
+      b0[Foods] --> b1[milk or milk based food product]
+      b1 --> b2[mammalian milk product]
+    end
+    raw -->|collapse filing tiers,<br/>cap fan-out, prune| bb
+```
 
 ```{admonition} Why not just use FoodOn's tree as-is?
 :class: tip
@@ -107,6 +125,34 @@ class Shelf(BaseModel):
 `support_direct` vs. `support_lifted` is the key diagnostic: a shelf with high lifted
 but low direct support is mostly an organizational umbrella; one with high direct
 support is a genuine topic the corpus discusses by name.
+
+### Reading real shelves
+
+Actual `foods` shelves from a build make the diagnostic concrete:
+
+| shelf | chunks | direct | lifted | reading |
+|---|---|---|---|---|
+| `fruit produce` | 633 | **633** | 0 | genuine topic — named outright |
+| `vegetable` | 542 | **542** | 0 | genuine topic |
+| `cheese` | 239 | **239** | 0 | genuine topic |
+| `meat (raw)` | 478 | 407 | 71 | mostly named, some lifted |
+| `mammalian milk product` | 649 | 1 | **648** | category — evidence is all descendants |
+| `vertebrate food product` | 2016 | 0 | **2016** | pure umbrella — nobody writes the phrase |
+| `Foods` | 3893 | 0 | **3893** | the facet root |
+
+The umbrellas (`Foods`, `vertebrate food product`) carry the most chunks but ~zero direct
+support — they exist to *organize*, not to be browsed to. The genuine topics are where a
+user actually lands.
+
+## How chunks attach
+
+A chunk's linked FoodOn ids are resolved to **surviving** shelves: a direct hit attaches
+to that shelf; otherwise the id is lifted up the is-a tree to the nearest kept ancestor.
+Because a chunk usually carries several ids — and each lifts independently — **one chunk
+attaches to multiple shelves** (see {term}`lifted attachment`). This multi-attachment is
+recorded as `shelf_ids` on the chunk (denormalized to Elasticsearch) and is exactly why
+Layer B must tie a theme to its [origin shelf](layer-b-themes.md) rather than the union of
+its chunks' shelves.
 
 ## Building it
 
