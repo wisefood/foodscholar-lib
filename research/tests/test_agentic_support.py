@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from foodscholar.layer_a.bakeoff.agentic.support import rollup_support
+from bakeoff.agentic.support import rollup_support
 from foodscholar.ontology import FoodOnAPI, load_ontology
 
 

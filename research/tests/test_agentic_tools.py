@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from foodscholar.layer_a.bakeoff.agentic.relations import Relation
-from foodscholar.layer_a.bakeoff.agentic.tools import GraphTools
+from bakeoff.agentic.relations import Relation
+from bakeoff.agentic.tools import GraphTools
 from foodscholar.ontology import FoodOnAPI, load_ontology
 
 

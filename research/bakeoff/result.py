@@ -20,8 +20,15 @@ class MethodResult:
     leaf_home: dict[str, str]
     home_edge_type: dict[str, str]
     home_distance: dict[str, int] = field(default_factory=dict)  # leaf -> is-a steps to its home
+    aliases: dict[str, str] = field(default_factory=dict)  # node id -> layperson display name
     llm_calls: int = 0
     audit: list[dict] = field(default_factory=list)
+
+    def display(self, nid: str) -> str:
+        """Browse label for a node: the alias if one was added, else the original
+        FoodOn label. Aliases are additive — they never replace `labels[nid]` or
+        the FOODON id, so faithfulness is unaffected."""
+        return self.aliases.get(nid) or self.labels.get(nid, nid)
 
 
 def home_distance(leaf: str, home: str, ontology: FoodOnAPI) -> int:
@@ -36,6 +43,20 @@ def home_distance(leaf: str, home: str, ontology: FoodOnAPI) -> int:
         a for a in ontology.id_to_ancestors(leaf)
         if a == home or ontology.is_subclass_of(a, home)
     ])
+
+
+def homed_here_counts(
+    result: MethodResult, leaf_chunks: dict[str, set[str]]
+) -> dict[str, int]:
+    """Distinct chunks that SETTLE at each node = the chunks of every leaf homed
+    there, unioned. A chunk reachable via several descendant links is counted at
+    most once per node (set semantics), so no node double-counts. Σ over nodes
+    can exceed the corpus size only because one chunk may mention several foods
+    that home to different nodes — never because a single node counted it twice."""
+    homed: dict[str, set[str]] = {}
+    for leaf, home in result.leaf_home.items():
+        homed.setdefault(home, set()).update(leaf_chunks.get(leaf, ()))
+    return {node: len(chunks) for node, chunks in homed.items()}
 
 
 def node_depths(result: MethodResult) -> dict[str, int]:

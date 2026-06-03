@@ -1,10 +1,10 @@
-from foodscholar.layer_a.bakeoff.metrics import (
+from bakeoff.metrics import (
     coverage,
     fan_out,
     specificity,
     tree_depth,
 )
-from foodscholar.layer_a.bakeoff.result import MethodResult
+from bakeoff.result import MethodResult
 
 
 def test_specificity_mean_and_median_distance():
@@ -53,7 +53,7 @@ def test_tree_depth_max_and_median():
     assert med == 2.0       # home-node depths {A1:2, A2:2, B:1} -> max 2, median 2.0
 
 
-from foodscholar.layer_a.bakeoff.metrics import findability, sample_query_leaves
+from bakeoff.metrics import findability, sample_query_leaves
 
 
 def test_findability_clicks_from_root():
@@ -82,7 +82,7 @@ def test_sample_query_leaves_is_deterministic_and_stratified():
     assert len(s1) == 4
 
 
-from foodscholar.layer_a.bakeoff.metrics import faithfulness, reproducibility
+from bakeoff.metrics import faithfulness, reproducibility
 
 
 def test_faithfulness_tallies_home_edge_types():
@@ -102,7 +102,7 @@ def test_reproducibility_jaccard_of_node_sets():
     assert reproducibility(a, b) < 1.0
 
 
-from foodscholar.layer_a.bakeoff.metrics import nameability
+from bakeoff.metrics import nameability
 
 
 class _FakeLLM:

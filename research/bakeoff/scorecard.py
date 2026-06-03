@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from foodscholar.layer_a.bakeoff import metrics as M
-from foodscholar.layer_a.bakeoff.result import MethodResult
+from bakeoff import metrics as M
+from bakeoff.result import MethodResult
 
 _COLUMNS = [
     "method", "coverage", "find_median", "find_p90", "find_pct_within_k",
