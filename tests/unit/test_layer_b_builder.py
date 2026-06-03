@@ -190,7 +190,6 @@ def cross_shelf_fs():
     global_similarity theme spanning both shelves.
     """
     from foodscholar import FoodScholar
-    from foodscholar.config import FoodScholarConfig, LayerBConfig
     from foodscholar.io.graph import Shelf
     from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
 

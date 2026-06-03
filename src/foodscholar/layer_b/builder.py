@@ -177,7 +177,7 @@ def build_layer_b(
          exceeds `cfg.global_similarity_max_chunks`, skip and emit [].
       3. Run Pass 2 (relatedness) per shelf (entity coherence is sharper
          inside a single shelf's chunk set).
-      4. Merge global × per-shelf via `merge_global_and_local_candidates`.
+      4. Merge global x per-shelf via `merge_global_and_local_candidates`.
       5. Backfill `shelf_ids` on unmerged global_similarity themes via
          chunk.shelf_ids filtered to this facet's non-synth shelves.
       6. Label (c-TF-IDF / LLM) + pick primary + build Theme records.
@@ -282,7 +282,7 @@ def build_layer_b(
             continue
         rel_cands_by_shelf[shelf_id] = build_shelf_relatedness_candidates(chunks, cfg)
 
-    # 4. Merge global × per-shelf.
+    # 4. Merge global x per-shelf.
     theme_dicts, _decisions = merge_global_and_local_candidates(
         global_cands, rel_cands_by_shelf, cfg.merge
     )

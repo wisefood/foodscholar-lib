@@ -20,10 +20,10 @@ import pytest
 
 pytest.importorskip("elasticsearch")
 
-from elasticsearch import Elasticsearch  # noqa: E402 (import guarded above)
+from elasticsearch import Elasticsearch
 
-from foodscholar.io.chunk import Chunk  # noqa: E402
-from foodscholar.storage.elastic import ElasticChunkStore  # noqa: E402
+from foodscholar.io.chunk import Chunk
+from foodscholar.storage.elastic import ElasticChunkStore
 
 _ES_URL = "http://localhost:9200"
 _INDEX_PREFIX = "fs_test_knn_"
