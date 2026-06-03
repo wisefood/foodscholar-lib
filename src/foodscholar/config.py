@@ -543,6 +543,16 @@ class LayerBConfig(BaseModel):
     """Skip shelves where < this fraction of chunks have embeddings —
     clustering a biased subsample is worse than not clustering at all."""
 
+    pass1_mode: Literal["global", "per_shelf"] = "global"
+    """How Pass 1 (similarity) scopes its kNN graph + Leiden run.
+
+    - ``"global"`` (default): one graph over ALL attached chunks in the facet.
+      Finds cross-shelf bridges — a theme's ``shelf_ids`` can have length ≥ 2.
+    - ``"per_shelf"``: a separate graph + Leiden per shelf. Every Pass-1 theme
+      is single-shelf; cross-shelf bridges are NOT discovered. Useful for the
+      bake-off (compare against ``"global"``) and matches the intent the
+      ``global_similarity_max_chunks`` fallback docstring already promised."""
+
     similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
     relatedness: RelatednessConfig = Field(default_factory=RelatednessConfig)
     leiden: LeidenConfig = Field(default_factory=LeidenConfig)
