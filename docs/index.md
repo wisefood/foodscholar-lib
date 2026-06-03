@@ -32,8 +32,8 @@ New here? Start with [](getting-started/quickstart.md), then read
 [](concepts/architecture.md) for the whole picture.
 
 ```{note}
-These docs are being built out. **Getting started** and **Concepts** are complete;
-**Guides** and the **API reference** are being filled in next.
+These docs are being built out. **Getting started**, **Concepts**, and **Guides** are
+complete; the **API reference** is next.
 ```
 
 ```{toctree}
@@ -56,4 +56,15 @@ concepts/ontology
 concepts/layer-a-backbone
 concepts/layer-b-themes
 concepts/layer-c-cards
+```
+
+```{toctree}
+:caption: Guides
+:maxdepth: 2
+
+guides/building-the-graph
+guides/exploring-the-graph
+guides/visualization
+guides/tuning-layer-b
+guides/cli
 ```
