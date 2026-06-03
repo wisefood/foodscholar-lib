@@ -197,3 +197,27 @@ def test_merge_global_and_local_unmerged_global_keeps_empty_shelf_ids() -> None:
     glob = [t for t in themes if t["discovery_pass"] == "global_similarity"]
     assert len(glob) == 1
     assert glob[0]["shelf_ids"] == []
+
+
+def test_merge_global_and_local_unmerged_per_shelf_uses_origin_shelf() -> None:
+    """In per-shelf Pass 1 the similarity candidate carries its origin_shelf_id;
+    an unmerged similarity theme must attach to that ONE shelf — not [] and not a
+    chunk-derived union (which over-attaches via lifted chunks). The transient
+    origin_shelf_id must not leak into the theme dict."""
+    from foodscholar.layer_b.merge import merge_global_and_local_candidates
+
+    global_cands = [
+        ThemeCandidate(
+            pass_name="global_similarity",
+            chunk_ids={"c100", "c101"},
+            foodon_ids=set(),
+            centroid_embedding=[0.1] * 3,
+            origin_shelf_id="shelf:spice",
+        ),
+    ]
+    cfg = MergeConfig()
+    themes, _ = merge_global_and_local_candidates(global_cands, {}, cfg)
+    glob = [t for t in themes if t["discovery_pass"] == "global_similarity"]
+    assert len(glob) == 1
+    assert glob[0]["shelf_ids"] == ["shelf:spice"]
+    assert "origin_shelf_id" not in glob[0]
