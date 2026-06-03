@@ -6,3 +6,4 @@ furo>=2024.1.29
 sphinx-copybutton>=0.5
 sphinx-design>=0.5
 sphinxcontrib-mermaid>=0.9
+autodoc-pydantic>=2.0       # rich rendering of the Pydantic config + io models
