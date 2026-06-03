@@ -19,22 +19,35 @@ class Relation:
     target_id: str    # a FOODON id
 
 
+# Ontologies FoodOn cross-references that are useful as naming/judgment context.
+# Targets in these namespaces are kept in the lens; everything else is dropped.
+# These are LENS-ONLY: they never become tree nodes or membership edges.
+DEFAULT_TARGET_PREFIXES = ("FOODON:", "CHEBI:", "NCBITaxon:", "PATO:", "UBERON:", "PO:")
+
+
 def load_relation_index(
-    owl_path: str | Path, *, keep_prefix: str = "FOODON:"
+    owl_path: str | Path,
+    *,
+    source_prefix: str = "FOODON:",
+    target_prefixes: tuple[str, ...] = DEFAULT_TARGET_PREFIXES,
 ) -> dict[str, list[Relation]]:
-    """Map each FOODON term id -> its non-is-a relations to other FOODON terms."""
+    """Map each FOODON term id -> its non-is-a relations.
+
+    Sources are FoodOn terms; targets are kept when in `target_prefixes` — FoodOn
+    plus the ontologies it references (CHEBI, NCBITaxon, PATO, …). Cross-ontology
+    targets are lens context only; they never enter the tree as nodes."""
     import pronto
 
     ont = pronto.Ontology(str(owl_path), import_depth=0)
     index: dict[str, list[Relation]] = {}
     for term in ont.terms():
-        if term.id is None or not term.id.startswith(keep_prefix):
+        if term.id is None or not term.id.startswith(source_prefix):
             continue
         rels: list[Relation] = []
         for rel, targets in (getattr(term, "relationships", None) or {}).items():
             rel_name = rel.name or rel.id
             for target in targets:
-                if target.id is None or not target.id.startswith(keep_prefix):
+                if target.id is None or not target.id.startswith(target_prefixes):
                     continue
                 rels.append(Relation(rel.id, rel_name, target.id))
         if rels:

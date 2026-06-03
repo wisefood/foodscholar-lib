@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from foodscholar.layer_a.bakeoff.agentic.relations import Relation
+from bakeoff.agentic.relations import Relation
 
 if TYPE_CHECKING:
     from foodscholar.ontology import FoodOnAPI

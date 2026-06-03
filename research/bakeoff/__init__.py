@@ -5,7 +5,7 @@ MethodResult via an adapter; metrics consume only that struct so methods are
 scored on identical footing.
 """
 
-from foodscholar.layer_a.bakeoff.result import (
+from bakeoff.result import (
     MethodResult,
     from_children_map,
     from_shelves,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import statistics
 
-from foodscholar.layer_a.bakeoff.result import MethodResult, node_depths
+from bakeoff.result import MethodResult, node_depths
 
 
 def coverage(result: MethodResult, mentioned_leaves: set[str]) -> float:
@@ -123,7 +123,7 @@ def nameability(result: MethodResult, llm, *, sample: int) -> float:
     'recognizable to a layperson'. Excludes the root. Returns 0.0 if the LLM
     errors (so a broken judge never inflates the score)."""
     labels = sorted(
-        {lbl for nid, lbl in result.labels.items() if nid != result.root}
+        {result.display(nid) for nid in result.labels if nid != result.root}
     )[:sample]
     if not labels:
         return 0.0

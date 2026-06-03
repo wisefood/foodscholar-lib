@@ -1,5 +1,5 @@
-from foodscholar.layer_a.bakeoff.result import MethodResult
-from foodscholar.layer_a.bakeoff.scorecard import build_scorecard, render_scorecard_markdown
+from bakeoff.result import MethodResult
+from bakeoff.scorecard import build_scorecard, render_scorecard_markdown
 
 
 def _r(name) -> MethodResult:

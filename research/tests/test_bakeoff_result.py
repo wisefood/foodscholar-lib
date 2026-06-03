@@ -1,4 +1,4 @@
-from foodscholar.layer_a.bakeoff.result import MethodResult, node_depths
+from bakeoff.result import MethodResult, node_depths
 
 
 def _toy() -> MethodResult:
@@ -28,7 +28,7 @@ def test_node_depths_ignores_unreachable():
 
 from pathlib import Path
 
-from foodscholar.layer_a.bakeoff.result import from_children_map
+from bakeoff.result import from_children_map
 from foodscholar.ontology import FoodOnAPI, load_ontology
 
 
@@ -57,7 +57,7 @@ def test_from_children_map_homes_leaves_to_deepest_tree_ancestor():
 
 
 from foodscholar.io.graph import Shelf
-from foodscholar.layer_a.bakeoff.result import from_shelves
+from bakeoff.result import from_shelves
 
 
 def test_from_shelves_groups_mark_nonancestor_membership_fabricated():
