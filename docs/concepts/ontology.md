@@ -28,9 +28,41 @@ fs.ontology.id_to_descendants("FOODON:00001002")
 fs.ontology.search("olive", limit=25)
 ```
 
-`id_to_ancestors` is what Layer A walks to build *lifted* support — a chunk mentioning
-`olive oil` counts as evidence for `vegetable oil` and every class above it. `name_to_id`
-and the synonym lookups are the linker's tiers 1–2.
+`id_to_ancestors` is what Layer A walks to build [*lifted* support](glossary.md) — a
+chunk mentioning `cow milk` counts as evidence for every class above it:
+
+```{mermaid}
+flowchart TD
+    A[cow milk] --> B[mammalian milk product]
+    B --> C[milk or milk based food product]
+    C --> D[dairy food product]
+    D --> E[vertebrate food product]
+    E --> F[animal food product]
+    F --> G[Foods]
+```
+
+```python
+fs.ontology.id_to_ancestors("FOODON:03310029")
+# {"FOODON:03315150",   # mammalian milk product
+#  "FOODON:00001257",   # milk or milk based food product
+#  "FOODON:00004242",   # animal food product
+#  "FOODON:00001002", ...}   # ... up to Foods (the closed transitive set)
+```
+
+`name_to_id` and the synonym lookups are exact-match conveniences; the production **NEL
+linker does not use them** — it resolves mentions by dense kNN over term embeddings (see
+[Annotation](annotation.md)).
+
+## One ontology, mostly one facet
+
+FoodOn is a **food** ontology. That's why the `foods` facet is rich (a few hundred
+shelves) while `health`, `nutrients`, `dietary_patterns`, `allergies`, and
+`sustainability` are **scaffolded but essentially unpopulated** in the current corpus —
+there's no food-class backbone to project them onto. `prefix_filter: ["FOODON:"]` keeps
+the loaded ontology to FOODON ids (real `.owl` files embed CHEBI/NCBITaxon/BFO terms
+inline), which the food linker wants — but it also means non-food facets have no ontology
+to draw from here. Treat `foods` as the production facet today; the multi-facet design is
+in place for ontologies that would back the others.
 
 ```{tip}
 For tests and notebooks you can skip the loader entirely and attach an in-memory API
