@@ -381,6 +381,21 @@ class LayerAConfig(BaseModel):
             "nutrients",
         ]
     )
+    projection: Literal["backbone", "prune"] = "backbone"
+    """Layer A construction method. ``"backbone"`` (1a+, default): backbone-first
+    controlled expansion — pick the facet root's supported children, expand down
+    real FoodOn tiers with filing-tier collapse, single-parent, and empty-leaf
+    prune. ``"prune"``: the older support-driven cascade (umbrella + threshold +
+    single-child collapse). Both are is-a faithful; backbone is the validated one."""
+
+    backbone_max_children: int = 12
+    """Max children shown per node under the ``"backbone"`` projection (fan-out cap)."""
+
+    alias_shelves: bool = True
+    """Run an LLM aliasing pass after projection to give jargon-labelled shelves a
+    human-facing `display_label` for browsable navigation. Additive — never changes
+    labels/ids/structure. No-op when no LLM is attached."""
+
     facet_overrides: dict[Facet, FacetConfig] = Field(default_factory=dict)
     """Per-facet overrides on top of the globals above. A facet not in this
     dict uses globals verbatim."""

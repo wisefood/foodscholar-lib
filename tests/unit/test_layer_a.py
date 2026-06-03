@@ -41,7 +41,7 @@ def test_build_shelves_propagates_foodon_support_to_ancestors() -> None:
     shelves = build_shelves(
         _store(),
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=2,
             max_depth=5,
             collapse_single_child_chains=False,
@@ -64,7 +64,7 @@ def test_build_shelves_honors_blacklist_and_reparents_to_nearest_included_ancest
     shelves = build_shelves(
         _store(),
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=1,
             max_depth=5,
             collapse_single_child_chains=False,
@@ -85,6 +85,7 @@ def test_build_layer_a_upserts_shelves_and_returns_artifact_meta() -> None:
     from foodscholar import FoodScholar
 
     fs = FoodScholar.in_memory()
+    fs.config.layer_a.projection = "prune"
     fs.config.layer_a.min_support = 2
     fs.config.layer_a.collapse_single_child_chains = False
     fs.config.layer_a.facets = ["foods"]
@@ -111,7 +112,7 @@ def test_build_layer_a_function_writes_to_graph_store() -> None:
                 "chunk_store": {"backend": "memory"},
                 "graph_store": {"backend": "memory"},
             },
-            "layer_a": {
+            "layer_a": {"projection": "prune", 
                 "min_support": 2,
                 "collapse_single_child_chains": False,
                 "facets": ["foods"],
@@ -178,7 +179,7 @@ def test_single_child_collapse_fires_on_pure_chain() -> None:
     shelves = build_shelves(
         store,
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=1,
             max_depth=10,
             facets=["foods"],
@@ -217,7 +218,7 @@ def test_single_child_collapse_does_not_fire_when_siblings_survive() -> None:
     shelves = build_shelves(
         store,
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=2,
             max_depth=10,
             facets=["foods"],
@@ -240,7 +241,7 @@ def test_depth_cap_lifts_to_nearest_ancestor() -> None:
     shelves = build_shelves(
         store,
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=1,
             max_depth=2,
             collapse_single_child_chains=False,
@@ -264,7 +265,7 @@ def test_whitelist_keeps_term_below_threshold() -> None:
     store = InMemoryChunkStore()
     store.upsert([_chunk("c1", ["TEST:0000006"])])
 
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=2,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -291,7 +292,7 @@ def test_confidence_floor_filters_low_confidence_links() -> None:
     # Use the mini fixture with prefix_filter=None and just rely on chunks not
     # finding the term — empty shelves expected.
     ontology = _mini_foodon()
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         min_link_confidence=0.70,
         facets=["foods"],
@@ -310,7 +311,7 @@ def test_see_also_records_collapsed_foodon_ids() -> None:
     shelves = build_shelves(
         store,
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=1,
             max_depth=10,
             facets=["foods"],
@@ -324,7 +325,7 @@ def test_see_also_records_collapsed_foodon_ids() -> None:
 
 
 def test_per_facet_override_resolves_over_globals() -> None:
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=20,
         max_depth=5,
         blacklist_terms=["global term"],
@@ -344,7 +345,7 @@ def test_per_facet_override_resolves_over_globals() -> None:
 def test_sustainability_emits_stub_root() -> None:
     # Sustainability has no entity_type mapped to it; always a stub root.
     store = _store()  # foods-only chunks
-    cfg = LayerAConfig(facets=["sustainability"])
+    cfg = LayerAConfig(projection="prune", facets=["sustainability"])
     shelves = build_shelves(store, _mini_foodon(), cfg)
     assert len(shelves) == 1
     stub = shelves[0]
@@ -373,7 +374,7 @@ def test_umbrella_rule_drops_organizational_classes() -> None:
     )
     # Umbrella defaults (0.10 / 0.85) — `plant food` direct=0, lifted_share=1.0.
     # min_count guard is normally 100; lower for the fixture's small counts.
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -408,7 +409,7 @@ def test_umbrella_rule_keeps_term_with_meaningful_direct_support() -> None:
     )
     # plant food: direct=1, count_wd=6, direct_share=0.167. Default
     # umbrella_direct_share_max=0.10 → 0.167 is NOT < 0.10 → survives.
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -432,7 +433,7 @@ def test_umbrella_rule_bypassed_by_whitelist() -> None:
             _chunk("c4", ["TEST:0000009"]),
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -457,7 +458,7 @@ def test_umbrella_rule_disabled_when_direct_share_max_is_zero() -> None:
             _chunk("c2", ["TEST:0000008"]),
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -488,7 +489,7 @@ def test_umbrella_min_count_guard_protects_small_shelves() -> None:
             _chunk("c5", ["TEST:0000009"]),
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -515,7 +516,7 @@ def test_synthetic_facet_root_injected_when_multiple_orphans() -> None:
             _chunk("c6", ["TEST:0000011"]),
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -553,7 +554,7 @@ def test_synthetic_root_chunk_count_is_unique_chunks_not_sum_of_roots() -> None:
             _chunk("c3", ["TEST:0000009"]),  # peanut only
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=False,
@@ -576,7 +577,7 @@ def test_synthetic_root_not_injected_when_already_single_rooted() -> None:
     store = InMemoryChunkStore()
     store.upsert([_chunk("c1", ["TEST:0000008"])])
 
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1,
         max_depth=10,
         collapse_single_child_chains=True,
@@ -642,7 +643,7 @@ def test_link_blocklist_filters_propagation() -> None:
     )
 
     # Without blocklist: term 9 survives at min_support=1.
-    cfg_no_block = LayerAConfig(
+    cfg_no_block = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
         link_blocklist=[],
@@ -652,7 +653,7 @@ def test_link_blocklist_filters_propagation() -> None:
     assert shelf_id_for_foodon("TEST:0000009") in by_id_no_block
 
     # With blocklist on (fish, TEST:0000009): term 9 has zero support → gone.
-    cfg_with_block = LayerAConfig(
+    cfg_with_block = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
         link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
@@ -668,7 +669,7 @@ def test_link_blocklist_surface_matching_is_case_insensitive() -> None:
         _chunk_with_links_text("c1", [("TEST:0000009", 0.9, "food")], surface="FISH"),
         _chunk_with_links_text("c2", [("TEST:0000009", 0.9, "food")], surface="Fish"),
     ])
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
         link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
@@ -686,7 +687,7 @@ def test_link_blocklist_ontology_id_is_specific() -> None:
         _chunk_with_links_text("c1", [("TEST:0000008", 0.9, "food")], surface="fish"),
         _chunk_with_links_text("c2", [("TEST:0000008", 0.9, "food")], surface="fish"),
     ])
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
         link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
@@ -726,7 +727,7 @@ def test_link_blocklist_not_bypassed_by_foodon_ids_denorm() -> None:
             _chunk_links_and_denorm("c3", [("TEST:0000009", 0.9, "food")], surface="fish"),
         ]
     )
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
         link_blocklist=[LinkBlocklistEntry(surface="fish", ontology_id="TEST:0000009")],
@@ -742,7 +743,7 @@ def test_foodon_ids_still_counts_terms_without_an_entity_link() -> None:
     # ONLY in foodon_ids (no per-mention entity_link), e.g. prototype CSV data.
     store = InMemoryChunkStore()
     store.upsert([_chunk("c1", ["TEST:0000009"])])  # foodon_ids only, no links
-    cfg = LayerAConfig(
+    cfg = LayerAConfig(projection="prune", 
         min_support=1, max_depth=10, facets=["foods"],
         umbrella_min_count=1, collapse_single_child_chains=False,
     )
@@ -756,6 +757,7 @@ def test_build_layer_a_clears_stale_shelves_on_rerun() -> None:
     from foodscholar import FoodScholar
 
     fs = FoodScholar.in_memory()
+    fs.config.layer_a.projection = "prune"
     fs.config.layer_a.min_support = 1
     fs.config.layer_a.collapse_single_child_chains = False
     fs.config.layer_a.facets = ["foods"]
@@ -794,7 +796,7 @@ def test_blacklist_runs_before_threshold() -> None:
     shelves = build_shelves(
         store,
         _mini_foodon(),
-        LayerAConfig(
+        LayerAConfig(projection="prune", 
             min_support=1,
             max_depth=10,
             collapse_single_child_chains=False,

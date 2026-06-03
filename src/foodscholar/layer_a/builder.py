@@ -71,6 +71,12 @@ def build_layer_a(
     re-runs idempotent against the *result*, not the *cumulative history*.
     """
     shelves = build_shelves(chunk_store, ontology, config, llm=llm)
+    # Aliasing pass: give jargon-labelled shelves a human-facing display_label for
+    # browsable navigation. Additive — never changes labels/ids/structure.
+    if llm is not None and config.alias_shelves:
+        from foodscholar.layer_a.alias import alias_shelves
+
+        shelves = alias_shelves(shelves, ontology, llm=llm)
     graph_store.clear_layer_a()
     graph_store.upsert_shelves(shelves)
 
@@ -138,7 +144,15 @@ def _build_facet(
     if not support:
         return [stub_root(facet)]
 
-    shelves = prune(support, ontology, facet_config, facet)
+    if config.projection == "backbone":
+        from foodscholar.layer_a.backbone import build_backbone_shelves
+
+        shelves = build_backbone_shelves(
+            support, ontology, facet_config, facet,
+            max_children=config.backbone_max_children,
+        )
+    else:
+        shelves = prune(support, ontology, facet_config, facet)
     if not shelves:
         return [stub_root(facet)]
     return _ensure_single_root(shelves, facet, support)
