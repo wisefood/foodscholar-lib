@@ -232,15 +232,33 @@ def build_layer_b(
     # can issue one final bulk_set_theme_ids that clears stale denorm.
     chunks_touched_this_run: set[str] = set()
 
-    # 2. Global Pass 1 (cross-shelf similarity).
-    if len(attached_chunk_ids) > cfg.global_similarity_max_chunks:
+    # 2. Pass 1 (similarity) — global (one corpus-wide graph) or per-shelf
+    #    (a separate graph + Leiden per shelf), selected by cfg.pass1_mode.
+    global_cands: list[ThemeCandidate] = []
+    if cfg.pass1_mode == "per_shelf":
+        # Per-shelf Pass 1: no megacluster risk, so no max-chunks cap needed.
+        # Candidates keep pass_name="global_similarity"; step 5 backfills each
+        # one's shelf_ids from its (shelf-scoped) chunks — yielding the origin
+        # shelf. No cross-shelf bridges are produced by construction.
+        for shelf_id, chunk_ids in shelf_to_chunks.items():
+            if shelf_id not in facet_shelves or shelf_id == synth_root:
+                continue
+            if len(chunk_ids) < cfg.min_chunks_per_shelf:
+                continue
+            global_cands.extend(
+                build_global_similarity_candidates(
+                    chunk_ids=sorted(chunk_ids),
+                    chunk_store=fs.chunk_store,
+                    cfg=cfg,
+                )
+            )
+    elif len(attached_chunk_ids) > cfg.global_similarity_max_chunks:
         warnings.warn(
             f"Attached corpus ({len(attached_chunk_ids)}) exceeds "
             f"cfg.global_similarity_max_chunks ({cfg.global_similarity_max_chunks}); "
             "skipping global Pass 1.",
             stacklevel=2,
         )
-        global_cands: list[ThemeCandidate] = []
     else:
         global_cands = build_global_similarity_candidates(
             chunk_ids=attached_chunk_ids,

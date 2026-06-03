@@ -670,7 +670,30 @@ else:
     )
     RESULTS.append(AGENTIC_RESULT)
     print(f"agentic: {len(AGENTIC_RESULT.edges)} internal nodes, "
-          f"{AGENTIC_RESULT.llm_calls} llm calls, {len(AGENTIC_RESULT.leaf_home)} leaves homed")'''
+          f"{AGENTIC_RESULT.llm_calls} llm calls, {len(AGENTIC_RESULT.leaf_home)} leaves homed")
+
+    # Side-by-side eyeball column: render the agent-built tree (mirrors the DAG col).
+    from foodscholar.layer_a.bakeoff.result import node_depths
+
+    _agentic_depths = node_depths(AGENTIC_RESULT)
+    _agentic_homed_chunks = len({
+        c for fid in AGENTIC_RESULT.leaf_home for c in agentic_leaf_chunks.get(fid, ())
+    })
+    agentic_tree = render_tree_from_edges(
+        AGENTIC_RESULT.root, AGENTIC_RESULT.edges, AGENTIC_RESULT.counts,
+        lambda n: AGENTIC_RESULT.labels.get(n) or api.id_to_label(n) or n,
+        max_depth=4, open_depth=1,
+    )
+    COLUMNS.append({
+        "title": f"agentic (Plan B) — {len(AGENTIC_RESULT.edges)} internal nodes",
+        "stats": stats_line(
+            len(AGENTIC_RESULT.edges.get(AGENTIC_RESULT.root, [])),
+            max(_agentic_depths.values()) if _agentic_depths else 0,
+            _agentic_homed_chunks, TOTAL_FOOD_CHUNKS,
+            sum(1 for _c in AGENTIC_RESULT.counts.values() if _c == 0), 0,
+        ),
+        "tree": agentic_tree,
+    })'''
     )
 )
 
