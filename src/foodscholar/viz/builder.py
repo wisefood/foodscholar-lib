@@ -269,6 +269,79 @@ def backbone(
     )
 
 
+def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
+    """Full Layer A shelf tree for a facet, with each shelf's Layer B themes
+    grouped by `discovery_pass` in node attrs. Sub-threshold shelves (below
+    `min_chunks_per_shelf`) are kept but flagged `eligible=False` and carry no
+    themes. One `parent_of` edge per `parent_shelf_id`.
+    """
+    min_chunks = fs.config.layer_b.min_chunks_per_shelf
+    shelves = fs.graph.shelves(facet=facet)
+
+    nodes: list[VizNode] = []
+    edges: list[VizEdge] = []
+    n_eligible = 0
+    n_themes = 0
+
+    for sh in shelves:
+        s = sh.model
+        buckets: dict[str, list[dict[str, Any]]] = {
+            "merged": [], "global_similarity": [], "relatedness": [],
+        }
+        for th in sh.themes():
+            t = th.model
+            bucket = buckets.get(t.discovery_pass)
+            if bucket is None:  # unknown pass — skip defensively
+                continue
+            bucket.append({
+                "theme_id": t.theme_id,
+                "label": t.label,
+                "chunk_count": t.chunk_count,
+                "keyword_terms": list(t.keyword_terms),
+                "discovery_pass": t.discovery_pass,
+            })
+            n_themes += 1
+
+        eligible = s.chunk_count >= min_chunks
+        if eligible:
+            n_eligible += 1
+
+        nodes.append(VizNode(
+            id=s.shelf_id,
+            label=s.display_label or s.label,
+            kind="shelf",
+            weight=float(s.chunk_count),
+            facet=facet,
+            attrs={
+                "chunk_count": s.chunk_count,
+                "support_direct": s.support_direct,
+                "support_lifted": s.support_lifted,
+                "depth": s.depth,
+                "foodon_id": s.foodon_id,
+                "eligible": eligible,
+                "themes": buckets,
+            },
+        ))
+        if s.parent_shelf_id is not None:
+            edges.append(VizEdge(
+                source=s.parent_shelf_id, target=s.shelf_id, kind="parent_of",
+            ))
+
+    return VizGraph(
+        title=f"Layer A tree — {facet}",
+        nodes=nodes,
+        edges=edges,
+        level="L3",
+        attrs={
+            "facet": facet,
+            "min_chunks_per_shelf": min_chunks,
+            "n_shelves": len(nodes),
+            "n_eligible": n_eligible,
+            "n_themes": n_themes,
+        },
+    )
+
+
 # ---------------------------------------------------------------------- L4
 
 

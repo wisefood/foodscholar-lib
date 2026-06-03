@@ -15,6 +15,7 @@ extra); we cover the ImportError path explicitly.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -321,3 +322,105 @@ def test_pyvis_renderer_import_error_when_extra_missing(monkeypatch) -> None:
     # Reset the module's cached class to force re-import inside __init__.
     with pytest.raises(ImportError, match=r"foodscholar\[viz\]"):
         pyvis_renderer.PyvisRenderer()
+
+
+# ------------------------------------------------------- layer_a_tree + tree
+
+
+def _populate_tree_fs() -> FoodScholar:
+    """Two shelves (parent 'dairy' eligible, child 'cow_milk' eligible) + a
+    sub-threshold sibling 'rare' — plus one theme of each origin on cow_milk."""
+    fs = FoodScholar.in_memory()
+    fs.config.layer_b.min_chunks_per_shelf = 50
+    fs.graph.add_shelf(shelf_id="dairy", label="dairy", facet="foods", depth=1,
+                       chunk_count=3120, support_direct=900, support_lifted=2220)
+    fs.graph.add_shelf(shelf_id="cow_milk", label="cow milk", facet="foods", depth=2,
+                       parent_shelf_id="dairy", foodon_id="FOODON:1",
+                       chunk_count=820, support_direct=540, support_lifted=280)
+    fs.graph.add_shelf(shelf_id="rare", label="rare food", facet="foods", depth=2,
+                       parent_shelf_id="dairy", chunk_count=12)
+    for tid, label, pass_ in [
+        ("t-merged", "calcium & bone health", "merged"),
+        ("t-sim", "lactose intolerance", "global_similarity"),
+        ("t-rel", "fermentation", "relatedness"),
+    ]:
+        fs.graph.add_theme(theme_id=tid, label=label, shelf_ids=["cow_milk"],
+                           discovered_by="leiden", discovery_version="v0.2",
+                           facet="foods", discovery_pass=pass_, chunk_count=100,
+                           keyword_terms=["k1", "k2"])
+    return fs
+
+
+def test_layer_a_tree_nodes_edges_and_buckets() -> None:
+    fs = _populate_tree_fs()
+    g = vb.layer_a_tree(fs, "foods")
+
+    ids = {n.id for n in g.nodes}
+    assert ids == {"dairy", "cow_milk", "rare"}
+    edges = {(e.source, e.target) for e in g.edges if e.kind == "parent_of"}
+    assert edges == {("dairy", "cow_milk"), ("dairy", "rare")}
+
+    cow = next(n for n in g.nodes if n.id == "cow_milk")
+    assert cow.attrs["eligible"] is True
+    assert cow.attrs["chunk_count"] == 820
+    assert cow.attrs["support_direct"] == 540
+    assert [t["label"] for t in cow.attrs["themes"]["merged"]] == ["calcium & bone health"]
+    assert [t["label"] for t in cow.attrs["themes"]["global_similarity"]] == ["lactose intolerance"]
+    assert [t["label"] for t in cow.attrs["themes"]["relatedness"]] == ["fermentation"]
+    assert cow.attrs["themes"]["merged"][0]["keyword_terms"] == ["k1", "k2"]
+
+    rare = next(n for n in g.nodes if n.id == "rare")
+    assert rare.attrs["eligible"] is False
+    assert rare.attrs["themes"] == {"merged": [], "global_similarity": [], "relatedness": []}
+
+    assert g.attrs["n_shelves"] == 3
+    assert g.attrs["n_eligible"] == 2
+    assert g.attrs["n_themes"] == 3
+
+
+def test_layer_a_tree_empty_state_when_no_shelves() -> None:
+    fs = FoodScholar.in_memory()
+    g = vb.layer_a_tree(fs, "foods")
+    assert len(g.nodes) == 0
+    assert g.attrs["n_shelves"] == 0
+
+
+def test_tree_renderer_emits_self_contained_html() -> None:
+    fs = _populate_tree_fs()
+    g = vb.layer_a_tree(fs, "foods")
+    from foodscholar.viz.renderers.tree_renderer import TreeRenderer
+
+    html = TreeRenderer().render(g)
+    assert isinstance(html, str)
+    assert "<!DOCTYPE html>" in html
+    assert "http://" not in html and "https://" not in html  # no external deps
+
+    m = re.search(r"const TREE_DATA = (\{.*?\});", html, re.DOTALL)
+    assert m, "embedded TREE_DATA not found"
+    data = json.loads(m.group(1))
+    roots = data["roots"]
+    assert [r["id"] for r in roots] == ["dairy"]
+    child_ids = {c["id"] for c in roots[0]["children"]}
+    assert child_ids == {"cow_milk", "rare"}
+    for origin in ("merged", "global_similarity", "relatedness"):
+        assert origin in html
+
+
+def test_tree_renderer_writes_file(tmp_path) -> None:
+    fs = _populate_tree_fs()
+    g = vb.layer_a_tree(fs, "foods")
+    from foodscholar.viz.renderers.tree_renderer import TreeRenderer
+
+    out = tmp_path / "tree.html"
+    returned = TreeRenderer().render(g, output=out)
+    assert returned == out
+    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
+
+def test_fs_viz_layer_a_tree_render_via_facade() -> None:
+    fs = _populate_tree_fs()
+    rg = fs.viz.layer_a_tree("foods")
+    assert isinstance(rg, RenderableGraph)
+    html = rg.render("tree")
+    assert "<!DOCTYPE html>" in html
+    assert "cow milk" in html
