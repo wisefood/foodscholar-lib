@@ -177,6 +177,18 @@ class ElasticChunkStore:
         self._ensured_init = True
         _log.info("elastic.index_created", index=self.index)
 
+    def recreate(self) -> None:
+        """Delete the index (if present) and recreate it with the CURRENT mapping.
+
+        `init()` is idempotent and leaves an existing index untouched, so a stale
+        on-disk mapping (e.g. embedding dims changed, or a field type that no longer
+        matches) causes `BulkIndexError` on re-ingest. Call this for a clean slate.
+        Destructive: drops all chunks in the index."""
+        self._es.indices.delete(index=self.index, ignore_unavailable=True)
+        self._ensured_init = False
+        self.init()
+        _log.info("elastic.index_recreated", index=self.index)
+
     # ------------------------------------------------------------------ writes
 
     def upsert(self, chunks: Iterable[Chunk]) -> None:
@@ -453,27 +465,31 @@ class ElasticChunkStore:
             src = {**src, "embedding": self._fetch_embedding(chunk_id)}
         return _doc_to_chunk(src)
 
-    def get_many(self, chunk_ids: list[ChunkId]) -> list[Chunk]:
+    def get_many(self, chunk_ids: list[ChunkId], *, batch_size: int = 500) -> list[Chunk]:
         if not chunk_ids:
             return []
-        # Two round-trips, in parallel-spirit (one `_mget` for the source
-        # doc, one `_search` for the vectors). We can't fold this into one
-        # call because `_mget` doesn't honor `fields`. The vectors fetch
-        # is keyed by `_id` term-query so it returns only chunks we asked
-        # for; missing ones are silently absent (matches `_mget` semantics).
-        resp = self._es.mget(index=self.index, body={"ids": chunk_ids})
-        docs = [d for d in resp.get("docs", []) if d.get("found")]
-        if not docs:
-            return []
-        embeddings = self._fetch_embeddings_bulk(
-            [d["_id"] for d in docs if d["_source"].get("embedding_model")]
-        )
+        # Batch the fetch: a single `_mget` over thousands of ids (each pulling a
+        # 768-dim dense_vector via the paired vectors fetch) builds one huge
+        # response that can OOM a small ES heap. Chunking it bounds peak memory.
+        #
+        # Two round-trips per batch (one `_mget` for the source doc, one `_search`
+        # for the vectors) — `_mget` doesn't honor `fields`. The vectors fetch is
+        # keyed by `_id` so it returns only chunks we asked for.
         out: list[Chunk] = []
-        for d in docs:
-            src = d["_source"]
-            if "embedding" not in src and d["_id"] in embeddings:
-                src = {**src, "embedding": embeddings[d["_id"]]}
-            out.append(_doc_to_chunk(src))
+        for start in range(0, len(chunk_ids), batch_size):
+            batch = chunk_ids[start:start + batch_size]
+            resp = self._es.mget(index=self.index, body={"ids": batch})
+            docs = [d for d in resp.get("docs", []) if d.get("found")]
+            if not docs:
+                continue
+            embeddings = self._fetch_embeddings_bulk(
+                [d["_id"] for d in docs if d["_source"].get("embedding_model")]
+            )
+            for d in docs:
+                src = d["_source"]
+                if "embedding" not in src and d["_id"] in embeddings:
+                    src = {**src, "embedding": embeddings[d["_id"]]}
+                out.append(_doc_to_chunk(src))
         return out
 
     def knn_search_chunks(
