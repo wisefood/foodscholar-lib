@@ -34,6 +34,7 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_design",
     "sphinxcontrib.mermaid",
+    "sphinxcontrib.autodoc_pydantic",
 ]
 
 myst_enable_extensions = [
@@ -79,14 +80,27 @@ autodoc_default_options = {
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 
-# Heavy optional deps that may be absent in the docs build env — mock them so
-# autodoc can import modules without installing the ES/Neo4j/ML stacks.
+# Heavy *optional* deps (the extras) that aren't installed in the RTD build env —
+# mock them so autodoc can import modules without the ES/Neo4j/ML stacks. Core deps
+# (numpy, pandas, networkx, pyarrow, pydantic, …) are installed via `pip install .`
+# and must NOT be mocked.
 autodoc_mock_imports = [
-    "numpy", "igraph", "leidenalg", "hnswlib", "sentence_transformers",
-    "gliner", "elasticsearch", "neo4j", "pronto", "rapidfuzz", "sklearn",
-    "scikit_learn", "pyvis", "graphviz", "matplotlib", "hdbscan", "umap",
-    "bertopic",
+    "igraph", "leidenalg", "hnswlib", "sentence_transformers", "gliner",
+    "elasticsearch", "neo4j", "pronto", "rapidfuzz", "sklearn", "scikit_learn",
+    "pyvis", "graphviz", "matplotlib", "hdbscan", "umap", "bertopic",
+    "anthropic", "openai", "groq", "google", "ollama",
 ]
+
+# -- autodoc-pydantic: clean rendering of the config + io models --------------
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_field_list_validators = False
+autodoc_pydantic_model_member_order = "bysource"
+autodoc_pydantic_field_show_default = True
+autodoc_pydantic_model_show_field_summary = True
+autodoc_pydantic_field_doc_policy = "description"
 
 intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
