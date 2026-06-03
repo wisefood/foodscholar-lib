@@ -44,6 +44,7 @@ the tree; it doesn't *define* it.
 | **1a+ — Auto backbone + controlled expansion** | same top backbone, recursively opens only supported/capped tiers |
 | **1b — LLM backbone** | `llama-3.1-8b-instant` proposes the backbone + support decorates |
 | **3 — Multi-facet** | a node may sit under several backbone axes (DAG) |
+| **B-probe — Active FoodOn shelf communities** | Layer A as full FoodOn evidence; Layer B scopes by corpus support |
 
 FoodOn stays the entity backbone — only the projection changes. Runs in-process
 (no Neo4j/Elastic). Col 1b needs `GROQ_API_KEY`; degrades gracefully."""
@@ -739,6 +740,421 @@ SCORECARD = build_scorecard(
 )
 print("methods scored:", [row["method"] for row in SCORECARD])
 display(HTML(render_scorecard_html(SCORECARD)))'''
+    )
+)
+
+# ----------------------------------------------------------------- Layer B active-shelf probe
+cells.append(
+    md(
+        """## B-probe — full FoodOn evidence → active-shelf communities
+
+This is **not** a production Layer-B change and it is **not** another Layer-A
+tree method. It tests the alternative direction: let Layer A associate chunks
+with FoodOn as faithfully as possible, then let Layer B choose the corpus-active
+FoodOn nodes worth opening and run community detection inside those scopes."""
+    )
+)
+
+cells.append(
+    code(
+        r'''# ---- Full FoodOn evidence layer ---------------------------------------------
+# Unlike CHUNK_TERMS above, this keeps every FOODON id routed to the foods facet.
+# That is the point of this probe: Layer A is FoodOn evidence, not a pruned tree.
+def chunk_full_foodon_terms(c):
+    fids = set()
+    for fid in getattr(c, "foodon_ids", []) or []:
+        if fid in api:
+            fids.add(fid)
+    for ln in getattr(c, "entity_links", []) or []:
+        if ln.ontology_id in api and route_link_to_facet(ln) == "foods":
+            fids.add(ln.ontology_id)
+    return fids
+
+
+FULL_CHUNK_TERMS = {c.chunk_id: chunk_full_foodon_terms(c) for c in chunks}
+FULL_CHUNK_TERMS = {cid: terms for cid, terms in FULL_CHUNK_TERMS.items() if terms}
+FULL_TERM_DOC_FREQ = Counter()
+for terms in FULL_CHUNK_TERMS.values():
+    for fid in terms:
+        FULL_TERM_DOC_FREQ[fid] += 1
+
+FULL_NODE_CHUNKS = defaultdict(set)
+FULL_NODE_LEAVES = defaultdict(set)
+for cid, terms in FULL_CHUNK_TERMS.items():
+    for fid in terms:
+        rollups = [fid] + [a for a in api.id_to_ancestors(fid) if a in api]
+        for node in rollups:
+            FULL_NODE_CHUNKS[node].add(cid)
+            FULL_NODE_LEAVES[node].add(fid)
+
+print(
+    f"full FoodOn evidence: {len(FULL_CHUNK_TERMS)} chunks · "
+    f"{len(FULL_TERM_DOC_FREQ)} direct FoodOn ids · "
+    f"{len(FULL_NODE_CHUNKS)} rollup nodes"
+)'''
+    )
+)
+
+cells.append(
+    code(
+        r'''# ---- Active FoodOn shelf selection -------------------------------------------
+# Goal: choose Layer-B scopes, not a browse taxonomy. A good active shelf is
+# corpus-supported, reasonably specific, non-generic, and not near-duplicate
+# with an already selected scope.
+ACTIVE_MIN_SUPPORT = 50
+ACTIVE_MAX_SUPPORT_FRAC = 0.25
+ACTIVE_MIN_LEAVES = 2
+ACTIVE_MAX_SCOPES = 36
+ACTIVE_REDUNDANCY_JACCARD = 0.72
+
+GENERIC_LABEL_BITS = (
+    "entity", "object", "material entity", "physical object", "datum",
+    "organism", "species", "taxonomic", "food product type",
+    "material", " by ", "consumer group", "characteristic", "process",
+    "meal type", "producing plant",
+)
+GENERIC_LABELS = {
+    "food product", "plant food product", "animal food product",
+    "edible food", "food material", "food source",
+    "animal", "plant", "processed food", "food (cooked)",
+}
+
+
+def _chunks(fid):
+    return FULL_NODE_CHUNKS.get(fid, set())
+
+
+def jaccard(a, b):
+    if not a and not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def label_quality(fid):
+    label = (api.id_to_label(fid) or fid).strip()
+    low = label.lower()
+    if low in GENERIC_LABELS:
+        return 0.0
+    if any(bit in low for bit in GENERIC_LABEL_BITS):
+        return 0.0
+    if len(label) > 70:
+        return 0.35
+    if low[:5].isdigit() or "efsa foodex2" in low or "gs1 gpc" in low:
+        return 0.25
+    return 0.75 if label.endswith(" food product") else 1.0
+
+
+def parent_overlap(fid):
+    own = _chunks(fid)
+    parents = [p for p in api.id_to_parents(fid) if p in FULL_NODE_CHUNKS]
+    return max((jaccard(own, _chunks(p)) for p in parents), default=0.0)
+
+
+def active_score(fid):
+    support = len(_chunks(fid))
+    leaf_count = len(FULL_NODE_LEAVES.get(fid, set()))
+    depth = len(api.id_to_ancestors(fid))
+    direct = FULL_TERM_DOC_FREQ.get(fid, 0)
+    nonredundant = max(0.05, 1.0 - parent_overlap(fid))
+    # High support matters, but specificity/non-redundancy prevents broad hubs
+    # from winning purely because nearly everything rolls up into them.
+    return (
+        (support ** 0.5)
+        * (1.0 + min(leaf_count, 50) / 20.0)
+        * (1.0 + min(depth, 10) / 12.0)
+        * (1.0 + min(direct, 50) / 100.0)
+        * label_quality(fid)
+        * nonredundant
+    )
+
+
+max_support = ACTIVE_MAX_SUPPORT_FRAC * max(1, len(FULL_CHUNK_TERMS))
+active_candidates = []
+for fid, chunk_ids in FULL_NODE_CHUNKS.items():
+    support = len(chunk_ids)
+    if support < ACTIVE_MIN_SUPPORT or support > max_support:
+        continue
+    if len(FULL_NODE_LEAVES.get(fid, set())) < ACTIVE_MIN_LEAVES and FULL_TERM_DOC_FREQ.get(fid, 0) < ACTIVE_MIN_SUPPORT:
+        continue
+    if label_quality(fid) <= 0:
+        continue
+    active_candidates.append(fid)
+
+selected_active_shelves = []
+for fid in sorted(active_candidates, key=active_score, reverse=True):
+    own = _chunks(fid)
+    if any(jaccard(own, _chunks(sel)) >= ACTIVE_REDUNDANCY_JACCARD for sel in selected_active_shelves):
+        continue
+    selected_active_shelves.append(fid)
+    if len(selected_active_shelves) >= ACTIVE_MAX_SCOPES:
+        break
+
+active_rows = []
+for fid in selected_active_shelves:
+    active_rows.append({
+        "id": fid,
+        "label": api.id_to_label(fid) or fid,
+        "support": len(_chunks(fid)),
+        "direct": FULL_TERM_DOC_FREQ.get(fid, 0),
+        "leaves": len(FULL_NODE_LEAVES.get(fid, set())),
+        "parent_overlap": parent_overlap(fid),
+        "score": active_score(fid),
+    })
+
+print(f"active shelf candidates: {len(active_candidates)} → selected {len(active_rows)}")
+for r in active_rows[:20]:
+    print(
+        f"{r['label']:<45} support={r['support']:>4} "
+        f"direct={r['direct']:>3} leaves={r['leaves']:>3} "
+        f"parentJ={r['parent_overlap']:.2f}"
+    )'''
+    )
+)
+
+cells.append(
+    code(
+        r'''# ---- B-probe Layer-A evidence tree -------------------------------------------
+# This is the Layer-A shape for the direction we are testing:
+# keep FoodOn as-is, associate corpus chunks to FoodOn ids, and roll support up
+# through the FoodOn hierarchy. Unlike the Layer-B active shelf report, this is
+# not restricted to selected active shelves.
+B_FOODON_ROOT = "__b_probe_full_foodon_root__"
+B_FOODON_MAX_DEPTH = 5
+B_FOODON_MAX_CHILDREN = 18
+
+
+def full_foodon_rank(fid):
+    return (
+        len(FULL_NODE_CHUNKS.get(fid, set())),
+        len(FULL_NODE_LEAVES.get(fid, set())),
+        FULL_TERM_DOC_FREQ.get(fid, 0),
+        api.id_to_label(fid) or fid,
+    )
+
+
+def supported_parent(fid, supported_nodes):
+    parents = [p for p in api.id_to_parents(fid) if p in supported_nodes]
+    if not parents:
+        return B_FOODON_ROOT
+    # If FoodOn gives multiple supported parents, choose the closest/specific one
+    # for this tree view. The ontology evidence itself remains multi-parent.
+    return max(parents, key=lambda p: len(api.id_to_ancestors(p)))
+
+
+def build_full_foodon_support_tree():
+    supported_nodes = set(FULL_NODE_CHUNKS)
+    children = defaultdict(list)
+    counts = {B_FOODON_ROOT: len(FULL_CHUNK_TERMS)}
+    labels = {B_FOODON_ROOT: "FoodOn as-is support tree"}
+
+    for fid in sorted(supported_nodes, key=full_foodon_rank, reverse=True):
+        parent = supported_parent(fid, supported_nodes)
+        children[parent].append(fid)
+        counts[fid] = len(FULL_NODE_CHUNKS.get(fid, set()))
+        labels[fid] = api.id_to_label(fid) or fid
+
+    # Keep sibling labels unique in the display. FoodOn can expose equivalent
+    # labels through different ids/parents, which is valid but noisy here.
+    deduped = defaultdict(list)
+    for parent, kids in children.items():
+        best_by_label = {}
+        for child in kids:
+            key = labels.get(child, child).strip().lower()
+            prev = best_by_label.get(key)
+            if prev is None or full_foodon_rank(child) > full_foodon_rank(prev):
+                best_by_label[key] = child
+        deduped[parent] = sorted(best_by_label.values(), key=full_foodon_rank, reverse=True)
+    return deduped, counts, labels
+
+
+B_FOODON_CHILDREN, B_FOODON_COUNTS, B_FOODON_LABELS = build_full_foodon_support_tree()
+B_FOODON_HTML = render_tree_from_edges(
+    B_FOODON_ROOT,
+    B_FOODON_CHILDREN,
+    B_FOODON_COUNTS,
+    lambda n: B_FOODON_LABELS.get(n, n),
+    max_depth=B_FOODON_MAX_DEPTH,
+    open_depth=1,
+    max_children=B_FOODON_MAX_CHILDREN,
+)
+B_FOODON_FANOUT = max((len(v) for v in B_FOODON_CHILDREN.values()), default=0)
+COLUMNS.append({
+    "title": "B-probe — Full FoodOn + corpus support",
+    "stats": (
+        f"full FoodOn evidence <b>{len(FULL_CHUNK_TERMS):,}</b> chunks · "
+        f"<b>{len(FULL_TERM_DOC_FREQ):,}</b> direct ids · "
+        f"<b>{len(FULL_NODE_CHUNKS):,}</b> rollup nodes<br>"
+        f"FoodOn as-is support tree · top fan-out <b>{B_FOODON_FANOUT}</b> · "
+        f"render cap <b>{B_FOODON_MAX_CHILDREN}</b>/parent"
+    ),
+    "tree": B_FOODON_HTML,
+})
+print(
+    f"B-probe full FoodOn support tree: {len(FULL_NODE_CHUNKS)} rollup nodes, "
+    f"top fan-out {B_FOODON_FANOUT}"
+)'''
+    )
+)
+
+cells.append(
+    code(
+        r'''# ---- Community detection inside active shelves ------------------------------
+# First pass uses the existing Layer-B relatedness graph + Leiden, scoped to the
+# selected FoodOn node's rolled-up chunks. This keeps the probe cheap and
+# faithful to the current Layer-B code path.
+from foodscholar.layer_b.community import run_leiden
+from foodscholar.layer_b.relatedness_graph import build_relatedness_graph
+
+COMMUNITY_MAX_SCOPES = 18
+COMMUNITY_MAX_CHUNKS_PER_SCOPE = 350
+COMMUNITY_MIN_CHUNKS = 20
+COMMUNITY_TOP_TERMS = 4
+
+
+def chunk_label_terms(chunk_ids, *, within_scope=None):
+    counts = Counter()
+    scope_ids = {within_scope, *api.id_to_descendants(within_scope)} if within_scope else None
+    for cid in chunk_ids:
+        for fid in FULL_CHUNK_TERMS.get(cid, ()):
+            if scope_ids is None or fid in scope_ids:
+                counts[fid] += 1
+    return counts
+
+
+def theme_label(chunk_ids, scope_id):
+    top = []
+    for fid, _ in chunk_label_terms(chunk_ids, within_scope=scope_id).most_common(12):
+        label = api.id_to_label(fid) or fid
+        if label not in top:
+            top.append(label)
+        if len(top) >= COMMUNITY_TOP_TERMS:
+            break
+    return ", ".join(top) or (api.id_to_label(scope_id) or scope_id)
+
+
+active_theme_rows = []
+community_errors = []
+for shelf in active_rows[:COMMUNITY_MAX_SCOPES]:
+    scope_id = shelf["id"]
+    scope_chunk_ids = sorted(_chunks(scope_id))
+    if len(scope_chunk_ids) < COMMUNITY_MIN_CHUNKS:
+        continue
+    sampled_ids = scope_chunk_ids[:COMMUNITY_MAX_CHUNKS_PER_SCOPE]
+    scope_chunks = fs.chunk_store.get_many(sampled_ids)
+    graph = None
+    try:
+        graph = build_relatedness_graph(scope_chunks, fs.config.layer_b.relatedness)
+        comms = run_leiden(graph, fs.config.layer_b.leiden)
+    except Exception as exc:
+        community_errors.append((scope_id, str(exc)))
+        comms = []
+
+    themes = []
+    for comm in sorted(comms, key=len, reverse=True)[:8]:
+        ids = {graph.vs[idx]["chunk_id"] for idx in comm}
+        themes.append({
+            "label": theme_label(ids, scope_id),
+            "n_chunks": len(ids),
+            "top_terms": [
+                (api.id_to_label(fid) or fid, n)
+                for fid, n in chunk_label_terms(ids, within_scope=scope_id).most_common(COMMUNITY_TOP_TERMS)
+            ],
+        })
+    active_theme_rows.append({
+        **shelf,
+        "sampled_chunks": len(sampled_ids),
+        "graph_edges": graph.ecount() if graph is not None else 0,
+        "themes": themes,
+    })
+
+if community_errors:
+    print("community errors:", community_errors[:5])
+print(f"community-scoped shelves: {len(active_theme_rows)}")
+for row in active_theme_rows[:12]:
+    print(
+        f"{row['label']:<42} chunks={row['support']:>4} "
+        f"sampled={row['sampled_chunks']:>3} themes={len(row['themes'])}"
+    )
+    for th in row["themes"][:3]:
+        print(f"  - {th['label']} ({th['n_chunks']} chunks)")'''
+    )
+)
+
+cells.append(
+    code(
+        r'''# ---- Render active-shelf community probe ------------------------------------
+from IPython.display import HTML
+from jinja2 import Template
+
+ACTIVE_REPORT = Template(
+    """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Layer B active FoodOn shelf communities</title><style>
+body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:1200px;margin:1.5rem auto;padding:0 1rem;}
+h1{border-bottom:3px solid #5b8a72;padding-bottom:.3rem;}
+.meta{color:#777;font-size:.9rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:.8rem}
+.scope{border:1px solid #d8dfd9;border-radius:6px;padding:.65rem .8rem;background:#fff}
+.scope h2{font-size:1rem;margin:.1rem 0 .25rem;color:#2f513f}.stat{font-size:.82rem;color:#69756c;margin-bottom:.45rem}
+ul{margin:.25rem 0 .3rem 1.1rem;padding:0}.theme{margin:.18rem 0}.small{font-size:.8rem;color:#7a8580}
+table{border-collapse:collapse;width:100%;margin:.8rem 0}td,th{border:1px solid #dde3df;padding:.25rem .35rem;text-align:left;font-size:.82rem}
+</style></head><body>
+<h1>Layer B active FoodOn shelf communities</h1>
+<p class="meta">
+Layer A evidence = all FOODON ids routed to foods, rolled up through FoodOn.
+Active shelves are selected by support, specificity, label quality, and
+anti-redundancy; communities use the existing Layer-B relatedness graph + Leiden.
+</p>
+<table><thead><tr><th>metric</th><th>value</th></tr></thead><tbody>
+<tr><td>chunks with FoodOn foods evidence</td><td>{{ n_chunks }}</td></tr>
+<tr><td>direct FoodOn ids</td><td>{{ n_terms }}</td></tr>
+<tr><td>rollup nodes</td><td>{{ n_nodes }}</td></tr>
+<tr><td>selected active shelves</td><td>{{ n_selected }}</td></tr>
+<tr><td>community-scoped shelves rendered</td><td>{{ n_rendered }}</td></tr>
+</tbody></table>
+<div class="grid">
+{% for row in rows %}
+<section class="scope">
+  <h2>{{ row.label }}</h2>
+  <div class="stat">
+    {{ row.support }} chunks · {{ row.leaves }} direct/descendant ids ·
+    direct {{ row.direct }} · parent J {{ "%.2f"|format(row.parent_overlap) }} ·
+    sampled {{ row.sampled_chunks }}
+  </div>
+  {% if row.themes %}
+  <ul>
+  {% for th in row.themes %}
+    <li class="theme"><b>{{ th.label }}</b> <span class="small">({{ th.n_chunks }} chunks)</span></li>
+  {% endfor %}
+  </ul>
+  {% else %}
+    <div class="small">No Leiden communities above the current minimum size.</div>
+  {% endif %}
+</section>
+{% endfor %}
+</div>
+</body></html>"""
+)
+
+active_out = VIZ_DIR / "layer_b_active_shelf_communities.html"
+active_out.write_text(
+    ACTIVE_REPORT.render(
+        n_chunks=len(FULL_CHUNK_TERMS),
+        n_terms=len(FULL_TERM_DOC_FREQ),
+        n_nodes=len(FULL_NODE_CHUNKS),
+        n_selected=len(active_rows),
+        n_rendered=len(active_theme_rows),
+        rows=active_theme_rows,
+    ),
+    encoding="utf-8",
+)
+display(HTML(ACTIVE_REPORT.render(
+    n_chunks=len(FULL_CHUNK_TERMS),
+    n_terms=len(FULL_TERM_DOC_FREQ),
+    n_nodes=len(FULL_NODE_CHUNKS),
+    n_selected=len(active_rows),
+    n_rendered=len(active_theme_rows),
+    rows=active_theme_rows,
+)))
+print(f"wrote {active_out} ({active_out.stat().st_size/1024:.0f} KB)")'''
     )
 )
 
