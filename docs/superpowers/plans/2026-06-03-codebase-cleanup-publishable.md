@@ -53,7 +53,16 @@ agentic/relations; agent.py deleted), `tests/unit/test_agentic_*`, plus tracked 
 
 ---
 
-## Decisions required before execution
+## Decisions (resolved 2026-06-03)
+
+- **A = A2 (archive):** move the bake-off harness under `research/` — out of the importable package, preserved as method-selection provenance.
+- **B = keep, non-default:** keep both `prune` (fallback) and `grouping` (bottom-up); backbone stays the default. No removals.
+- **C = archive old notebook:** `graph_build.ipynb` is canonical; move `build_graph.ipynb` under `research/` (kept, not shipped).
+- **D = publish:** open a PR `layer-a-method-bakeoff → main` once Stages 0–6 are green.
+
+---
+
+## Decisions (original framing, for reference)
 
 These are judgment calls I should not make for you. Each blocks the stage noted.
 
