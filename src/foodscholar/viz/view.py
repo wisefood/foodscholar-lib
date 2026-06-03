@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from foodscholar.facade import FoodScholar
 
 
-RendererName = Literal["pyvis", "cytoscape", "graphviz", "matplotlib"]
+RendererName = Literal["pyvis", "cytoscape", "graphviz", "matplotlib", "tree"]
 
 
 class RenderableGraph:
@@ -90,6 +90,7 @@ class RenderableGraph:
             "cytoscape": _renderers.cytoscape,
             "graphviz": _renderers.graphviz,
             "matplotlib": _renderers.matplotlib,
+            "tree": _renderers.tree,
         }
         if backend not in factory:
             raise ValueError(
@@ -165,6 +166,14 @@ class VizView:
         return RenderableGraph(
             builder.backbone(self._fs, facet=facet, include_cards=include_cards)
         )
+
+    def layer_a_tree(self, facet: str = "foods") -> RenderableGraph:
+        """Full Layer A shelf tree for a facet, themes grouped by origin.
+
+        Best rendered with the `"tree"` backend:
+        `fs.viz.layer_a_tree("foods").render("tree", output="tree.html")`.
+        """
+        return RenderableGraph(builder.layer_a_tree(self._fs, facet))
 
     # ------------------------------------------------------------- L4
 
