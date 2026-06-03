@@ -172,7 +172,7 @@ def test_merge_global_and_local_returns_themes_with_union_shelf_ids() -> None:
     # global {c1,c2,c3,c4} vs shelf:fat {c1,c2}: J=0.5, combined=0.5*1.0=0.5
     # global {c1,c2,c3,c4} vs shelf:meat {c3,c4}: J=0.5, combined=0.5
     cfg = MergeConfig(chunk_weight=1.0, entity_weight=0.0, dedupe_threshold=0.4)
-    themes, decisions = merge_global_and_local_candidates(
+    themes, _decisions = merge_global_and_local_candidates(
         global_cands, rel_cands_by_shelf, cfg,
     )
     merged = [t for t in themes if t["discovery_pass"] == "merged"]
