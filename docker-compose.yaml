@@ -15,7 +15,7 @@ services:
       - wisefood-net
 
   neo4j:
-    image: neo4j:5.20
+    image: neo4j:2026.05.0
     container_name: neo4j
     environment:
       NEO4J_AUTH: "neo4j/password"
