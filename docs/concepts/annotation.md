@@ -23,8 +23,16 @@ fs.annotate()                                              # full phase over the
 
 Mentions are found by **GLiNER-bio** (`urchade/gliner_large_bio-v0.1`), a zero-shot
 biomedical NER model. It labels spans across the project's entity types (food,
-nutrient, health, dietary pattern, allergen, population, biomarker, processing) and is
-configured by `config.annotate.gliner`:
+nutrient, health, dietary pattern, allergen, population, biomarker, processing):
+
+```python
+fs.ner.extract("One cup of milk provides calcium and vitamin D.")
+# [Mention(text="milk",      start=11, end=15, entity_type="food",     score=0.91),
+#  Mention(text="calcium",   start=25, end=32, entity_type="nutrient", score=0.88),
+#  Mention(text="vitamin D", start=37, end=46, entity_type="nutrient", score=0.85)]
+```
+
+It's configured by `config.annotate.gliner`:
 
 ```yaml
 annotate:
@@ -65,9 +73,17 @@ annotate:
 
 The biomedical encoder (BioLORD by default) places synonyms close in vector space, so
 `ascorbate → vitamin C` and `whole grains → whole grain` link without any lexical
-overlap. Each `EntityLink` records its `method` and `confidence`, so it stays auditable,
-and downstream stages (Layer A support, Layer B relatedness) can require a minimum
-confidence.
+overlap — and a typo like `oliv oil` still links, because the surface is *embedded*, not
+string-matched. Each `EntityLink` records its `method` and `confidence`, so it stays
+auditable, and downstream stages (Layer A support, Layer B relatedness) can require a
+minimum confidence.
+
+```{note}
+**Two different embedders, on purpose.** Chunk *text* is embedded with **BGE-base**
+(general semantic similarity, for retrieval and Layer B Pass 1); *entity surfaces* are
+embedded with **BioLORD** (a biomedical encoder tuned to put clinical/food synonyms
+together). They solve different problems and aren't interchangeable.
+```
 
 ```{tip}
 Linking is the expensive part. Supplying NEL CSVs at ingest (`fs.ingest(dir, nel_dir=...)`)
@@ -78,10 +94,16 @@ skips GLiNER and the HNSW build entirely — fast, deterministic, and offline. T
 ## Catching linker drift
 
 Some surface forms are polysemous in a way a generic encoder gets wrong — e.g. "fish"
-in food prose means fish-as-food, but the upstream linker can pair it with the FoodOn
-class for aquarium feed. A small **link blocklist** (`config.layer_a.link_blocklist`)
-filters known `(surface, ontology_id)` drift before Layer A collects support, so those
-mislinks never inflate a shelf.
+in food prose means fish-as-food, but the linker can pair it with the FoodOn class for
+aquarium feed. A small **link blocklist** (`config.layer_a.link_blocklist`) filters known
+`(surface, ontology_id)` drift before Layer A collects support, so those mislinks never
+inflate a shelf:
+
+```yaml
+layer_a:
+  link_blocklist:
+    - { surface: fish, ontology_id: "FOODON:00002281" }   # "fish" ≠ aquarium feed
+```
 
 ## Quality gate
 

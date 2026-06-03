@@ -45,12 +45,14 @@ getting-started/configuration
 :maxdepth: 2
 
 concepts/architecture
+concepts/worked-example
 concepts/corpus-input
 concepts/annotation
 concepts/ontology
 concepts/layer-a-backbone
 concepts/layer-b-themes
 concepts/layer-c-cards
+concepts/glossary
 ```
 
 ```{toctree}

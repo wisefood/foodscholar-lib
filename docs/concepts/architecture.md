@@ -16,7 +16,7 @@ flowchart TB
       C[Corpus: textbooks, guides, abstracts] -->|chunker| K[Chunks]
       K -->|BGE-base 768d| E[Embeddings]
       K -->|NER| Mn[Mentions]
-      Mn -->|tiered linker| L[Entity links → FoodOn IDs]
+      Mn -->|dense linker| L[Entity links → FoodOn IDs]
     end
     subgraph LayerA[Layer A — Shelves]
       L -->|project onto FoodOn| SA[Shelf nodes]
@@ -56,14 +56,19 @@ Every layer builds on the previous one, and every layer is queryable on its own.
 ## Two stores, one truth
 
 Retrieval and graph navigation have different ideal databases, so FoodScholar uses
-both and keeps them in lockstep.
+both and keeps them in lockstep. Elasticsearch can't cheaply do multi-hop traversals
+(chunk → theme → sibling chunks → shelf); Neo4j can't do good hybrid retrieval. So each
+store owns what it's best at:
 
 | Elasticsearch owns **retrieval** | Neo4j owns **navigation** |
 |---|---|
 | BM25 keyword search | `(:Shelf)-[:PARENT_OF]->(:Shelf)` hierarchy |
 | HNSW kNN (768-d `dense_vector`, cosine) | `(:Chunk)-[:ATTACHED_TO]->(:Shelf)` |
-| hybrid via reciprocal-rank fusion | `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` |
+| hybrid via [reciprocal-rank fusion](glossary.md) (RRF) | `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` |
 | filter by `shelf_ids` / `theme_ids` | graph traversals (theme expansion, shelf walks) |
+
+On the `THEME_OF` edge, `primary` marks a chunk's single best theme on a shelf (a chunk
+can belong to several), and `weight` is its membership strength — both used when ranking.
 
 A chunk's `shelf_ids` and `theme_ids` are **denormalized** onto its Elasticsearch
 document so retrieval can filter by shelf/theme without round-tripping to Neo4j. The
