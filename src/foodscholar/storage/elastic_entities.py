@@ -84,9 +84,22 @@ class ElasticEntityStore:
     # ------------------------------------------------------------------ admin
 
     def init(self) -> None:
+        """Idempotent — tolerant of a concurrent creator racing the
+        exists()→create() window (the `resource_already_exists` error is swallowed)."""
+        from elasticsearch import BadRequestError
+
         if self._es.indices.exists(index=self.index):
             self._ensured_init = True
             return
+        try:
+            self._create_index()
+        except BadRequestError as e:
+            if getattr(e, "error", "") != "resource_already_exists_exception":
+                raise
+        self._ensured_init = True
+        _log.info("elastic_entities.index_created", index=self.index)
+
+    def _create_index(self) -> None:
         self._es.indices.create(
             index=self.index,
             body={
@@ -117,8 +130,6 @@ class ElasticEntityStore:
                 },
             },
         )
-        self._ensured_init = True
-        _log.info("elastic_entities.index_created", index=self.index)
 
     # ------------------------------------------------------------------ writes
 
