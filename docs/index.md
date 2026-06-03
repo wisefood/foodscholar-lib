@@ -31,11 +31,6 @@ flowchart LR
 New here? Start with [](getting-started/quickstart.md), then read
 [](concepts/architecture.md) for the whole picture.
 
-```{note}
-These docs are being built out. **Getting started**, **Concepts**, and **Guides** are
-complete; the **API reference** is next.
-```
-
 ```{toctree}
 :caption: Getting started
 :maxdepth: 2
@@ -67,4 +62,11 @@ guides/exploring-the-graph
 guides/visualization
 guides/tuning-layer-b
 guides/cli
+```
+
+```{toctree}
+:caption: API reference
+:maxdepth: 2
+
+reference/index
 ```
