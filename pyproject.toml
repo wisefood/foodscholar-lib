@@ -101,6 +101,11 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B"]
+# Conditional imports after `pytest.importorskip(...)` / import-near-use in tests.
+"tests/unit/test_chunk_store_knn.py" = ["E402"]
+"tests/unit/test_layer_a_grouping.py" = ["E402"]
+# Best-effort index teardown (try/except/pass) in the integration harness.
+"tests/integration/test_elastic_chunk_store.py" = ["SIM105"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -1,0 +1,30 @@
+format-version: 1.2
+ontology: test
+
+[Typedef]
+id: RO:0001000
+name: derives from
+
+[Term]
+id: FOODON:0000001
+name: food product
+
+[Term]
+id: FOODON:0000010
+name: mammal
+
+[Term]
+id: FOODON:0000011
+name: mammalian meat food product
+is_a: FOODON:0000001 ! food product
+relationship: RO:0001000 FOODON:0000010 ! derives from
+
+[Term]
+id: NCBITaxon:9606
+name: Homo sapiens
+
+[Term]
+id: FOODON:0000012
+name: human food
+is_a: FOODON:0000001 ! food product
+relationship: RO:0001000 NCBITaxon:9606 ! derives from

@@ -121,6 +121,9 @@ def merge_candidates(
                 "foodon_ids": s.foodon_ids,
                 "discovery_pass": s.pass_name,
                 "discovered_by": s.discovered_by,
+                # Carried through so the caller can attach a per-shelf Pass-1
+                # theme to its origin shelf. Transient — stripped before persist.
+                "origin_shelf_id": s.origin_shelf_id,
             }
         )
     # 3. Rel-only themes
@@ -177,7 +180,12 @@ def merge_global_and_local_candidates(
             }
             t = {**t, "shelf_ids": sorted(contributing_shelves)}
         elif pass_kind == "global_similarity":
-            t = {**t, "shelf_ids": []}
+            # Per-shelf Pass 1 tags the candidate with its origin shelf -> attach
+            # there directly. Global Pass 1 leaves it None -> shelf_ids=[] so the
+            # orchestrator backfills from the (genuinely cross-shelf) chunk union.
+            origin = t.get("origin_shelf_id")
+            t = {k: v for k, v in t.items() if k != "origin_shelf_id"}
+            t["shelf_ids"] = [origin] if origin else []
         elif pass_kind == "relatedness":
             # Match by exact chunk_ids to find origin shelf
             origin = None

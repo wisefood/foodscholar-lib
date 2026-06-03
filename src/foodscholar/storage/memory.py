@@ -248,7 +248,7 @@ class InMemoryChunkStore:
         norms[norms == 0] = 1.0
         corpus_matrix = corpus_matrix / norms
         sims = (corpus_matrix @ q).tolist()
-        ranked = sorted(zip(ids, sims), key=lambda x: x[1], reverse=True)
+        ranked = sorted(zip(ids, sims, strict=False), key=lambda x: x[1], reverse=True)
         return ranked[:k]
 
     def scan(self) -> list[Chunk]:

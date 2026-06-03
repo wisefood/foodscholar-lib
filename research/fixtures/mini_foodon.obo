@@ -1,0 +1,63 @@
+format-version: 1.2
+ontology: mini-foodon
+
+[Term]
+id: TEST:0000001
+name: food product
+
+[Term]
+id: TEST:0000002
+name: plant food
+is_a: TEST:0000001 ! food product
+
+[Term]
+id: TEST:0000003
+name: animal food
+is_a: TEST:0000001 ! food product
+
+[Term]
+id: TEST:0000004
+name: fruit
+is_a: TEST:0000002 ! plant food
+
+[Term]
+id: TEST:0000005
+name: vegetable
+is_a: TEST:0000002 ! plant food
+
+[Term]
+id: TEST:0000006
+name: apple
+synonym: "Malus domestica" EXACT []
+synonym: "eating apple" RELATED []
+is_a: TEST:0000004 ! fruit
+
+[Term]
+id: TEST:0000007
+name: olive
+synonym: "Olea europaea" EXACT []
+is_a: TEST:0000004 ! fruit
+
+[Term]
+id: TEST:0000008
+name: olive oil
+synonym: "extra-virgin olive oil" EXACT []
+synonym: "EVOO" EXACT []
+is_a: TEST:0000007 ! olive
+
+[Term]
+id: TEST:0000009
+name: peanut
+synonym: "Arachis hypogaea" EXACT []
+synonym: "groundnut" EXACT []
+is_a: TEST:0000002 ! plant food
+
+[Term]
+id: TEST:0000010
+name: legacy term
+is_obsolete: true
+
+[Term]
+id: TEST:0000011
+name: dairy product
+is_a: TEST:0000003 ! animal food
