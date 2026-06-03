@@ -1,0 +1,8 @@
+# Documentation build dependencies (used by Read the Docs — see ../.readthedocs.yaml).
+sphinx>=7.2
+myst-parser>=2.0
+linkify-it-py>=2.0          # MyST `linkify` extension (auto-link bare URLs)
+furo>=2024.1.29
+sphinx-copybutton>=0.5
+sphinx-design>=0.5
+sphinxcontrib-mermaid>=0.9
