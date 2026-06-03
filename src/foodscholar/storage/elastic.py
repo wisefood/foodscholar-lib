@@ -101,10 +101,24 @@ class ElasticChunkStore:
     # ------------------------------------------------------------------ admin
 
     def init(self) -> None:
-        """Create the index with the FoodScholar mapping if missing. Idempotent."""
+        """Create the index with the FoodScholar mapping if missing. Idempotent —
+        safe to call repeatedly and tolerant of a concurrent creator (the
+        exists()→create() window can race, e.g. two callers or a just-restarted
+        cluster), in which case the `resource_already_exists` error is swallowed."""
+        from elasticsearch import BadRequestError
+
         if self._es.indices.exists(index=self.index):
             self._ensured_init = True
             return
+        try:
+            self._create_index()
+        except BadRequestError as e:
+            if getattr(e, "error", "") != "resource_already_exists_exception":
+                raise
+        self._ensured_init = True
+        _log.info("elastic.index_created", index=self.index)
+
+    def _create_index(self) -> None:
         self._es.indices.create(
             index=self.index,
             body={
@@ -174,8 +188,6 @@ class ElasticChunkStore:
                 },
             },
         )
-        self._ensured_init = True
-        _log.info("elastic.index_created", index=self.index)
 
     def recreate(self) -> None:
         """Delete the index (if present) and recreate it with the CURRENT mapping.
