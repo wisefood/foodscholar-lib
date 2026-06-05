@@ -15,15 +15,31 @@ mutate the stores.
 
 from __future__ import annotations
 
-from collections import Counter
+import math
+import re
+from collections import Counter, defaultdict
 from typing import TYPE_CHECKING, Any
 
 from foodscholar.viz.model import VizEdge, VizGraph, VizNode
 
 if TYPE_CHECKING:
     from foodscholar.facade import FoodScholar
+    from foodscholar.io.chunk import Chunk
     from foodscholar.io.entity import Entity
     from foodscholar.ontology import FoodOnAPI
+
+# Per-shelf detail caps surfaced in the tree's tabbed panel (Terms / Entities / Sources).
+TOP_TERMS = 100
+TOP_ENTITIES = 40
+TOP_SOURCES = 40
+
+_WORD_RE = re.compile(r"[a-z][a-z\-]{2,}")
+# Small English + nutrition-corpus stopword set so "Top terms" surface signal, not filler.
+_STOPWORDS = frozenset(["the", "of", "and", "to", "in", "for", "is", "on", "with", "as", "by", "an", "at", "or", "be", "are", "from", "this", "that", "these", "those", "it", "its", "can", "may", "also", "such", "other", "more", "most", "than", "then", "they", "them", "their", "there", "which", "who", "whom", "whose", "into", "over", "under", "between", "within", "without", "about", "above", "below", "not", "no", "nor", "but", "if", "so", "we", "you", "your", "our", "his", "her", "she", "him", "he", "was", "were", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "should", "could", "one", "two", "each", "per", "any", "all", "some", "many", "few", "both", "either", "neither", "same", "very", "much", "like", "used", "use", "using", "uses", "based", "food", "foods", "diet", "dietary", "nutrition", "nutritional", "eat", "eating", "intake", "amount", "amounts", "source", "sources", "high", "low", "rich", "content", "contain", "contains", "containing", "include", "includes", "including", "example", "examples", "figure", "table", "chapter", "section", "page", "see", "e.g", "i.e", "etc"])
+
+
+def _tokenize(text: str) -> Counter[str]:
+    return Counter(w for w in _WORD_RE.findall((text or "").lower()) if w not in _STOPWORDS)
 
 # How many chunks / co-entities / descendants the default views surface
 # inline. Renderers can't usefully show thousands of nodes, so the builder
@@ -278,6 +294,69 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
     min_chunks = fs.config.layer_b.min_chunks_per_shelf
     shelves = fs.graph.shelves(facet=facet)
 
+    # One pass over the corpus: tokenize each chunk once, accumulate document
+    # frequency (for tf-idf-style term scoring), and bucket chunks by shelf.
+    all_chunks = fs.chunk_store.scan()
+    n_docs = max(1, len(all_chunks))
+    tokens_by_chunk: dict[str, Counter[str]] = {}
+    doc_freq: Counter[str] = Counter()
+    chunks_by_shelf: dict[str, list[Chunk]] = defaultdict(list)
+    for c in all_chunks:
+        toks = _tokenize(c.text)
+        tokens_by_chunk[c.chunk_id] = toks
+        doc_freq.update(toks.keys())
+        for sid in c.shelf_ids:
+            chunks_by_shelf[sid].append(c)
+
+    try:
+        _onto = fs.ontology
+    except Exception:  # ontology not loaded (e.g. in_memory without FoodOn) — fall back to ids
+        _onto = None
+
+    def _label(ontology_id: str) -> str:
+        if _onto is not None:
+            try:
+                return _onto.id_to_label(ontology_id) or ontology_id
+            except Exception:
+                return ontology_id
+        return ontology_id
+
+    def _shelf_terms(chunks: list[Chunk]) -> list[dict[str, Any]]:
+        tf: Counter[str] = Counter()
+        for c in chunks:
+            tf.update(tokens_by_chunk.get(c.chunk_id, {}))
+        # tf · smoothed-idf (sklearn-style, always positive) so ubiquitous words rank
+        # below shelf-distinctive ones without ever zeroing out on small corpora.
+        scored = sorted(
+            tf.items(),
+            key=lambda kv: kv[1] * (math.log((1 + n_docs) / (1 + doc_freq[kv[0]])) + 1),
+            reverse=True,
+        )
+        return [{"term": w, "count": k} for w, k in scored[:TOP_TERMS]]
+
+    def _shelf_entities(chunks: list[Chunk]) -> list[dict[str, Any]]:
+        c: Counter[str] = Counter()
+        for ch in chunks:
+            c.update(ch.foodon_ids or [])
+        return [
+            {"id": i, "label": _label(i), "count": k}
+            for i, k in c.most_common(TOP_ENTITIES)
+        ]
+
+    def _shelf_sources(chunks: list[Chunk]) -> list[dict[str, Any]]:
+        agg: dict[str, dict[str, Any]] = {}
+        for ch in chunks:
+            row = agg.get(ch.source_doc_id)
+            if row is None:
+                agg[ch.source_doc_id] = row = {
+                    "doc_id": ch.source_doc_id,
+                    "source_type": str(ch.source_type),
+                    "year": ch.year,
+                    "count": 0,
+                }
+            row["count"] += 1
+        return sorted(agg.values(), key=lambda r: -r["count"])[:TOP_SOURCES]
+
     nodes: list[VizNode] = []
     edges: list[VizEdge] = []
     n_eligible = 0
@@ -306,6 +385,7 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
         if eligible:
             n_eligible += 1
 
+        shelf_chunks = chunks_by_shelf.get(s.shelf_id, [])
         nodes.append(VizNode(
             id=s.shelf_id,
             label=s.display_label or s.label,
@@ -320,6 +400,9 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
                 "foodon_id": s.foodon_id,
                 "eligible": eligible,
                 "themes": buckets,
+                "terms": _shelf_terms(shelf_chunks),
+                "entities": _shelf_entities(shelf_chunks),
+                "sources": _shelf_sources(shelf_chunks),
             },
         ))
         if s.parent_shelf_id is not None:

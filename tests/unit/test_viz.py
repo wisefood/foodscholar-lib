@@ -378,6 +378,76 @@ def test_layer_a_tree_nodes_edges_and_buckets() -> None:
     assert g.attrs["n_themes"] == 3
 
 
+def _populate_tree_fs_with_chunks() -> FoodScholar:
+    """`_populate_tree_fs` plus three chunks attached to the cow_milk shelf, so
+    the per-shelf Terms / Entities / Sources tabs have data to surface."""
+    from foodscholar.io.chunk import Chunk
+
+    fs = _populate_tree_fs()
+    fs.upsert_chunks([
+        Chunk(chunk_id="c1", text="calcium and bone health in milk and dairy products",
+              source_doc_id="doc-A", source_type="textbook", section_type="textbook",
+              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1", "FOODON:2"]),
+        Chunk(chunk_id="c2", text="lactose intolerance and fermentation of milk",
+              source_doc_id="doc-A", source_type="textbook", section_type="textbook",
+              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1"]),
+        Chunk(chunk_id="c3", text="bone density and calcium absorption from dairy",
+              source_doc_id="doc-B", source_type="guide", section_type="guideline",
+              shelf_ids=["cow_milk"], foodon_ids=["FOODON:2"]),
+    ])
+    return fs
+
+
+def test_layer_a_tree_terms_entities_sources() -> None:
+    fs = _populate_tree_fs_with_chunks()
+    g = vb.layer_a_tree(fs, "foods")
+    cow = next(n for n in g.nodes if n.id == "cow_milk")
+
+    terms = {t["term"] for t in cow.attrs["terms"]}
+    assert "calcium" in terms and "bone" in terms
+    assert "and" not in terms and "in" not in terms  # stopwords filtered
+    assert all({"term", "count"} <= set(t) for t in cow.attrs["terms"])
+
+    ents = {e["id"]: e for e in cow.attrs["entities"]}
+    assert ents["FOODON:1"]["count"] == 2 and ents["FOODON:2"]["count"] == 2
+    assert all("label" in e for e in cow.attrs["entities"])
+
+    srcs = {s["doc_id"]: s for s in cow.attrs["sources"]}
+    assert srcs["doc-A"]["count"] == 2 and srcs["doc-B"]["count"] == 1
+    assert srcs["doc-A"]["source_type"] == "textbook"
+
+    # A shelf with no directly-attached chunks carries empty detail lists.
+    dairy = next(n for n in g.nodes if n.id == "dairy")
+    assert dairy.attrs["terms"] == []
+    assert dairy.attrs["entities"] == []
+    assert dairy.attrs["sources"] == []
+
+
+def test_tree_renderer_has_detail_tabs() -> None:
+    fs = _populate_tree_fs_with_chunks()
+    g = vb.layer_a_tree(fs, "foods")
+    from foodscholar.viz.renderers.tree_renderer import TreeRenderer
+
+    html = TreeRenderer().render(g)
+    for tab in ("Topics", "Terms", "Entities", "Sources"):
+        assert tab in html
+    assert "http://" not in html and "https://" not in html  # still self-contained
+    m = re.search(r"const TREE_DATA = (\{.*?\});", html, re.DOTALL)
+    data = json.loads(m.group(1))
+    cow = _find_node(data["roots"], "cow_milk")
+    assert cow["terms"] and cow["entities"] and cow["sources"]
+
+
+def _find_node(nodes, node_id):
+    for n in nodes:
+        if n["id"] == node_id:
+            return n
+        hit = _find_node(n.get("children", []), node_id)
+        if hit:
+            return hit
+    return None
+
+
 def test_layer_a_tree_empty_state_when_no_shelves() -> None:
     fs = FoodScholar.in_memory()
     g = vb.layer_a_tree(fs, "foods")
