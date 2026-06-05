@@ -387,14 +387,21 @@ def _populate_tree_fs_with_chunks() -> FoodScholar:
     fs.upsert_chunks([
         Chunk(chunk_id="c1", text="calcium and bone health in milk and dairy products",
               source_doc_id="doc-A", source_type="textbook", section_type="textbook",
-              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1", "FOODON:2"]),
+              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1", "FOODON:2"],
+              embedding=[1.0, 0.0, 0.0]),
         Chunk(chunk_id="c2", text="lactose intolerance and fermentation of milk",
               source_doc_id="doc-A", source_type="textbook", section_type="textbook",
-              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1"]),
+              year=2019, shelf_ids=["cow_milk"], foodon_ids=["FOODON:1"],
+              embedding=[0.95, 0.3, 0.0]),    # ~colinear with c1 → text neighbour
         Chunk(chunk_id="c3", text="bone density and calcium absorption from dairy",
               source_doc_id="doc-B", source_type="guide", section_type="guideline",
-              shelf_ids=["cow_milk"], foodon_ids=["FOODON:2"]),
+              shelf_ids=["cow_milk"], foodon_ids=["FOODON:2"],
+              embedding=[0.0, 0.0, 1.0]),     # orthogonal → no text neighbour
     ])
+    # Attach chunks to themes so the Topics-tab per-theme chunk lists have data.
+    fs.graph_store.attach_chunks_to_theme("t-sim", ["c1", "c2"])           # similarity → direct
+    fs.graph_store.attach_chunks_to_theme("t-rel", ["c3"])                 # relatedness → indirect
+    fs.graph_store.attach_chunks_to_theme("t-merged", ["c1", "c2", "c3"])  # merged → per-chunk
     return fs
 
 
@@ -423,6 +430,24 @@ def test_layer_a_tree_terms_entities_sources() -> None:
     assert dairy.attrs["sources"] == []
 
 
+def test_layer_a_tree_theme_chunks_direct_indirect() -> None:
+    fs = _populate_tree_fs_with_chunks()
+    g = vb.layer_a_tree(fs, "foods")
+    themes = next(n for n in g.nodes if n.id == "cow_milk").attrs["themes"]
+
+    sim = themes["global_similarity"][0]                       # similarity pass → all direct
+    assert {c["chunk_id"] for c in sim["chunks"]} == {"c1", "c2"}
+    assert all(c["link"] == "direct" for c in sim["chunks"])
+
+    rel = themes["relatedness"][0]                             # relatedness pass → all indirect
+    assert [c["link"] for c in rel["chunks"]] == ["indirect"]
+
+    merged = themes["merged"][0]                               # merged → reconstruct per chunk
+    link = {c["chunk_id"]: c["link"] for c in merged["chunks"]}
+    assert link == {"c1": "direct", "c2": "direct", "c3": "indirect"}
+    assert merged["chunks"][0]["snippet"] and "source_doc_id" in merged["chunks"][0]
+
+
 def test_tree_renderer_has_detail_tabs() -> None:
     fs = _populate_tree_fs_with_chunks()
     g = vb.layer_a_tree(fs, "foods")
@@ -436,6 +461,9 @@ def test_tree_renderer_has_detail_tabs() -> None:
     data = json.loads(m.group(1))
     cow = _find_node(data["roots"], "cow_milk")
     assert cow["terms"] and cow["entities"] and cow["sources"]
+    # theme member chunks (with direct/indirect link) are embedded for the Topics tab
+    rel = cow["themes"]["relatedness"][0]
+    assert rel["chunks"] and rel["chunks"][0]["link"] == "indirect"
 
 
 def _find_node(nodes, node_id):

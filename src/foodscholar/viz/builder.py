@@ -20,6 +20,8 @@ import re
 from collections import Counter, defaultdict
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from foodscholar.viz.model import VizEdge, VizGraph, VizNode
 
 if TYPE_CHECKING:
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
 TOP_TERMS = 100
 TOP_ENTITIES = 40
 TOP_SOURCES = 40
+TOP_THEME_CHUNKS = 25
 
 _WORD_RE = re.compile(r"[a-z][a-z\-]{2,}")
 # Small English + nutrition-corpus stopword set so "Top terms" surface signal, not filler.
@@ -301,12 +304,16 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
     tokens_by_chunk: dict[str, Counter[str]] = {}
     doc_freq: Counter[str] = Counter()
     chunks_by_shelf: dict[str, list[Chunk]] = defaultdict(list)
+    chunk_by_id: dict[str, Chunk] = {}
     for c in all_chunks:
         toks = _tokenize(c.text)
         tokens_by_chunk[c.chunk_id] = toks
         doc_freq.update(toks.keys())
+        chunk_by_id[c.chunk_id] = c
         for sid in c.shelf_ids:
             chunks_by_shelf[sid].append(c)
+
+    pass1_thr = fs.config.layer_b.similarity.edge_threshold
 
     try:
         _onto = fs.ontology
@@ -357,6 +364,46 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
             row["count"] += 1
         return sorted(agg.values(), key=lambda r: -r["count"])[:TOP_SOURCES]
 
+    def _theme_chunks(theme_id: str, discovery_pass: str) -> list[dict[str, Any]]:
+        """Member chunks of a theme, each tagged direct/indirect by *which pass linked it*:
+        similarity themes → all direct (text core); relatedness themes → all indirect (entity
+        link); merged themes → per-chunk (direct iff it has a text neighbour ≥ pass-1 threshold)."""
+        ids = list(fs.graph_store.get_chunks_for_theme(theme_id))
+        vecs = {i: chunk_by_id[i].embedding for i in ids
+                if i in chunk_by_id and chunk_by_id[i].embedding}
+
+        def _badge(cid: str) -> str:
+            if discovery_pass == "global_similarity":
+                return "direct"
+            if discovery_pass == "relatedness":
+                return "indirect"
+            v = vecs.get(cid)  # merged: reconstruct from text neighbours
+            if v is None:
+                return "indirect"
+            a = np.asarray(v, dtype=float)
+            na = float(np.linalg.norm(a)) or 1.0
+            best = 0.0
+            for other, w in vecs.items():
+                if other == cid:
+                    continue
+                b = np.asarray(w, dtype=float)
+                nb = float(np.linalg.norm(b)) or 1.0
+                best = max(best, float(a @ b) / (na * nb))
+            return "direct" if best >= pass1_thr else "indirect"
+
+        rows = []
+        for cid in ids[:TOP_THEME_CHUNKS]:
+            ch = chunk_by_id.get(cid)
+            text = (ch.text if ch else "")[:200]
+            rows.append({
+                "chunk_id": cid,
+                "snippet": " ".join(text.split()),
+                "source_doc_id": ch.source_doc_id if ch else None,
+                "link": _badge(cid),
+            })
+        rows.sort(key=lambda r: r["link"] != "direct")  # direct first
+        return rows
+
     nodes: list[VizNode] = []
     edges: list[VizEdge] = []
     n_eligible = 0
@@ -378,6 +425,7 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
                 "chunk_count": t.chunk_count,
                 "keyword_terms": list(t.keyword_terms),
                 "discovery_pass": t.discovery_pass,
+                "chunks": _theme_chunks(t.theme_id, t.discovery_pass),
             })
             n_themes += 1
 

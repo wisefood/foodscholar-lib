@@ -140,6 +140,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .theme { padding: 7px 11px; border-left: 3px solid var(--line); margin: 5px 0;
            background: var(--panel); border-radius: 0 var(--radius) var(--radius) 0; }
   .theme .kw { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .theme details { margin-top: 6px; }
+  .theme details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .chunk { border-top: 1px solid var(--line); padding: 5px 2px 4px; }
+  .chunk .src { color: var(--muted); font-size: 11px; }
+  .chunk .tx { font-size: 12.5px; margin-top: 2px; }
+  .b { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px; margin-right: 6px; }
+  .b.direct { background: var(--chip-bg); color: var(--chip-fg); }       /* Pass-1 text core */
+  .b.indirect { background: #f3e0d6; color: #7a3f24; }                   /* Pass-2 entity link */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { background: var(--chip-bg); color: var(--chip-fg); border-radius: 999px;
           padding: 3px 10px; font-size: 12.5px; }
@@ -243,10 +251,24 @@ function topicsBody(node) {
     html += '<div class="origin" style="color:' + ORIGIN_COLORS[origin] + '">' +
       ORIGIN_LABELS[origin].toUpperCase() + " (" + list.length + ")</div>";
     list.forEach(t => {
-      html += '<div class="theme" style="border-left-color:' + ORIGIN_COLORS[origin] + '">' +
+      const ch = t.chunks || [];
+      const nd = ch.filter(c => c.link === "direct").length;
+      const ni = ch.filter(c => c.link === "indirect").length;
+      let block = '<div class="theme" style="border-left-color:' + ORIGIN_COLORS[origin] + '">' +
         esc(t.label) + ' <span class="cc">' + t.chunk_count + "ch</span>" +
         (t.keyword_terms && t.keyword_terms.length ?
-          '<div class="kw">' + esc(t.keyword_terms.join(", ")) + "</div>" : "") + "</div>";
+          '<div class="kw">' + esc(t.keyword_terms.join(", ")) + "</div>" : "");
+      if (ch.length) {
+        block += "<details><summary>" + ch.length + " chunks · " + nd +
+          " direct / " + ni + " indirect</summary>";
+        ch.forEach(c => {
+          block += '<div class="chunk"><span class="b ' + c.link + '">' + c.link + "</span>" +
+            '<span class="src">' + esc(c.source_doc_id || "") + "</span>" +
+            '<div class="tx">' + esc(c.snippet || "") + "</div></div>";
+        });
+        block += "</details>";
+      }
+      html += block + "</div>";
     });
   });
   return html;
