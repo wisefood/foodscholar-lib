@@ -34,6 +34,7 @@ annotate = [
 ]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
+summarization = ["sumy", "nltk"]
 elastic = ["elasticsearch>=8"]
 neo4j = ["neo4j>=5"]
 llm = ["anthropic", "openai", "google-genai", "groq", "ollama"]
@@ -50,6 +51,8 @@ all = [
     "hdbscan",
     "scikit-learn",
     "umap-learn",
+    "sumy",
+    "nltk",
     "elasticsearch>=8",
     "neo4j>=5",
     "anthropic",
