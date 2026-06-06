@@ -78,3 +78,69 @@ class NLTKFrequencySummarizer(BaseSummarizer):
             (i for i, _ in sorted(scored, key=lambda t: t[1], reverse=True)[: self.n])
         )
         return " ".join(sentences[i] for i in top_idx)
+
+
+class _SumyBase(BaseSummarizer):
+    """Shared parse/tokenize/run/join for the four sumy algorithms.
+
+    Subclasses set `name` and implement `_algo()` returning a sumy summarizer.
+    """
+
+    def __init__(self, n: int = 8) -> None:
+        self.n = n
+
+    def _algo(self):  # noqa: ANN202 - sumy type, lazy-imported
+        raise NotImplementedError
+
+    def summarize(self, chunks: list[str]) -> str:
+        text = _concat(chunks)
+        sentences = split_sentences(text)
+        if not sentences:
+            return ""
+        if len(sentences) <= self.n:
+            return " ".join(sentences)
+
+        _ensure_nltk_data()
+        from sumy.nlp.tokenizers import Tokenizer
+        from sumy.parsers.plaintext import PlaintextParser
+
+        parser = PlaintextParser.from_string(text, Tokenizer("english"))
+        picked = self._algo()(parser.document, self.n)
+        out = " ".join(str(s) for s in picked)
+        return out or " ".join(sentences[: self.n])
+
+
+class SumyLexRankSummarizer(_SumyBase):
+    name = "lexrank"
+
+    def _algo(self):  # noqa: ANN202
+        from sumy.summarizers.lex_rank import LexRankSummarizer
+
+        return LexRankSummarizer()
+
+
+class SumyLsaSummarizer(_SumyBase):
+    name = "lsa"
+
+    def _algo(self):  # noqa: ANN202
+        from sumy.summarizers.lsa import LsaSummarizer
+
+        return LsaSummarizer()
+
+
+class SumyLuhnSummarizer(_SumyBase):
+    name = "luhn"
+
+    def _algo(self):  # noqa: ANN202
+        from sumy.summarizers.luhn import LuhnSummarizer
+
+        return LuhnSummarizer()
+
+
+class SumyTextRankSummarizer(_SumyBase):
+    name = "textrank"
+
+    def _algo(self):  # noqa: ANN202
+        from sumy.summarizers.text_rank import TextRankSummarizer
+
+        return TextRankSummarizer()

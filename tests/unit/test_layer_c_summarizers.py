@@ -64,3 +64,37 @@ def test_nltk_freq_fewer_than_budget_returns_all() -> None:
     s = NLTKFrequencySummarizer(n=10)
     out = s.summarize(["Only one sentence here."])
     assert "Only one sentence here." in out
+
+
+pytest.importorskip("sumy")
+from foodscholar.layer_c.summarizers import (  # noqa: E402
+    SumyLexRankSummarizer,
+    SumyLsaSummarizer,
+    SumyLuhnSummarizer,
+    SumyTextRankSummarizer,
+)
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [SumyLexRankSummarizer, SumyLsaSummarizer, SumyLuhnSummarizer, SumyTextRankSummarizer],
+)
+def test_sumy_methods_respect_budget(cls) -> None:
+    out = cls(n=2).summarize(_DOCS)
+    assert out
+    assert len(split_sentences(out)) <= 2
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [SumyLexRankSummarizer, SumyLsaSummarizer, SumyLuhnSummarizer, SumyTextRankSummarizer],
+)
+def test_sumy_methods_empty_input(cls) -> None:
+    assert cls(n=3).summarize([]) == ""
+
+
+def test_sumy_names() -> None:
+    assert SumyLexRankSummarizer(n=1).name == "lexrank"
+    assert SumyLsaSummarizer(n=1).name == "lsa"
+    assert SumyLuhnSummarizer(n=1).name == "luhn"
+    assert SumyTextRankSummarizer(n=1).name == "textrank"
