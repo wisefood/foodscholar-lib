@@ -1,1 +1,1 @@
-"""Layer C — LLM-generated write-up cards. Implementations land in milestone 5."""
+"""Layer C — theme summarization (extractive Stage 1 → LLM Stage 2)."""
