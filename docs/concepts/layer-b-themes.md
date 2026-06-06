@@ -154,8 +154,7 @@ class Theme(BaseModel):
 ## Building it
 
 ```python
-fs.config.layer_b.pass1_mode = "per_shelf"
-fs.build_layer_b(facet="foods")
+fs.build_layer_b(facet="foods")   # pass1_mode defaults to "per_shelf"
 ```
 
 Then click a shelf in the interactive tree to see its themes grouped by origin:

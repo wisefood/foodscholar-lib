@@ -198,6 +198,72 @@ class GroqClient:
         return _parse_json_object(text)
 
 
+class OpenRouterClient:
+    """OpenRouter (one key, many models). Needs `OPENROUTER_API_KEY` or `api_key`.
+
+    OpenRouter speaks the OpenAI chat-completions wire format, so this reuses the
+    `openai` SDK pointed at OpenRouter's `base_url`. Models are namespaced, e.g.
+    ``openai/gpt-4o-mini``, ``anthropic/claude-3.5-haiku``,
+    ``meta-llama/llama-3.3-70b-instruct``. JSON support varies by underlying
+    model, so `generate_json` uses the same try-structured-then-parse fallback as
+    `GroqClient` rather than strict `json_schema` mode.
+    """
+
+    def __init__(
+        self,
+        model: str = "openai/gpt-4o-mini",
+        *,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
+        base_url: str = "https://openrouter.ai/api/v1",
+    ) -> None:
+        try:
+            import openai
+        except ImportError as e:
+            raise ImportError(
+                "the 'openai' package is required for OpenRouterClient. "
+                "Install with: pip install 'foodscholar[llm]'"
+            ) from e
+        self.model_id = model
+        self._client = openai.OpenAI(
+            api_key=_resolve_secret(api_key, "OPENROUTER_API_KEY", "OpenRouter"),
+            base_url=base_url,
+            timeout=timeout_s,
+        )
+
+    def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        resp = self._client.chat.completions.create(
+            model=self.model_id,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content or ""
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        full = f"{prompt}\n\nRespond with JSON matching this schema:\n{json.dumps(schema)}"
+        # JSON support varies across OpenRouter models — `json_object` mode may
+        # be unsupported (400) or return empty. Try it, then fall back to a plain
+        # completion and parse the {...} out of the text (mirrors GroqClient).
+        try:
+            resp = self._client.chat.completions.create(
+                model=self.model_id,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": full}],
+                response_format={"type": "json_object"},
+            )
+            content = resp.choices[0].message.content or ""
+            if content.strip():
+                return _parse_json_object(content)
+        except Exception:
+            pass  # fall through to the unconstrained retry
+        text = self.generate(
+            f"{full}\n\nOutput ONLY the JSON object, no prose.", max_tokens=max_tokens
+        )
+        return _parse_json_object(text)
+
+
 class GeminiClient:
     """Google Gemini. Needs `GEMINI_API_KEY` or an explicit `api_key`."""
 

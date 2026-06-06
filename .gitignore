@@ -224,3 +224,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Notebook-generated artifacts (BERTopic viz, etc.)
+notebooks/out/

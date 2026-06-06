@@ -30,7 +30,7 @@ class _ThemeAdapter:
 
 
 def build_layer_c(
-    fs: "FoodScholar",
+    fs: FoodScholar,
     *,
     facet: str = "foods",
     dry_run: bool = False,
@@ -62,7 +62,7 @@ def build_layer_c(
         )
         try:
             card = run_stage2(fs.llm, s1, adapter, chunk_ids, cfg)
-        except Exception:  # noqa: BLE001 - record + continue
+        except Exception:
             failed += 1
             continue
 

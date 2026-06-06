@@ -61,10 +61,10 @@ class _ThemeLike(Protocol):
 
 def run_stage2(
     llm: Any,
-    stage1: "Stage1Output",
+    stage1: Stage1Output,
     theme: _ThemeLike,
     cited_chunk_ids: list[str],
-    cfg: "LayerCConfig",
+    cfg: LayerCConfig,
 ) -> Card:
     """Refine `stage1.text` into a Card for `theme`. Raises ValueError if the
     strict grounding guard fails."""
@@ -77,12 +77,13 @@ def run_stage2(
     data = llm.generate_json(prompt, _CARD_SCHEMA, max_tokens=1024)
 
     summary = str(data.get("summary", "")).strip()
-    if cfg.grounding_check == "strict":
-        if not summary or len(summary) > cfg.max_summary_chars:
-            raise ValueError(
-                f"grounding(strict): summary length {len(summary)} "
-                f"outside (0, {cfg.max_summary_chars}]"
-            )
+    if cfg.grounding_check == "strict" and (
+        not summary or len(summary) > cfg.max_summary_chars
+    ):
+        raise ValueError(
+            f"grounding(strict): summary length {len(summary)} "
+            f"outside (0, {cfg.max_summary_chars}]"
+        )
 
     safety = theme.facet in cfg.safety_sensitive_facets
 

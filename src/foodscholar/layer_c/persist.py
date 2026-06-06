@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from foodscholar.storage.protocols import GraphStore
 
 
-def persist_cards(cards: list["Card"], graph_store: "GraphStore") -> None:
+def persist_cards(cards: list[Card], graph_store: GraphStore) -> None:
     """Upsert theme cards into the graph store. No-op on empty input."""
     if not cards:
         return

@@ -14,37 +14,47 @@ smaller, noisier themes.
 | `layer_b.similarity.edge_threshold` | 0.55 | looser kNN edges → denser graph |
 | `layer_b.similarity.require_mutual` | true | keep one-directional neighbours too |
 
-## A tuning cell
+## Let the sweep pick for you
 
-Re-run this per knob set and watch `coverage` rise as median theme size falls. Keyword
-labels keep it fast and free while sweeping; flip `labeling.strategy` to `"llm"` for the
-final run.
+`fs.sweep_layer_b()` runs the full Cartesian grid of the knobs above as
+*non-mutating* `dry_run` builds (cheap keyword labels, `per_shelf` Pass 1),
+scores each config, and returns a ranked table. Nothing is written — apply the
+winner yourself and rebuild.
 
 ```python
-import statistics as _stats
-
-cfg = fs.config.layer_b
-cfg.pass1_mode = "per_shelf"
-cfg.labeling.strategy = "keyword"        # fast + free while tuning
-
-# --- knobs (defaults in comments) ---
-cfg.leiden.min_community_size = 8        # default 15 — biggest lever
-cfg.similarity.edge_threshold = 0.45     # default 0.55
-cfg.similarity.require_mutual = False    # default True
-
-art = fs.build_layer_b(facet="foods", dry_run=False)
-
-# --- coverage = attached chunks that landed in a theme ---
-attach = fs.graph_store.list_chunk_shelf_attachments()
-foods = {s.shelf_id for s in fs.graph_store.list_shelves() if s.facet == "foods"}
-attached = [cid for cid, sids in attach.items() if sids & foods]
-themed = sum(1 for c in fs.chunk_store.get_many(attached) if c.theme_ids)
-sizes = [t.chunk_count for t in fs.graph_store.list_themes()]
-
-print(f"themes {art.n_themes_total}  by pass {art.n_themes_by_pass}")
-print(f"coverage {themed}/{len(attached)} = {themed/len(attached):.0%}"
-      f"   median theme size {int(_stats.median(sizes)) if sizes else 0}")
+result = fs.sweep_layer_b(facet="foods")   # full 160-config grid — slow
+print(result)                              # ranked Markdown table, best first
+result.best                                # winning config dict
+result.to_frame()                          # pandas DataFrame for plotting
 ```
+
+Scoring maximizes coverage and useful merged themes while penalizing duplicate
+labels, tiny themes, and cross-shelf leakage, and keeps the theme count in a
+sane band. Weights are fixed and documented in `layer_b/sweep.py`. Shrink the
+grid by passing your own:
+
+```python
+result = fs.sweep_layer_b(facet="foods", grid={
+    "leiden.min_community_size": [5, 8, 10],
+    "similarity.edge_threshold": [0.45, 0.50],
+})
+```
+
+From the CLI: `foodscholar sweep-layer-b -c config.yaml`.
+
+## Inspect a single build
+
+`fs.build_quality_report(facet="foods")` gives the same metrics for the
+*current* persisted build plus WARN-level smells (high-lifted/low-direct
+shelves, no-theme shelves, near-duplicate labels, themes that span too many
+entities, labels echoing the parent shelf). It's read-only.
+
+```python
+art = fs.build_layer_b(facet="foods")          # pass1_mode defaults to per_shelf
+print(fs.build_quality_report(facet="foods"))  # metrics + warnings, as Markdown
+```
+
+From the CLI: `foodscholar report-layer-b -c config.yaml`.
 
 ## Reading the result
 

@@ -89,7 +89,7 @@ class _SumyBase(BaseSummarizer):
     def __init__(self, n: int = 8) -> None:
         self.n = n
 
-    def _algo(self):  # noqa: ANN202 - sumy type, lazy-imported
+    def _algo(self):
         raise NotImplementedError
 
     def summarize(self, chunks: list[str]) -> str:
@@ -113,7 +113,7 @@ class _SumyBase(BaseSummarizer):
 class SumyLexRankSummarizer(_SumyBase):
     name = "lexrank"
 
-    def _algo(self):  # noqa: ANN202
+    def _algo(self):
         from sumy.summarizers.lex_rank import LexRankSummarizer
 
         return LexRankSummarizer()
@@ -122,7 +122,7 @@ class SumyLexRankSummarizer(_SumyBase):
 class SumyLsaSummarizer(_SumyBase):
     name = "lsa"
 
-    def _algo(self):  # noqa: ANN202
+    def _algo(self):
         from sumy.summarizers.lsa import LsaSummarizer
 
         return LsaSummarizer()
@@ -131,7 +131,7 @@ class SumyLsaSummarizer(_SumyBase):
 class SumyLuhnSummarizer(_SumyBase):
     name = "luhn"
 
-    def _algo(self):  # noqa: ANN202
+    def _algo(self):
         from sumy.summarizers.luhn import LuhnSummarizer
 
         return LuhnSummarizer()
@@ -140,7 +140,7 @@ class SumyLuhnSummarizer(_SumyBase):
 class SumyTextRankSummarizer(_SumyBase):
     name = "textrank"
 
-    def _algo(self):  # noqa: ANN202
+    def _algo(self):
         from sumy.summarizers.text_rank import TextRankSummarizer
 
         return TextRankSummarizer()

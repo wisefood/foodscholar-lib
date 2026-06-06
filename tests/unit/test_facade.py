@@ -108,13 +108,13 @@ def test_upsert_chunks_routes_to_store() -> None:
     assert fs.chunk_store.get("c1") is not None
 
 
-def test_deferred_phases_raise_not_implemented() -> None:
+def test_build_layer_c_runs_on_empty_stores() -> None:
+    # Layer C has landed: build_layer_c now runs (no themes → 0 cards) instead
+    # of raising the old deferred-phase NotImplementedError.
     fs = FoodScholar.in_memory()
-    # build_layer_b is wired as of M5 (Phase 4); only build_layer_c remains
-    # deferred until Layer C lands.
-    for method in ["build_layer_c"]:
-        with pytest.raises(NotImplementedError, match="not implemented yet"):
-            getattr(fs, method)()
+    report = fs.build_layer_c()
+    assert report.n_themes == 0
+    assert report.n_cards == 0
 
 
 def test_query_raises_until_retrieval_lands() -> None:

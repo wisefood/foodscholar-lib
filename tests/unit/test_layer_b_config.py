@@ -76,6 +76,23 @@ def test_layer_b_config_has_global_similarity_max_chunks_default():
     assert LayerBConfig().global_similarity_max_chunks == 50_000
 
 
+def test_layer_b_pass1_mode_defaults_to_per_shelf():
+    """Production default — per-shelf themes never smear across shelves.
+    `global` is opt-in for cross-shelf bridge discovery only."""
+    from foodscholar.config import LayerBConfig
+    assert LayerBConfig().pass1_mode == "per_shelf"
+
+
+def test_layer_b_audit_warning_thresholds_have_defaults():
+    from foodscholar.config import LayerBConfig
+    audit = LayerBConfig().audit
+    assert audit.lifted_to_direct_ratio_max == 4.0
+    assert audit.direct_support_floor == 3
+    assert audit.single_pass_share_max == 0.90
+    assert audit.dup_label_jaccard_min == 0.80
+    assert audit.max_entity_span == 8
+
+
 def test_layer_b_config_global_similarity_max_chunks_is_int():
     from foodscholar.config import LayerBConfig
     assert LayerBConfig(global_similarity_max_chunks=10).global_similarity_max_chunks == 10

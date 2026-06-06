@@ -35,12 +35,30 @@ def test_cli_init_memory_backend_is_noop(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
-def test_cli_phase_command_is_deferred(tmp_path: Path) -> None:
-    # build-layer-b shipped in M5; build-layer-c is the remaining deferred phase.
+def test_cli_build_layer_c_runs_on_empty_stores(tmp_path: Path) -> None:
+    # build-layer-c shipped in Layer C: it now runs (no themes → 0 cards),
+    # rather than raising the old deferred-phase error.
     cfg = _write_memory_config(tmp_path)
     result = runner.invoke(app, ["build-layer-c", "--config", str(cfg)])
-    assert result.exit_code == 1
-    assert "not implemented yet" in result.output
+    assert result.exit_code == 0
+    assert "Layer C" in result.output
+
+
+def test_cli_report_layer_b_runs_on_empty_stores(tmp_path: Path) -> None:
+    """report-layer-b is read-only and works against an empty in-memory graph."""
+    cfg = _write_memory_config(tmp_path)
+    result = runner.invoke(app, ["report-layer-b", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert "quality report" in result.output.lower()
+
+
+def test_cli_sweep_layer_b_runs_on_empty_stores(tmp_path: Path) -> None:
+    """sweep-layer-b with no shelves produces an (empty) ranked table without
+    error — every config dry-run yields zero themes."""
+    cfg = _write_memory_config(tmp_path)
+    result = runner.invoke(app, ["sweep-layer-b", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert "sweep" in result.output.lower()
 
 
 def test_cli_version_command() -> None:

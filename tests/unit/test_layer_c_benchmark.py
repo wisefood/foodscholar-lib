@@ -11,7 +11,7 @@ from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
 
 pytest.importorskip("sumy")
 
-from foodscholar.layer_c.benchmark import benchmark_theme  # noqa: E402
+from foodscholar.layer_c.benchmark import benchmark_theme
 
 
 def _fs():

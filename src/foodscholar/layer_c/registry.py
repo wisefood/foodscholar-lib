@@ -6,7 +6,8 @@ Single source of truth: the builder selects one method via
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from foodscholar.layer_c.base import BaseSummarizer
 from foodscholar.layer_c.summarizers import (
@@ -20,7 +21,7 @@ from foodscholar.layer_c.summarizers import (
 if TYPE_CHECKING:
     from foodscholar.config import LayerCConfig
 
-SUMMARIZERS: dict[str, Callable[["LayerCConfig"], BaseSummarizer]] = {
+SUMMARIZERS: dict[str, Callable[[LayerCConfig], BaseSummarizer]] = {
     "lexrank": lambda c: SumyLexRankSummarizer(n=c.stage1_sentences),
     "lsa": lambda c: SumyLsaSummarizer(n=c.stage1_sentences),
     "luhn": lambda c: SumyLuhnSummarizer(n=c.stage1_sentences),
@@ -29,11 +30,11 @@ SUMMARIZERS: dict[str, Callable[["LayerCConfig"], BaseSummarizer]] = {
 }
 
 
-def build_summarizer(name: str, cfg: "LayerCConfig") -> BaseSummarizer:
+def build_summarizer(name: str, cfg: LayerCConfig) -> BaseSummarizer:
     """Return the BaseSummarizer for `name`, configured from `cfg`."""
     return SUMMARIZERS[name](cfg)
 
 
-def all_summarizers(cfg: "LayerCConfig") -> list[BaseSummarizer]:
+def all_summarizers(cfg: LayerCConfig) -> list[BaseSummarizer]:
     """Return one instance of every registered summarizer (for the harness)."""
     return [factory(cfg) for factory in SUMMARIZERS.values()]

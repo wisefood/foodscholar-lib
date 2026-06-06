@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from foodscholar.facade import FoodScholar
 
 
-def benchmark_theme(fs: "FoodScholar", theme_id: str) -> list[MethodResult]:
+def benchmark_theme(fs: FoodScholar, theme_id: str) -> list[MethodResult]:
     """Run all registered methods over `theme_id`'s chunks (single pass)."""
     cfg = fs.config.layer_c
     chunk_ids = list(fs.graph_store.get_chunks_for_theme(theme_id))
@@ -37,7 +37,7 @@ def benchmark_theme(fs: "FoodScholar", theme_id: str) -> list[MethodResult]:
 
 
 def benchmark_facet(
-    fs: "FoodScholar",
+    fs: FoodScholar,
     *,
     facet: str = "foods",
     themes: int = 5,

@@ -233,6 +233,9 @@ def cross_shelf_fs():
             "graph_store": {"backend": "memory"},
         },
         "layer_b": {
+            # This fixture exercises the experimental global Pass 1 (cross-shelf
+            # bridge discovery); the production default is now "per_shelf".
+            "pass1_mode": "global",
             "min_chunks_per_shelf": 2,
             "min_embedded_fraction": 0.0,
             "similarity": {"knn_k": 5, "edge_threshold": 0.5},

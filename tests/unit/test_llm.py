@@ -124,8 +124,15 @@ def test_fallback_generate_json_raises_when_all_fail() -> None:
 # --------------------------------------------------------------- build_llm
 
 
-def test_provider_registry_has_all_five() -> None:
-    assert set(PROVIDERS) == {"anthropic", "openai", "groq", "gemini", "ollama"}
+def test_provider_registry_has_all_providers() -> None:
+    assert set(PROVIDERS) == {
+        "anthropic",
+        "openai",
+        "openrouter",
+        "groq",
+        "gemini",
+        "ollama",
+    }
 
 
 def test_build_llm_unknown_provider_in_factory() -> None:
@@ -272,6 +279,82 @@ def test_groq_generate_json_falls_back_on_empty() -> None:
     out = client.generate_json("judge this", {"type": "object"}, max_tokens=512)
     assert out == {"merge_groups": [], "keep_alone": [1]}
     assert completions.calls == [True, False]  # structured first, then plain retry
+
+
+def test_openrouter_generate_json_falls_back_on_empty() -> None:
+    """OpenRouter models vary in JSON support; when structured mode returns
+    empty, OpenRouterClient retries as a plain completion and parses the text."""
+    from foodscholar.llm.providers import OpenRouterClient
+
+    class _Msg:
+        def __init__(self, content: str | None) -> None:
+            self.message = type("M", (), {"content": content})()
+
+    class _Resp:
+        def __init__(self, content: str | None) -> None:
+            self.choices = [_Msg(content)]
+
+    class _Completions:
+        def __init__(self) -> None:
+            self.calls: list[bool] = []  # records whether response_format was set
+
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            structured = "response_format" in kwargs
+            self.calls.append(structured)
+            content = "" if structured else 'Sure: {"alias": "olive oil"}'
+            return _Resp(content)
+
+    client = object.__new__(OpenRouterClient)  # bypass __init__ (no SDK / key needed)
+    client.model_id = "openai/gpt-4o-mini"
+    completions = _Completions()
+    client._client = type("C", (), {"chat": type("Ch", (), {"completions": completions})()})()
+
+    out = client.generate_json("name this", {"type": "object"}, max_tokens=256)
+    assert out == {"alias": "olive oil"}
+    assert completions.calls == [True, False]  # structured first, then plain retry
+
+
+def test_factory_maps_host_to_base_url_for_openrouter() -> None:
+    """build_llm must forward cfg.llm.primary.host to the openrouter base_url."""
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        model_id = "fake"
+
+        def __init__(
+            self,
+            model: str,
+            *,
+            timeout_s: float,
+            api_key: str | None,
+            base_url: str = "https://openrouter.ai/api/v1",
+        ) -> None:
+            captured.update({"model": model, "api_key": api_key, "base_url": base_url})
+
+        def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+            return ""
+
+        def generate_json(self, prompt, schema, max_tokens=1024):  # type: ignore[no-untyped-def]
+            return {}
+
+    PROVIDERS["openrouter"] = _FakeClient  # type: ignore[assignment]
+    try:
+        cfg = LLMConfig(
+            primary=ProviderConfig(
+                provider="openrouter",
+                model="anthropic/claude-3.5-haiku",
+                api_key="key-or",
+                host="https://my-proxy.example/v1",
+            ),
+        )
+        build_llm(cfg)
+        assert captured["base_url"] == "https://my-proxy.example/v1"
+        assert captured["api_key"] == "key-or"
+        assert captured["model"] == "anthropic/claude-3.5-haiku"
+    finally:
+        from foodscholar.llm.providers import OpenRouterClient
+
+        PROVIDERS["openrouter"] = OpenRouterClient
 
 
 def test_factory_forwards_api_key_to_provider() -> None:

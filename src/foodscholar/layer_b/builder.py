@@ -321,6 +321,8 @@ def build_layer_b(
             leiden_seed=cfg.leiden.random_state,
             started_at=started,
             finished_at=_utc_iso(),
+            themes_preview=[] if dry_run else None,
+            theme_chunk_ids_preview={} if dry_run else None,
         )
 
     all_theme_chunk_ids: list[str] = sorted({cid for td in theme_dicts for cid in td["chunk_ids"]})
@@ -443,4 +445,10 @@ def build_layer_b(
         leiden_seed=cfg.leiden.random_state,
         started_at=started,
         finished_at=_utc_iso(),
+        themes_preview=themes if dry_run else None,
+        theme_chunk_ids_preview=(
+            {tid: [cid for cid, _, _ in assigns] for tid, assigns in chunk_assignments.items()}
+            if dry_run
+            else None
+        ),
     )
