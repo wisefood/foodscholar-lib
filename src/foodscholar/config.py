@@ -543,6 +543,29 @@ class LayerBAuditConfig(BaseModel):
     merged_rate_min: float = 0.20
     merged_rate_max: float = 0.80
 
+    # --- quality-report warning thresholds (see layer_b/quality.py) ---
+    # None of these flip any CRITICAL `passed` flag; they only drive WARN-level
+    # signal in `build_quality_report()`.
+    lifted_to_direct_ratio_max: float = 4.0
+    """Warn on a shelf whose lifted support dwarfs its direct support
+    (support_lifted / max(support_direct, 1) above this) AND whose direct
+    support is below `direct_support_floor` — a shelf held up almost entirely
+    by ancestor-propagated chunks."""
+    direct_support_floor: int = 3
+    """A shelf with `support_direct` below this is a candidate for the
+    `high_lifted_low_direct` warning (paired with `lifted_to_direct_ratio_max`)."""
+    single_pass_share_max: float = 0.90
+    """Warn when, within a shelf, the fraction of similarity-only OR
+    relatedness-only themes exceeds this — the merge step isn't earning its
+    keep (or one pass is mis-tuned)."""
+    dup_label_jaccard_min: float = 0.80
+    """Two themes in the same shelf warn as near-duplicates when the token-set
+    Jaccard of their lowercased labels is at or above this."""
+    max_entity_span: int = 8
+    """Warn on a theme whose `foodon_id_signature` has more than this many
+    entities — it likely spans too many unrelated FoodOn concepts to be a
+    coherent sub-topic."""
+
 
 class LayerBConfig(BaseModel):
     """Layer B (theme discovery) — dual-pass + merge per the brief.
@@ -558,15 +581,16 @@ class LayerBConfig(BaseModel):
     """Skip shelves where < this fraction of chunks have embeddings —
     clustering a biased subsample is worse than not clustering at all."""
 
-    pass1_mode: Literal["global", "per_shelf"] = "global"
+    pass1_mode: Literal["global", "per_shelf"] = "per_shelf"
     """How Pass 1 (similarity) scopes its kNN graph + Leiden run.
 
-    - ``"global"`` (default): one graph over ALL attached chunks in the facet.
-      Finds cross-shelf bridges — a theme's ``shelf_ids`` can have length ≥ 2.
-    - ``"per_shelf"``: a separate graph + Leiden per shelf. Every Pass-1 theme
-      is single-shelf; cross-shelf bridges are NOT discovered. Useful for the
-      bake-off (compare against ``"global"``) and matches the intent the
-      ``global_similarity_max_chunks`` fallback docstring already promised."""
+    - ``"per_shelf"`` (production default): a separate graph + Leiden per shelf.
+      Every Pass-1 theme is single-shelf, so themes never smear across unrelated
+      FoodOn shelves. Cross-shelf bridges are NOT discovered — that's the point.
+    - ``"global"`` (experimental): one graph over ALL attached chunks in the
+      facet. Finds cross-shelf bridges — a theme's ``shelf_ids`` can have
+      length ≥ 2 — at the cost of smearing themes across unrelated shelves.
+      Only use this when cross-shelf bridge discovery is the explicit goal."""
 
     similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
     relatedness: RelatednessConfig = Field(default_factory=RelatednessConfig)
@@ -575,8 +599,10 @@ class LayerBConfig(BaseModel):
     labeling: LabelingConfig = Field(default_factory=LabelingConfig)
     audit: LayerBAuditConfig = Field(default_factory=LayerBAuditConfig)
     global_similarity_max_chunks: int = 50_000
-    """Safety cap: if the global similarity pass would see more chunks than this,
-    fall back to per-shelf Pass 1 and emit a warning."""
+    """Safety cap for the experimental ``pass1_mode="global"`` path: if the
+    global similarity pass would see more chunks than this, skip global Pass 1
+    and emit a warning. Dormant under the production ``"per_shelf"`` default,
+    which has no megacluster risk."""
 
 
 class LayerCConfig(BaseModel):
@@ -586,6 +612,20 @@ class LayerCConfig(BaseModel):
     sample_size: int = 12
     grounding_check: Literal["strict", "lenient", "off"] = "strict"
     safety_sensitive_facets: list[Facet] = Field(default_factory=lambda: ["allergies"])
+    # Stage-1 extractive summarization
+    stage1_method: Literal["lexrank", "lsa", "luhn", "textrank", "nltk_freq"] = "lexrank"
+    stage1_sentences: int = 8
+    """Sentence budget per extractive pass (top-N sentences kept)."""
+    # map-reduce scaling
+    map_reduce_threshold: int = 400
+    """Total input sentences above which Stage 1 switches to map-reduce."""
+    group_char_budget: int = 20_000
+    """Max characters per map group when map-reduce is active."""
+    # Stage-2 guard
+    max_summary_chars: int = 4000
+    """Strict-grounding length cap on the Stage-2 summary."""
+    # benchmark harness
+    benchmark_out_dir: str = "data/layer_c_bench"
 
 
 class ChunkStoreConfig(BaseModel):
@@ -625,7 +665,7 @@ class StorageConfig(BaseModel):
     graph_store: GraphStoreConfig = Field(default_factory=GraphStoreConfig)
 
 
-LLMProvider = Literal["anthropic", "openai", "groq", "gemini", "ollama"]
+LLMProvider = Literal["anthropic", "openai", "openrouter", "groq", "gemini", "ollama"]
 
 
 class ProviderConfig(BaseModel):
@@ -634,15 +674,15 @@ class ProviderConfig(BaseModel):
     API keys can be supplied either in this section (`api_key:` — useful for
     in-code configs and Docker secrets) or via the provider's standard
     environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
-    `GROQ_API_KEY`, `GEMINI_API_KEY`). The config value wins when both are
-    set. Ollama needs no key — just a running daemon at `host`.
+    `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`). The config value
+    wins when both are set. Ollama needs no key — just a running daemon at `host`.
     """
 
     model_config = ConfigDict(extra="forbid")
     provider: LLMProvider
     model: str
     api_key: str | None = None
-    host: str | None = None  # ollama daemon URL; ignored for other providers
+    host: str | None = None  # ollama daemon URL / openrouter base_url override; ignored elsewhere
 
 
 class LLMConfig(BaseModel):
