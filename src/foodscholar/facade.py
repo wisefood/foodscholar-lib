@@ -1078,8 +1078,70 @@ class FoodScholar:
 
         return _build_layer_b(self, facet=facet, dry_run=dry_run)
 
-    def build_layer_c(self) -> None:
-        raise _deferred("build-layer-c")
+    def build_quality_report(self, *, facet: str = "foods"):
+        """Read-only WARN-level quality report for Layer B of `facet`.
+
+        Pairs with `fs.audit()` (CRITICAL invariants) but answers "is the build
+        *good* / well-tuned" rather than "is it correct". Reads shelves, themes,
+        and attachments; mutates nothing. Returns a `LayerBQualityReport` whose
+        `__str__` is Markdown for notebook viewing — structural stats (shelves,
+        depth, fanout, support ratios), theme stats (coverage, source mix,
+        duplicate/tiny/leakage counts), and a list of `LayerBWarning`s.
+
+        Warning thresholds come from `cfg.layer_b.audit`. See
+        `layer_b/quality.py` for the full metric + warning list.
+        """
+        from foodscholar.layer_b.quality import build_quality_report as _q
+
+        return _q(self.chunk_store, self.graph_store, self.config.layer_b, facet=facet)
+
+    def sweep_layer_b(
+        self,
+        *,
+        facet: str = "foods",
+        grid: dict | None = None,
+    ):
+        """Non-mutating tuning sweep over a grid of Layer B configs.
+
+        Runs each config combination as a `dry_run` build with cheap keyword
+        labels and `per_shelf` Pass 1, scores the resulting quality metrics, and
+        returns a ranked `SweepResult` (best first). Nothing is persisted — apply
+        the winning config (`result.best`) yourself and rebuild.
+
+        `grid` maps dotted `layer_b` config paths (e.g.
+        `"leiden.min_community_size"`) to candidate values; defaults to the full
+        160-config Cartesian product (`sweep.DEFAULT_GRID`). Scoring weights are
+        fixed and documented in `layer_b/sweep.py`.
+        """
+        from foodscholar.layer_b.sweep import sweep_layer_b as _sweep
+
+        return _sweep(self, facet=facet, grid=grid)
+
+    def build_layer_c(self, *, facet: str = "foods", dry_run: bool = False):
+        """Build Layer C — one summary Card per Layer B theme of `facet`.
+
+        Each theme's member chunks are compressed by a cheap extractive method
+        (Stage 1, map-reduce when large), then refined by the LLM into a Card
+        (Stage 2). `dry_run=True` runs both stages but skips persistence.
+        Returns a `LayerCReport`.
+        """
+        from foodscholar.layer_c.builder import build_layer_c as _build_layer_c
+
+        return _build_layer_c(self, facet=facet, dry_run=dry_run)
+
+    def benchmark_layer_c(
+        self,
+        *,
+        facet: str = "foods",
+        themes: int = 5,
+        out: str | None = None,
+    ):
+        """Read-only benchmark of all extractive methods over the largest
+        `themes` themes of `facet`. Writes per-method JSON metrics; returns the
+        results keyed by theme id. No LLM, no persistence."""
+        from foodscholar.layer_c.benchmark import benchmark_facet as _bench
+
+        return _bench(self, facet=facet, themes=themes, out=out)
 
     def build(self) -> None:
         self.annotate()
