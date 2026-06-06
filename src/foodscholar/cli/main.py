@@ -86,10 +86,58 @@ def build_layer_b(config: Path = ConfigOption) -> None:
     _run_phase(_build(config), "build-layer-b", "build_layer_b")
 
 
+@app.command("report-layer-b")
+def report_layer_b(
+    config: Path = ConfigOption,
+    facet: str = typer.Option("foods", "--facet", help="Facet to report on."),
+) -> None:
+    """Print the Layer B WARN-level quality report (metrics + warnings)."""
+    fs = _build(config)
+    typer.echo(str(fs.build_quality_report(facet=facet)))
+
+
+@app.command("sweep-layer-b")
+def sweep_layer_b(
+    config: Path = ConfigOption,
+    facet: str = typer.Option("foods", "--facet", help="Facet to sweep."),
+) -> None:
+    """Run the Layer B tuning sweep (non-mutating) and print a ranked table.
+
+    Runs the full 160-config Cartesian grid as dry-run builds — slow.
+    """
+    fs = _build(config)
+    typer.echo(str(fs.sweep_layer_b(facet=facet)))
+
+
 @app.command("build-layer-c")
-def build_layer_c(config: Path = ConfigOption) -> None:
-    """Build Layer C — LLM write-up cards for every shelf and theme."""
-    _run_phase(_build(config), "build-layer-c", "build_layer_c")
+def build_layer_c(
+    config: Path = ConfigOption,
+    facet: str = typer.Option("foods", "--facet", help="Facet to summarize."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run without persisting."),
+) -> None:
+    """Build Layer C — one summary card per Layer B theme."""
+    fs = _build(config)
+    report = fs.build_layer_c(facet=facet, dry_run=dry_run)
+    typer.echo(str(report))
+
+
+@app.command("bench-layer-c")
+def bench_layer_c(
+    config: Path = ConfigOption,
+    facet: str = typer.Option("foods", "--facet", help="Facet to benchmark."),
+    themes: int = typer.Option(5, "--themes", help="How many largest themes."),
+    out: str = typer.Option(None, "--out", help="Output dir for the JSON."),
+) -> None:
+    """Benchmark all extractive methods over the largest themes (read-only)."""
+    fs = _build(config)
+    results = fs.benchmark_layer_c(facet=facet, themes=themes, out=out)
+    for tid, rows in results.items():
+        typer.echo(f"\n# {tid}")
+        for r in rows:
+            typer.echo(
+                f"  {r.method:10} {r.summary_length_chars:>6} chars "
+                f"{r.execution_time_ms:>5} ms"
+            )
 
 
 @app.command("build-all")
