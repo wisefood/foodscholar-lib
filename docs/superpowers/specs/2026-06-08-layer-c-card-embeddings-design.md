@@ -1,7 +1,7 @@
 # Layer C Card Embeddings — Design
 
 **Date:** 2026-06-08
-**Status:** Approved; implementing
+**Status:** Implemented (595 unit tests green; ES card store integration-only)
 **Builds on:** `2026-06-06-layer-c-theme-summarization-design.md`
 
 ## Goal
