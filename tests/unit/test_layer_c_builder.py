@@ -6,7 +6,11 @@ from foodscholar.config import FoodScholarConfig, LayerCConfig
 from foodscholar.io.chunk import Chunk
 from foodscholar.io.graph import Shelf, Theme
 from foodscholar.layer_c.builder import build_layer_c
-from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+from foodscholar.storage.memory import (
+    InMemoryCardStore,
+    InMemoryChunkStore,
+    InMemoryGraphStore,
+)
 
 
 def _chunk(cid: str, text: str) -> Chunk:
@@ -48,12 +52,25 @@ def _fs(llm):
     # signature is (chunk_id, theme_id, primary, weight)
     gs.attach_chunks_to_themes_bulk([("c1", "t1", True, 1.0), ("c2", "t1", False, 1.0)])
 
+    class _Embedder:
+        model_id = "test-embedder"
+
+        @property
+        def dim(self) -> int:
+            return 3
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            # deterministic 3-d vector per text (length-based, non-zero)
+            return [[float(len(t)), 1.0, 0.5] for t in texts]
+
     class _FS:
         pass
 
     fs = _FS()
     fs.chunk_store = cs
     fs.graph_store = gs
+    fs.card_store = InMemoryCardStore()
+    fs.embedder = _Embedder()
     from foodscholar.graph_view import GraphView
     fs.graph = GraphView(cs, gs)
     fs.llm = llm
@@ -71,11 +88,24 @@ def test_build_creates_card_per_theme() -> None:
     assert fs.graph_store.get_card("t1", "theme") is not None
 
 
+def test_build_embeds_and_persists_to_card_store() -> None:
+    fs = _fs(_OKJsonLLM())
+    build_layer_c(fs)
+    cards = fs.card_store.get_many(["card:theme:t1"])
+    assert len(cards) == 1
+    assert cards[0].embedding is not None
+    assert cards[0].embedding_model == "test-embedder"
+    # the card is vector-searchable
+    hits = fs.card_store.knn_search_cards(cards[0].embedding, k=1)
+    assert hits and hits[0][0] == "card:theme:t1"
+
+
 def test_dry_run_persists_nothing() -> None:
     fs = _fs(_OKJsonLLM())
     rep = build_layer_c(fs, dry_run=True)
     assert rep.n_cards == 1
     assert fs.graph_store.get_card("t1", "theme") is None
+    assert fs.card_store.get_many(["card:theme:t1"]) == []
 
 
 def test_llm_failure_counted_not_raised() -> None:

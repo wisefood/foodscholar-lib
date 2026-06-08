@@ -285,6 +285,31 @@ class Embedder(Protocol):
 
 
 @runtime_checkable
+class CardStore(Protocol):
+    """Vector-searchable store for Layer C cards. Cards also live in the graph
+    store (Neo4j); this store holds the embedding for kNN retrieval."""
+
+    def init(self) -> None:
+        """Idempotently provision backing storage (e.g. the ES cards index)."""
+        ...
+
+    def upsert(self, cards: list[Card]) -> None: ...
+
+    def get_many(self, card_ids: list[str]) -> list[Card]: ...
+
+    def knn_search_cards(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[str] | None = None,
+    ) -> list[tuple[str, float]]:
+        """Return up to `k` `(card_id, cosine_score)` nearest the query, best
+        first. Cards without an embedding are not returned."""
+        ...
+
+
+@runtime_checkable
 class LLMClient(Protocol):
     model_id: str
 

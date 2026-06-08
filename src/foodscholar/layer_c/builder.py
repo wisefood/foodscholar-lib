@@ -17,6 +17,8 @@ from foodscholar.layer_c.stage2 import run_stage2
 
 if TYPE_CHECKING:
     from foodscholar.facade import FoodScholar
+    from foodscholar.io.graph import Card
+    from foodscholar.storage.protocols import Embedder
 
 
 @dataclass
@@ -27,6 +29,18 @@ class _ThemeAdapter:
     label: str
     facet: str
     keyword_terms: list[str]
+
+
+def _embed_cards(cards: list[Card], embedder: Embedder) -> None:
+    """Embed each card's `title + summary` in one batch and attach the vector.
+
+    Mutates the cards in place (sets `.embedding` / `.embedding_model`).
+    """
+    texts = [f"{c.title}\n\n{c.summary}" for c in cards]
+    vecs = embedder.embed(texts)
+    for card, vec in zip(cards, vecs, strict=True):
+        card.embedding = list(vec)
+        card.embedding_model = embedder.model_id
 
 
 def build_layer_c(
@@ -69,8 +83,11 @@ def build_layer_c(
         cards.append(card)
         strat[s1.strategy] = strat.get(s1.strategy, 0) + 1
 
+    if cards:
+        _embed_cards(cards, fs.embedder)
+
     if not dry_run:
-        persist_cards(cards, fs.graph_store)
+        persist_cards(cards, fs.graph_store, getattr(fs, "card_store", None))
 
     return LayerCReport(
         n_themes=len(themes), n_cards=len(cards),

@@ -8,11 +8,18 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from foodscholar.io.graph import Card
-    from foodscholar.storage.protocols import GraphStore
+    from foodscholar.storage.protocols import CardStore, GraphStore
 
 
-def persist_cards(cards: list[Card], graph_store: GraphStore) -> None:
-    """Upsert theme cards into the graph store. No-op on empty input."""
+def persist_cards(
+    cards: list[Card],
+    graph_store: GraphStore,
+    card_store: CardStore | None = None,
+) -> None:
+    """Upsert theme cards into the graph store, and (when given) the vector
+    card store. No-op on empty input."""
     if not cards:
         return
     graph_store.upsert_cards(cards)
+    if card_store is not None:
+        card_store.upsert(cards)
