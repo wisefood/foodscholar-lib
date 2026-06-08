@@ -3,6 +3,20 @@
 Layer A gives you coarse shelves. Layer B finds the **fine-grained topics inside a
 shelf** — *themes* — using two complementary signals and merging them.
 
+```{admonition} Two discovery backends
+:class: tip
+Pass 1 (the embedding signal) has **two interchangeable backends**, selected by
+`config.layer_b.algorithm`:
+
+- **`"leiden"`** (default) — build a similarity *graph* over chunk embeddings, run Leiden.
+- **`"bertopic"`** — cluster the chunk embeddings *directly* with BERTopic (no graph).
+
+Pass 2 (the entity signal) and the merge step are **identical** for both. Everything below
+describes the shared two-pass/merge architecture first; the
+[BERTopic backend](#pass-1-backend-bertopic) section then explains the alternative and when
+to reach for it.
+```
+
 ## Two passes, two signals
 
 A shelf's chunks can be related in two different ways, so Layer B runs two community
@@ -112,6 +126,130 @@ need [tuning](../guides/tuning-layer-b.md) — configuration, not architecture. 
 keyword-ish here because this build used `labeling.strategy = "keyword"`; the LLM strategy
 polishes them.)
 
+(pass-1-backend-bertopic)=
+## Pass 1 backend — BERTopic
+
+`config.layer_b.algorithm = "bertopic"` swaps **only Pass 1**: instead of building a
+similarity graph and running Leiden, it clusters the shelf's chunk **embeddings directly**
+with [BERTopic](https://maartengr.github.io/BERTopic/). Pass 2 (relatedness) still runs
+Leiden, and the merge step is unchanged — so a BERTopic build still produces `merged` /
+`global_similarity` / `relatedness` themes exactly as above. The only differences are *how*
+the embedding communities are found and which `discovered_by` value they carry.
+
+```{mermaid}
+flowchart LR
+    C[shelf chunks + embeddings] --> A{algorithm?}
+    A -->|leiden| G[mutual-kNN graph] --> L[Leiden] --> CAND[similarity candidates]
+    A -->|bertopic| B[BERTopic over raw vectors] --> CAND
+    CAND --> MERGE[merge with Pass-2 relatedness]
+```
+
+Each emitted community becomes a `ThemeCandidate` with `discovered_by="bertopic"` (vs
+`"leiden"`); from there it flows through the identical merge/label/persist path.
+
+### Two scope choices — `bertopic.scope`
+
+BERTopic runs **per shelf**, but you choose *which* chunks a shelf contributes:
+
+::::{grid} 1 1 2 2
+:gutter: 2
+
+:::{grid-item-card} `"direct"` (default)
+Only the shelf's **own** directly-attached chunks. Themes are local to the node; a chunk is
+clustered once, under the shelf it sits on. Mirrors the Leiden per-shelf scope.
+:::
+
+:::{grid-item-card} `"subtree"`
+The shelf's chunks **plus every descendant shelf's** chunks. Inner nodes get broader,
+roll-up themes spanning their branch; the same chunk participates in every ancestor's run.
+:::
+
+::::
+
+```{mermaid}
+flowchart TD
+    subgraph direct["scope = direct"]
+        d_dairy["dairy<br/>(own chunks only)"]
+        d_milk["milk<br/>(own chunks only)"]
+        d_cheese["cheese<br/>(own chunks only)"]
+        d_dairy -.->|tree edge, NOT clustered together| d_milk
+        d_dairy -.-> d_cheese
+    end
+    subgraph subtree["scope = subtree"]
+        s_dairy["dairy<br/>(own + milk + cheese chunks)"]
+        s_milk["milk<br/>(own chunks)"]
+        s_cheese["cheese<br/>(own chunks)"]
+        s_dairy ==>|inherits descendant chunks| s_milk
+        s_dairy ==> s_cheese
+    end
+```
+
+### Two clusterers — `bertopic.clusterer`
+
+::::{grid} 1 1 2 2
+:gutter: 2
+
+:::{grid-item-card} `"hdbscan"` (default)
+BERTopic the way it ships: **UMAP → HDBSCAN**. Discovers the topic count from density and
+emits a `-1` *outlier* bucket (dropped — those chunks stay un-themed). No `K` to choose;
+naturally exhaustive. Best when you don't want to fix the number of themes.
+:::
+
+:::{grid-item-card} `"kmeans"`
+A **passthrough** reducer + **KMeans** on the raw BGE vectors. Full coverage (no outlier
+bucket), predictable count — `n_clusters`, or auto `clamp(round(√(n/2)), 2, 12)` when
+`n_clusters` is `None`. Best when you want a controlled number of themes per shelf.
+:::
+
+::::
+
+```{mermaid}
+flowchart LR
+    V[chunk vectors] --> CL{clusterer?}
+    CL -->|hdbscan| U[UMAP 15→5d] --> H["HDBSCAN<br/>(min_cluster_size)"] --> HT["topics + −1 outliers"]
+    CL -->|kmeans| PT["passthrough<br/>(raw vectors)"] --> K["KMeans(n_clusters)"] --> KT["topics<br/>(full coverage)"]
+    HT --> F["drop −1 + size filter<br/>(min_topic_size)"]
+    KT --> F
+    F --> GRP[chunk-id groups → candidates]
+```
+
+Both clusterers post-filter with `bertopic.min_topic_size` (the BERTopic analogue of
+Leiden's `min_community_size`): topics smaller than this are dropped.
+
+```{list-table} BERTopic knobs (`config.layer_b.bertopic`)
+:header-rows: 1
+
+* - Knob
+  - Default
+  - Meaning
+* - `scope`
+  - `"direct"`
+  - `direct` = own chunks · `subtree` = own + descendants
+* - `clusterer`
+  - `"hdbscan"`
+  - `hdbscan` = auto count + outliers · `kmeans` = matched/auto-K, full coverage
+* - `min_topic_size`
+  - `15`
+  - Minimum chunks per theme (drops smaller topics)
+* - `n_clusters`
+  - `None`
+  - KMeans only; `None` → auto `√(n/2)` clamped to `[2, 12]`
+* - `random_state`
+  - `42`
+  - Determinism seed for UMAP / KMeans
+```
+
+```{note}
+BERTopic and its deps (`bertopic`, `umap-learn`, `hdbscan`, `scikit-learn`) are lazy-imported
+behind the `[bertopic]` / `[clustering]` extras — the core package imports without them. Install
+with `pip install 'foodscholar[bertopic,clustering]'`.
+```
+
+```{seealso}
+The Layer B & C methods brief (`docs/methods_layer_b_c_brief.md`) has the `run_bertopic`
+internals, the Leiden-vs-BERTopic contract, and the full tuning matrix.
+```
+
 ## Labeling
 
 Each theme gets a short label. The default keyword labeler computes
@@ -148,13 +286,20 @@ class Theme(BaseModel):
     discovery_pass: Literal["relatedness", "merged", "global_similarity"]
     keyword_terms: list[str]
     foodon_id_signature: list[str]
-    discovered_by: Literal["leiden", "hdbscan"]
+    discovered_by: Literal["leiden", "hdbscan", "bertopic"]
 ```
 
 ## Building it
 
 ```python
-fs.build_layer_b(facet="foods")   # pass1_mode defaults to "per_shelf"
+# Default: Leiden, per-shelf.
+fs.build_layer_b(facet="foods")
+
+# BERTopic backend (direct scope, HDBSCAN) — the tuned baseline:
+fs.config.layer_b.algorithm = "bertopic"
+fs.config.layer_b.bertopic.scope = "direct"        # or "subtree"
+fs.config.layer_b.bertopic.clusterer = "hdbscan"   # or "kmeans"
+fs.build_layer_b(facet="foods")
 ```
 
 Then click a shelf in the interactive tree to see its themes grouped by origin:
