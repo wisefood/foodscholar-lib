@@ -607,7 +607,7 @@ class LayerBConfig(BaseModel):
 
 class LayerCConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    llm_model: str = "claude-sonnet-4-6"
+    llm_model: str = "llama-3.1-8b-instant"
     prompt_version: str = "v1"
     sample_size: int = 12
     grounding_check: Literal["strict", "lenient", "off"] = "strict"

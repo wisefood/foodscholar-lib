@@ -11,7 +11,7 @@ from foodscholar.config import LayerCConfig
 def test_layer_c_defaults() -> None:
     c = LayerCConfig()
     # existing fields preserved
-    assert c.llm_model == "claude-sonnet-4-6"
+    assert c.llm_model == "llama-3.1-8b-instant"
     assert c.prompt_version == "v1"
     assert c.grounding_check == "strict"
     # new fields
