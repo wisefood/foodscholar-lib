@@ -659,10 +659,25 @@ class GraphStoreConfig(BaseModel):
     values without committing secrets to the file."""
 
 
+class CardStoreConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    backend: Literal["elastic", "memory"] = "elastic"
+    url: str | None = None
+    index: str | None = "foodscholar_cards"
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
+    bulk_size: int = 500
+    """Vector store for Layer C cards (dense_vector index). Mirrors
+    `chunk_store` auth/backends. Cards also live in the graph store; this index
+    holds their embeddings for kNN retrieval."""
+
+
 class StorageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     chunk_store: ChunkStoreConfig = Field(default_factory=ChunkStoreConfig)
     graph_store: GraphStoreConfig = Field(default_factory=GraphStoreConfig)
+    card_store: CardStoreConfig = Field(default_factory=CardStoreConfig)
 
 
 LLMProvider = Literal["anthropic", "openai", "openrouter", "groq", "gemini", "ollama"]

@@ -153,7 +153,7 @@ layer_b:
     merged_rate_max: 0.80
 
 layer_c:
-  llm_model: claude-sonnet-4-6
+  llm_model: llama-3.1-8b-instant
   prompt_version: v1
   sample_size: 12
   grounding_check: strict
@@ -177,6 +177,12 @@ storage:
     # (e.g. `password: change-me` for local dev). When omitted, the driver
     # falls back to the NEO4J_PASSWORD environment variable.
     password: ${NEO4J_PASSWORD}
+  card_store:
+    # Vector index for Layer C cards (dense_vector). Cards also persist to
+    # Neo4j; this index holds their embeddings for kNN retrieval.
+    backend: elastic
+    url: http://localhost:9200
+    index: foodscholar_cards
 
 # LLM client — used only by Layer C card generation now that NER is GLiNER
 # and the linker is purely dense. Provider-agnostic: anthropic | openai |

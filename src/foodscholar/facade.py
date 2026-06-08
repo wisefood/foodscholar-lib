@@ -34,12 +34,14 @@ from foodscholar.config import FoodScholarConfig, resolve_config
 from foodscholar.graph_view import GraphView
 from foodscholar.logging import configure_logging, get_logger
 from foodscholar.storage.memory import (
+    InMemoryCardStore,
     InMemoryChunkStore,
     InMemoryEntityStore,
     InMemoryGraphStore,
 )
 from foodscholar.storage.protocols import (
     NER,
+    CardStore,
     ChunkStore,
     Embedder,
     EntityStore,
@@ -54,6 +56,7 @@ if TYPE_CHECKING:
     from foodscholar.evaluation.quality import QualityReport
     from foodscholar.io.artifacts import ArtifactMeta
     from foodscholar.io.chunk import Chunk
+    from foodscholar.io.graph import Card
     from foodscholar.layer_a.semantic_consolidation import ConsolidationArtifact
     from foodscholar.ontology import FoodOnAPI
     from foodscholar.retrieval import Answer
@@ -138,11 +141,15 @@ class FoodScholar:
         embedder: Embedder | None = None,
         llm: LLMClient | None = None,
         entity_store: EntityStore | None = None,
+        card_store: CardStore | None = None,
     ) -> None:
         cfg = resolve_config(config)
         self.config = cfg
         self.chunk_store = chunk_store
         self.graph_store = graph_store
+        # Vector store for Layer C cards. Defaults to in-memory so the facade
+        # works without ES; production wiring builds an ElasticCardStore.
+        self.card_store: CardStore = card_store or InMemoryCardStore()
         # Embedder is built lazily on first access — the production BGE-base
         # embedder costs ~440 MB of model weights to load, which we don't want
         # to pay just to print info().
@@ -213,6 +220,7 @@ class FoodScholar:
             embedder=embedder,
             llm=llm,
             entity_store=InMemoryEntityStore(),
+            card_store=InMemoryCardStore(),
         )
 
     @classmethod
@@ -264,6 +272,24 @@ class FoodScholar:
         else:
             raise ValueError(f"unknown chunk_store backend: {chunk_backend}")
 
+        card_backend = cfg.storage.card_store.backend
+        if card_backend == "memory":
+            card_store: CardStore = InMemoryCardStore()
+        elif card_backend == "elastic":
+            from foodscholar.storage.elastic import ElasticCardStore
+
+            cds = cfg.storage.card_store
+            card_store = ElasticCardStore(
+                url=cds.url or "http://localhost:9200",
+                index=cds.index or "foodscholar_cards",
+                api_key=cds.api_key,
+                username=cds.username,
+                password=cds.password,
+                bulk_size=cds.bulk_size,
+            )
+        else:
+            raise ValueError(f"unknown card_store backend: {card_backend}")
+
         graph_backend = cfg.storage.graph_store.backend
         if graph_backend == "memory":
             graph_store: GraphStore = InMemoryGraphStore()
@@ -296,6 +322,7 @@ class FoodScholar:
             embedder=embedder,
             llm=llm,
             entity_store=entity_store,
+            card_store=card_store,
         )
 
     @staticmethod
@@ -876,14 +903,15 @@ class FoodScholar:
     def init(self) -> None:
         """Provision the backing stores declared by the config.
 
-        Calls `chunk_store.init()`, `entity_store.init()`, and
-        `graph_store.init()` — all three are in the storage protocols and are
+        Calls `chunk_store.init()`, `entity_store.init()`, `graph_store.init()`,
+        and `card_store.init()` — all are in the storage protocols and are
         no-ops for the in-memory backends, so this works uniformly regardless
         of where the stores live.
         """
         self.chunk_store.init()
         self.entity_store.init()
         self.graph_store.init()
+        self.card_store.init()
         self._log.info(
             "init.done",
             chunk_store=self.config.storage.chunk_store.backend,
@@ -1143,6 +1171,16 @@ class FoodScholar:
 
         return _bench(self, facet=facet, themes=themes, out=out)
 
+    def search_cards(self, text: str, *, k: int = 10) -> list[Card]:
+        """Vector-search Layer C cards by `text`. Embeds the query with the
+        chunk embedder, runs kNN over the card store, and returns the matching
+        `Card`s nearest-first. (A thin retrieval helper; full `query()` with
+        answer synthesis is still deferred.)"""
+        query_vec = self.embedder.embed([text])[0]
+        hits = self.card_store.knn_search_cards(query_vec, k=k)
+        cards = {c.card_id: c for c in self.card_store.get_many([cid for cid, _ in hits])}
+        return [cards[cid] for cid, _ in hits if cid in cards]
+
     def build(self) -> None:
         self.annotate()
         self.build_layer_a()
@@ -1184,6 +1222,7 @@ def _minimal_memory_config() -> FoodScholarConfig:
             "storage": {
                 "chunk_store": {"backend": "memory"},
                 "graph_store": {"backend": "memory"},
+                "card_store": {"backend": "memory"},
             },
         }
     )
