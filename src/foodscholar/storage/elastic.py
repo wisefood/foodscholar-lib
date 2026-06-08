@@ -35,7 +35,7 @@ from collections.abc import Iterable, Iterator
 from typing import Any
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
-from foodscholar.io.graph import ShelfId, ThemeId
+from foodscholar.io.graph import Card, ShelfId, ThemeId
 from foodscholar.logging import get_logger
 
 _log = get_logger("foodscholar.storage.elastic")
@@ -732,6 +732,223 @@ def _chunk_to_doc(chunk: Chunk) -> dict[str, Any]:
 
 def _doc_to_chunk(doc: dict[str, Any]) -> Chunk:
     return Chunk.model_validate(doc)
+
+
+def _card_to_doc(card: Card) -> dict[str, Any]:
+    return card.model_dump(mode="json")
+
+
+def _doc_to_card(doc: dict[str, Any]) -> Card:
+    return Card.model_validate(doc)
+
+
+class ElasticCardStore:
+    """ES-backed `CardStore`: a dedicated cards index holding each Layer C
+    card plus its `embedding` (dense_vector) for kNN retrieval. Mirrors
+    `ElasticChunkStore`'s auth, dense_vector mapping, and the ES-9 `_source`
+    vector-stripping workaround.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        index: str,
+        *,
+        api_key: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        bulk_size: int = _DEFAULT_BULK_SIZE,
+    ) -> None:
+        if not url or not index:
+            raise ValueError("ElasticCardStore needs both `url` and `index`")
+        if bulk_size <= 0:
+            raise ValueError(f"bulk_size must be positive, got {bulk_size}")
+        self._bulk_size = bulk_size
+        try:
+            from elasticsearch import Elasticsearch  # type: ignore[import-not-found]
+        except ImportError as e:
+            raise ImportError(
+                "the 'elasticsearch>=8' package is required for ElasticCardStore. "
+                "Install with: pip install 'foodscholar[elastic]'"
+            ) from e
+        self._url = url
+        self.index = index
+
+        client_kwargs: dict[str, Any] = {"request_timeout": 60}
+        if username and password is not None:
+            client_kwargs["basic_auth"] = (username, password)
+        else:
+            import os as _os
+
+            effective_key = api_key or _os.environ.get("ELASTICSEARCH_API_KEY")
+            if effective_key:
+                client_kwargs["api_key"] = effective_key
+        self._es = Elasticsearch(url, **client_kwargs)
+        self._ensured_init = False
+
+    # ------------------------------------------------------------------ admin
+
+    def init(self) -> None:
+        """Create the cards index with the explicit mapping if missing.
+        Idempotent and race-tolerant (mirrors ElasticChunkStore.init)."""
+        from elasticsearch import BadRequestError
+
+        if self._es.indices.exists(index=self.index):
+            self._ensured_init = True
+            return
+        try:
+            self._create_index()
+        except BadRequestError as e:
+            if getattr(e, "error", "") != "resource_already_exists_exception":
+                raise
+        self._ensured_init = True
+        _log.info("elastic.card_index_created", index=self.index)
+
+    def _create_index(self) -> None:
+        self._es.indices.create(
+            index=self.index,
+            body={
+                "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 0,
+                    "analysis": {"analyzer": {"default": {"type": "standard"}}},
+                },
+                "mappings": {
+                    "dynamic": "false",
+                    "properties": {
+                        "card_id": {"type": "keyword"},
+                        "target_id": {"type": "keyword"},
+                        "target_type": {"type": "keyword"},
+                        "title": {"type": "text"},
+                        "summary": {"type": "text"},
+                        "tip": {"type": "text"},
+                        "evidence_quality": {"type": "keyword"},
+                        "cited_chunk_ids": {"type": "keyword"},
+                        "llm_model": {"type": "keyword"},
+                        "prompt_version": {"type": "keyword"},
+                        "safety_flagged": {"type": "boolean"},
+                        "generated_at": {"type": "date"},
+                        "embedding": {
+                            "type": "dense_vector",
+                            "dims": 768,
+                            "index": True,
+                            "similarity": "cosine",
+                            "index_options": {
+                                "type": "hnsw",
+                                "m": 16,
+                                "ef_construction": 100,
+                            },
+                        },
+                        "embedding_model": {"type": "keyword"},
+                    },
+                },
+            },
+        )
+
+    def recreate(self) -> None:
+        """Delete the cards index (if present) and recreate it."""
+        self._es.indices.delete(index=self.index, ignore_unavailable=True)
+        self._create_index()
+        self._ensured_init = True
+        _log.info("elastic.card_index_recreated", index=self.index)
+
+    # ------------------------------------------------------------------ writes
+
+    def upsert(self, cards: list[Card]) -> None:
+        if not cards:
+            return
+        if not self._ensured_init:
+            self.init()
+        from elasticsearch.helpers import bulk  # type: ignore[import-not-found]
+
+        actions = [
+            {
+                "_op_type": "index",
+                "_index": self.index,
+                "_id": card.card_id,
+                "_source": _card_to_doc(card),
+            }
+            for card in cards
+        ]
+        bulk(self._es, actions, chunk_size=self._bulk_size, refresh=True)
+
+    # ------------------------------------------------------------------ reads
+
+    def get_many(self, card_ids: list[str]) -> list[Card]:
+        if not card_ids:
+            return []
+        out: list[Card] = []
+        for start in range(0, len(card_ids), self._bulk_size):
+            batch = card_ids[start : start + self._bulk_size]
+            resp = self._es.mget(index=self.index, body={"ids": batch})
+            docs = [d for d in resp.get("docs", []) if d.get("found")]
+            if not docs:
+                continue
+            embeddings = self._fetch_embeddings_bulk(
+                [d["_id"] for d in docs if d["_source"].get("embedding_model")]
+            )
+            for d in docs:
+                src = d["_source"]
+                if "embedding" not in src and d["_id"] in embeddings:
+                    src = {**src, "embedding": embeddings[d["_id"]]}
+                out.append(_doc_to_card(src))
+        return out
+
+    def knn_search_cards(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[str] | None = None,
+    ) -> list[tuple[str, float]]:
+        """kNN over the cards index. Returns `(card_id, cosine)` best first.
+        ES `_score = (cosine + 1) / 2` for cosine similarity; mapped back."""
+        num_candidates = max(50, k * 10)
+        must_not: list[dict[str, Any]] = []
+        if exclude_ids:
+            must_not.append({"ids": {"values": list(exclude_ids)}})
+
+        knn_body: dict[str, Any] = {
+            "field": "embedding",
+            "query_vector": list(query_vector),
+            "k": k,
+            "num_candidates": num_candidates,
+        }
+        if must_not:
+            knn_body["filter"] = {"bool": {"must_not": must_not}}
+        body: dict[str, Any] = {"size": k, "_source": False, "knn": knn_body}
+        resp = self._es.search(index=self.index, body=body)
+        out: list[tuple[str, float]] = []
+        for h in resp["hits"]["hits"]:
+            cosine = (h["_score"] * 2.0) - 1.0
+            out.append((h["_id"], cosine))
+        return out
+
+    def _fetch_embeddings_bulk(
+        self, card_ids: list[str]
+    ) -> dict[str, list[float]]:
+        """Batch-fetch `embedding` via the `fields` API (ES-9 strips dense_vector
+        from `_source`). Pages to stay under `index.max_terms_count`."""
+        if not card_ids:
+            return {}
+        out: dict[str, list[float]] = {}
+        page = 1024
+        for start in range(0, len(card_ids), page):
+            window = card_ids[start : start + page]
+            resp = self._es.search(
+                index=self.index,
+                body={
+                    "size": len(window),
+                    "_source": False,
+                    "fields": ["embedding"],
+                    "query": {"ids": {"values": window}},
+                },
+            )
+            for h in resp["hits"]["hits"]:
+                vec = (h.get("fields") or {}).get("embedding")
+                if vec is not None:
+                    out[h["_id"]] = vec
+        return out
 
 
 def _rrf(rankings: list[list[str]], k: int = 60) -> list[str]:

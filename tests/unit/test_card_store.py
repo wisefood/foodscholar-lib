@@ -60,3 +60,16 @@ def test_in_memory_card_store_knn_exclude() -> None:
     ])
     hits = cs.knn_search_cards([1.0, 0.0], k=5, exclude_ids=["card:theme:a"])
     assert [cid for cid, _ in hits] == ["card:theme:b"]
+
+
+def test_card_stores_satisfy_protocol() -> None:
+    # Both stores are structurally CardStore. (ElasticCardStore imports without
+    # a live ES — the elasticsearch client is lazy-imported in __init__.)
+    from foodscholar.storage.elastic import ElasticCardStore
+    from foodscholar.storage.protocols import CardStore
+
+    assert isinstance(InMemoryCardStore(), CardStore)
+    # ElasticCardStore needs url+index at construction; check the class has the
+    # protocol methods without instantiating (no ES available in unit tests).
+    for meth in ("init", "upsert", "get_many", "knn_search_cards"):
+        assert callable(getattr(ElasticCardStore, meth))
