@@ -20,6 +20,7 @@ from collections import Counter
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
+from foodscholar.layer_b.bertopic_community import run_bertopic
 from foodscholar.layer_b.community import run_leiden
 from foodscholar.layer_b.models import ThemeCandidate
 from foodscholar.layer_b.relatedness_graph import build_relatedness_graph
@@ -94,6 +95,67 @@ def build_global_similarity_candidates(
                 foodon_ids=set(),
                 centroid_embedding=centroid.tolist(),
                 discovered_by="leiden",
+            )
+        )
+    return out
+
+
+def _centroid(member_ids: set[str], embeddings: dict[str, Any]) -> list[float] | None:
+    """Unit-normalized mean of member embeddings (parallels the Leiden path)."""
+    import numpy as np
+
+    vecs = [embeddings[cid] for cid in member_ids if cid in embeddings]
+    if not vecs:
+        return None
+    member_vecs = np.stack(vecs)
+    norms = np.linalg.norm(member_vecs, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    centroid = (member_vecs / norms).mean(axis=0)
+    cn = np.linalg.norm(centroid)
+    if cn > 0:
+        centroid = centroid / cn
+    return centroid.tolist()
+
+
+def build_shelf_bertopic_candidates(
+    chunk_ids: list[str],
+    chunk_store: Any,
+    cfg: LayerBConfig,
+) -> list[ThemeCandidate]:
+    """Pass 1 via BERTopic (selected by `cfg.algorithm="bertopic"`).
+
+    Clusters the chunks' embeddings into topic groups (see `run_bertopic`) and
+    wraps each group as a `ThemeCandidate` — the same shape the Leiden path
+    emits, so merge/persist downstream is unchanged. `pass_name` stays
+    `"global_similarity"` for schema continuity; `discovered_by="bertopic"`.
+    """
+    import numpy as np
+
+    if not chunk_ids:
+        return []
+
+    groups = run_bertopic(chunk_ids, chunk_store, cfg.bertopic)
+    if not groups:
+        return []
+
+    chunks = chunk_store.get_many(list(chunk_ids))
+    embeddings: dict[str, Any] = {
+        c.chunk_id: np.asarray(c.embedding, dtype=np.float32)
+        for c in chunks
+        if c.embedding is not None
+    }
+
+    out: list[ThemeCandidate] = []
+    for member_ids in groups:
+        if not member_ids:
+            continue
+        out.append(
+            ThemeCandidate(
+                pass_name="global_similarity",
+                chunk_ids=set(member_ids),
+                foodon_ids=set(),
+                centroid_embedding=_centroid(member_ids, embeddings),
+                discovered_by="bertopic",
             )
         )
     return out
@@ -241,16 +303,48 @@ def build_layer_b(
         # the theme to exactly that shelf — NOT the union of its member chunks'
         # shelves (which over-attaches via lifted, multi-shelf chunks). Pass name
         # stays "global_similarity" for schema continuity.
+        # When BERTopic runs with subtree scope, precompute each shelf's
+        # parent→children map once so we can union descendant chunks per shelf.
+        _children: dict[str, list[str]] = {}
+        if cfg.algorithm == "bertopic" and cfg.bertopic.scope == "subtree":
+            for sid, s in facet_shelves.items():
+                pid = getattr(s, "parent_shelf_id", None)
+                if pid is not None:
+                    _children.setdefault(pid, []).append(sid)
+
+        def _subtree_chunk_ids(shelf_id: str) -> list[str]:
+            seen: set[str] = set()
+            stack = [shelf_id]
+            while stack:
+                sid = stack.pop()
+                seen.update(shelf_to_chunks.get(sid, ()))
+                stack.extend(_children.get(sid, ()))
+            return sorted(seen)
+
         for shelf_id, chunk_ids in shelf_to_chunks.items():
             if shelf_id not in facet_shelves or shelf_id == synth_root:
                 continue
-            if len(chunk_ids) < cfg.min_chunks_per_shelf:
-                continue
-            shelf_cands = build_global_similarity_candidates(
-                chunk_ids=sorted(chunk_ids),
-                chunk_store=fs.chunk_store,
-                cfg=cfg,
-            )
+            if cfg.algorithm == "bertopic":
+                scoped_ids = (
+                    _subtree_chunk_ids(shelf_id)
+                    if cfg.bertopic.scope == "subtree"
+                    else sorted(chunk_ids)
+                )
+                if len(scoped_ids) < cfg.min_chunks_per_shelf:
+                    continue
+                shelf_cands = build_shelf_bertopic_candidates(
+                    chunk_ids=scoped_ids,
+                    chunk_store=fs.chunk_store,
+                    cfg=cfg,
+                )
+            else:
+                if len(chunk_ids) < cfg.min_chunks_per_shelf:
+                    continue
+                shelf_cands = build_global_similarity_candidates(
+                    chunk_ids=sorted(chunk_ids),
+                    chunk_store=fs.chunk_store,
+                    cfg=cfg,
+                )
             for c in shelf_cands:
                 c.origin_shelf_id = shelf_id
             global_cands.extend(shelf_cands)
