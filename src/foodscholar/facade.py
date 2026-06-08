@@ -1171,6 +1171,22 @@ class FoodScholar:
 
         return _bench(self, facet=facet, themes=themes, out=out)
 
+    def export_graphml(
+        self,
+        output: str | Path,
+        *,
+        facet: str | None = "foods",
+    ) -> Path:
+        """Export the Layer A/B/C graph (shelves + themes + cards) to GraphML.
+
+        Typed nodes (`shelf` / `theme` / `card`) with their attributes and edges
+        (`parent_of` / `has_theme` / `has_card`), readable by Gephi, Cytoscape,
+        yEd, etc. `facet=None` exports every facet. Returns the output `Path`.
+        """
+        from foodscholar.io.graphml import export_graphml as _export
+
+        return _export(self.graph, output, facet=facet)
+
     def search_cards(self, text: str, *, k: int = 10) -> list[Card]:
         """Vector-search Layer C cards by `text`. Embeds the query with the
         chunk embedder, runs kNN over the card store, and returns the matching
