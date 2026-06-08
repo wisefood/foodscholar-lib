@@ -18,7 +18,7 @@ from foodscholar.io.chunk import ChunkId
 from foodscholar.io.graph import Facet, Theme
 
 DiscoveryPass = Literal["relatedness", "merged", "global_similarity"]
-DiscoveredBy = Literal["leiden", "hdbscan"]
+DiscoveredBy = Literal["leiden", "hdbscan", "bertopic"]
 
 
 class ThemeCandidate(BaseModel):

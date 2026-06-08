@@ -567,15 +567,50 @@ class LayerBAuditConfig(BaseModel):
     coherent sub-topic."""
 
 
+class BertopicConfig(BaseModel):
+    """BERTopic-based theme discovery (alternative to Leiden, selected by
+    `LayerBConfig.algorithm="bertopic"`). Clusters chunk embeddings directly
+    (no similarity graph). Lazy-imports `bertopic` behind the `[bertopic]` extra."""
+
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["direct", "subtree"] = "direct"
+    """Per-shelf chunk scope fed to BERTopic.
+
+    - ``"direct"`` (default): only the shelf's directly-attached chunks.
+    - ``"subtree"``: the shelf's chunks PLUS every descendant shelf's chunks."""
+    clusterer: Literal["hdbscan", "kmeans"] = "hdbscan"
+    """Clustering backend inside BERTopic.
+
+    - ``"hdbscan"`` (default): native UMAP + HDBSCAN — discovers the topic count
+      from density, emits a ``-1`` outlier bucket (dropped). No K to choose.
+    - ``"kmeans"``: passthrough reducer + KMeans on the raw BGE vectors. Full
+      coverage, predictable count (``n_clusters`` or auto-by-size)."""
+    min_topic_size: int = 15
+    """Minimum chunks per topic. HDBSCAN ``min_cluster_size``; also a post-filter
+    that drops smaller topics for both clusterers (parallels Leiden's
+    ``min_community_size``)."""
+    n_clusters: int | None = None
+    """KMeans cluster count. ``None`` → auto-by-size ``clamp(round(sqrt(n/2)),
+    2, 12)``. Ignored when ``clusterer="hdbscan"``."""
+    random_state: int = 42
+    """Determinism seed for UMAP/KMeans."""
+
+
 class LayerBConfig(BaseModel):
     """Layer B (theme discovery) — dual-pass + merge per the brief.
 
     See `layer_b_construction_brief.md` §5 for the full knob list and the
-    accompanying plan for the v1 decisions (Leiden-only, LLM labels by
-    default, embedded-fraction gate, etc.).
+    accompanying plan for the v1 decisions (Leiden default, LLM labels by
+    default, embedded-fraction gate, etc.). `algorithm="bertopic"` swaps the
+    Pass-1 discovery backend; Leiden remains the default.
     """
 
     model_config = ConfigDict(extra="forbid")
+    algorithm: Literal["leiden", "bertopic"] = "leiden"
+    """Pass-1 theme-discovery backend. ``"leiden"`` (default) builds a similarity
+    graph and runs Leiden; ``"bertopic"`` clusters chunk embeddings directly via
+    BERTopic (see `bertopic`). Pass 2 (relatedness) always uses Leiden."""
+    bertopic: BertopicConfig = Field(default_factory=BertopicConfig)
     min_chunks_per_shelf: int = 50
     min_embedded_fraction: float = 0.80
     """Skip shelves where < this fraction of chunks have embeddings —
