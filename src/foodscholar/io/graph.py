@@ -68,3 +68,5 @@ class Card(BaseModel):
     prompt_version: str
     safety_flagged: bool = False
     generated_at: datetime = Field(default_factory=_utcnow)
+    embedding: list[float] | None = None
+    embedding_model: str | None = None

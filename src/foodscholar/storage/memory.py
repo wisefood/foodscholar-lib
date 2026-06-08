@@ -486,3 +486,49 @@ class InMemoryEntityStore:
 
     def scan(self) -> list[Entity]:
         return list(self._entities.values())
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (na * nb)
+
+
+class InMemoryCardStore:
+    """Dict-backed `CardStore`. `knn_search_cards` is a brute-force cosine over
+    stored embeddings — test-grade, mirrors `InMemoryChunkStore`'s flavor. Cards
+    without an embedding are skipped by knn.
+    """
+
+    def __init__(self) -> None:
+        self._cards: dict[str, Card] = {}
+
+    def init(self) -> None:
+        """No-op — nothing to provision for an in-memory store."""
+        return
+
+    def upsert(self, cards: list[Card]) -> None:
+        for c in cards:
+            self._cards[c.card_id] = c
+
+    def get_many(self, card_ids: list[str]) -> list[Card]:
+        return [self._cards[cid] for cid in card_ids if cid in self._cards]
+
+    def knn_search_cards(
+        self,
+        query_vector: list[float],
+        *,
+        k: int,
+        exclude_ids: list[str] | None = None,
+    ) -> list[tuple[str, float]]:
+        excluded = set(exclude_ids or ())
+        scored: list[tuple[str, float]] = []
+        for cid, card in self._cards.items():
+            if cid in excluded or not card.embedding:
+                continue
+            scored.append((cid, _cosine(query_vector, card.embedding)))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:k]
