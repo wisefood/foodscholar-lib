@@ -30,6 +30,39 @@ def test_split_sentences_counts() -> None:
     assert sents[0].startswith("Apples")
 
 
+def test_split_sentences_drops_markdown_table_rows() -> None:
+    # Tabular nutrition rows (lots of pipes / digits) must NOT survive as
+    # "sentences" — they defeated the splitter on the real corpus.
+    text = (
+        "Milk provides most of the calcium in the U.S. diet. "
+        "| whole | 150 | 275 | 8 | 4.5 | 25 | "
+        "| 1% low-fat | 100 | 290 | 2 | 1.5 | 10 | "
+        "About 30 percent of calcium is absorbed from milk."
+    )
+    sents = split_sentences(text)
+    joined = " ".join(sents)
+    assert "Milk provides most of the calcium" in joined
+    assert "About 30 percent of calcium is absorbed" in joined
+    assert "| whole |" not in joined
+    assert "| 1% low-fat |" not in joined
+
+
+def test_split_sentences_keeps_prose_with_a_few_numbers() -> None:
+    # A normal sentence that merely mentions numbers must be kept.
+    text = "Adults need about 1,200 milligrams of calcium and 600 IU of vitamin D daily."
+    sents = split_sentences(text)
+    assert len(sents) == 1
+    assert sents[0].startswith("Adults need")
+
+
+def test_split_sentences_clamps_giant_pseudo_sentence() -> None:
+    # A pipe-free but absurdly long run with no terminal punctuation (e.g. a
+    # mangled table) must not pass through as one multi-KB "sentence".
+    blob = "col " * 4000  # ~16 KB, no '.', no pipes
+    sents = split_sentences(blob)
+    assert all(len(s) <= 2000 for s in sents)
+
+
 def test_split_sentences_empty() -> None:
     assert split_sentences("") == []
     assert split_sentences("   ") == []

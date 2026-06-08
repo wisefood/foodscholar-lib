@@ -37,8 +37,14 @@ def test_single_pass_below_threshold() -> None:
 
 def test_mapreduce_above_threshold() -> None:
     s = _FirstN(n=2)
-    # 6 chunks, each 3 sentences = 18 sentences; threshold 5 forces map-reduce.
-    chunks = [f"A{i}. B{i}. C{i}." for i in range(6)]
+    # 6 chunks, each 3 real prose sentences = 18 sentences; threshold 5 forces
+    # map-reduce. (Use real words — the splitter now drops non-prose fragments.)
+    chunks = [
+        f"Alpha grain number {i} is nutritious. "
+        f"Beta cereal number {i} has fiber. "
+        f"Gamma food number {i} tastes good."
+        for i in range(6)
+    ]
     out = run_stage1(chunks, s, map_reduce_threshold=5, group_char_budget=20)
     assert out.strategy == "mapreduce"
     assert out.n_groups >= 2
