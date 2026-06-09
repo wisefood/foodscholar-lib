@@ -174,6 +174,61 @@ def test_backbone_empty_state_when_no_shelves() -> None:
     assert g.level == "L3"
 
 
+def test_backbone_includes_theme_cards() -> None:
+    # Layer C makes THEME cards; backbone must surface them (theme -> card edge).
+    from foodscholar.io.graph import Card, Shelf, Theme
+
+    fs = FoodScholar.in_memory()
+    fs.graph_store.upsert_shelves([
+        Shelf(shelf_id="s:dairy", label="dairy", facet="foods", depth=1, chunk_count=4),
+    ])
+    fs.graph_store.upsert_themes([
+        Theme(theme_id="t:milk", label="milk", shelf_ids=["s:dairy"], chunk_count=3,
+              discovered_by="bertopic", discovery_version="v", facet="foods",
+              discovery_pass="global_similarity"),
+    ])
+    fs.graph_store.upsert_cards([
+        Card(card_id="c:milk", target_id="t:milk", target_type="theme",
+             title="Milk card", summary="s", evidence_quality="high",
+             cited_chunk_ids=["x"], llm_model="m", prompt_version="v1"),
+    ])
+    g = vb.backbone(fs)
+    assert any(n.id == "c:milk" and n.kind == "card" for n in g.nodes)
+    assert any(e.source == "c:milk" and e.target == "t:milk" and e.kind == "describes"
+               for e in g.edges)
+
+
+def test_layer_a_tree_all_facets() -> None:
+    # facet=None walks EVERY facet's shelves into one tree, each node carrying
+    # its own facet, and a theme's Layer C card surfaced in its bucket.
+    from foodscholar.io.graph import Card, Shelf, Theme
+
+    fs = FoodScholar.in_memory()
+    fs.graph_store.upsert_shelves([
+        Shelf(shelf_id="s:dairy", label="dairy", facet="foods", depth=1, chunk_count=4),
+        Shelf(shelf_id="s:fiber", label="fiber", facet="nutrients", depth=1,
+              chunk_count=4),
+    ])
+    fs.graph_store.upsert_themes([
+        Theme(theme_id="t:milk", label="milk", shelf_ids=["s:dairy"], chunk_count=3,
+              discovered_by="bertopic", discovery_version="v", facet="foods",
+              discovery_pass="global_similarity"),
+    ])
+    fs.graph_store.upsert_cards([
+        Card(card_id="c:milk", target_id="t:milk", target_type="theme",
+             title="Milk card", summary="s", evidence_quality="high",
+             cited_chunk_ids=["x"], llm_model="m", prompt_version="v1"),
+    ])
+    g = vb.layer_a_tree(fs, facet=None)
+    facets = {n.facet for n in g.nodes if n.kind == "shelf"}
+    assert {"foods", "nutrients"} <= facets
+    # the theme bucket carries its card
+    dairy = next(n for n in g.nodes if n.id == "s:dairy")
+    theme = dairy.attrs["themes"]["global_similarity"][0]
+    assert theme["card"] is not None
+    assert theme["card"]["title"] == "Milk card"
+
+
 def test_ontology_subtree_walks_ancestors_and_descendants() -> None:
     # 3-level tiny ontology: root → mid → leaf, with `mid` as anchor.
     terms = [
@@ -464,6 +519,33 @@ def test_tree_renderer_has_detail_tabs() -> None:
     # theme member chunks (with direct/indirect link) are embedded for the Topics tab
     rel = cow["themes"]["relatedness"][0]
     assert rel["chunks"] and rel["chunks"][0]["link"] == "indirect"
+
+
+def test_tree_renderer_shows_layer_c_card() -> None:
+    from foodscholar.io.graph import Card, Shelf, Theme
+    from foodscholar.viz.renderers.tree_renderer import TreeRenderer
+
+    fs = FoodScholar.in_memory()
+    fs.graph_store.upsert_shelves([
+        Shelf(shelf_id="s:dairy", label="dairy", facet="foods", depth=1, chunk_count=4),
+    ])
+    fs.graph_store.upsert_themes([
+        Theme(theme_id="t:milk", label="milk", shelf_ids=["s:dairy"], chunk_count=3,
+              discovered_by="bertopic", discovery_version="v", facet="foods",
+              discovery_pass="global_similarity"),
+    ])
+    fs.graph_store.upsert_cards([
+        Card(card_id="c:milk", target_id="t:milk", target_type="theme",
+             title="Milk and calcium", summary="Milk has calcium.",
+             evidence_quality="high", cited_chunk_ids=["x"], llm_model="m",
+             prompt_version="v1"),
+    ])
+    html = TreeRenderer().render(vb.layer_a_tree(fs, facet=None))
+    m = re.search(r"const TREE_DATA = (\{.*?\});", html, re.DOTALL)
+    data = json.loads(m.group(1))
+    dairy = _find_node(data["roots"], "s:dairy")
+    assert dairy["themes"]["global_similarity"][0]["card"]["title"] == "Milk and calcium"
+    assert "Layer C card" in html  # the renderer surfaces the card block
 
 
 def _find_node(nodes, node_id):

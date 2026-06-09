@@ -140,6 +140,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .theme { padding: 7px 11px; border-left: 3px solid var(--line); margin: 5px 0;
            background: var(--panel); border-radius: 0 var(--radius) var(--radius) 0; }
   .theme .kw { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .card { margin-top: 6px; padding: 7px 9px; background: #fff; border: 1px solid var(--line);
+          border-left: 3px solid var(--brand); border-radius: var(--radius); }
+  .card .cardq { font-size: 10px; font-weight: 700; color: var(--brand); text-transform: uppercase; }
+  .card .cards { font-size: 12.5px; margin-top: 2px; }
   .theme details { margin-top: 6px; }
   .theme details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   .chunk { border-top: 1px solid var(--line); padding: 5px 2px 4px; }
@@ -258,6 +262,13 @@ function topicsBody(node) {
         esc(t.label) + ' <span class="cc">' + t.chunk_count + "ch</span>" +
         (t.keyword_terms && t.keyword_terms.length ?
           '<div class="kw">' + esc(t.keyword_terms.join(", ")) + "</div>" : "");
+      if (t.card) {
+        block += '<div class="card"><div class="cardq">Layer C card · ' +
+          esc(t.card.evidence_quality) + '</div><b>' + esc(t.card.title) + '</b>' +
+          '<div class="cards">' + esc(t.card.summary) + '</div>' +
+          (t.card.tip ? '<div class="kw">tip: ' + esc(t.card.tip) + '</div>' : '') +
+          '</div>';
+      }
       if (ch.length) {
         block += "<details><summary>" + ch.length + " chunks · " + nd +
           " direct / " + ni + " indirect</summary>";

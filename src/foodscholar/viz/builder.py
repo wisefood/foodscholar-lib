@@ -270,9 +270,18 @@ def backbone(
             edges.append(VizEdge(
                 source=sh.model.shelf_id, target=theme.theme_id, kind="has_theme",
             ))
+            # Layer C makes per-theme cards — attach them (deduped by card id).
+            if include_cards:
+                tcard_h = theme_h.card()
+                if tcard_h is not None and not _has_card(nodes, tcard_h.model.card_id):
+                    nodes.append(_card_node(tcard_h.model))
+                    edges.append(VizEdge(
+                        source=tcard_h.model.card_id, target=theme.theme_id,
+                        kind="describes",
+                    ))
         if include_cards:
             card_h = sh.card()
-            if card_h is not None:
+            if card_h is not None and not _has_card(nodes, card_h.model.card_id):
                 nodes.append(_card_node(card_h.model))
                 edges.append(VizEdge(
                     source=card_h.model.card_id, target=sh.model.shelf_id,
@@ -288,14 +297,17 @@ def backbone(
     )
 
 
-def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
-    """Full Layer A shelf tree for a facet, with each shelf's Layer B themes
-    grouped by `discovery_pass` in node attrs. Sub-threshold shelves (below
-    `min_chunks_per_shelf`) are kept but flagged `eligible=False` and carry no
-    themes. One `parent_of` edge per `parent_shelf_id`.
+def layer_a_tree(fs: FoodScholar, facet: str | None = "foods") -> VizGraph:
+    """Full Layer A shelf tree, with each shelf's Layer B themes grouped by
+    `discovery_pass` (and each theme's Layer C card) in node attrs. Sub-threshold
+    shelves (below `min_chunks_per_shelf`) are kept but flagged `eligible=False`
+    and carry no themes. One `parent_of` edge per `parent_shelf_id`.
+
+    `facet=None` walks EVERY facet's shelves into one tree (each facet's roots
+    become top-level branches) — the full A→B→C graph across all facets.
     """
     min_chunks = fs.config.layer_b.min_chunks_per_shelf
-    shelves = fs.graph.shelves(facet=facet)
+    shelves = fs.graph.shelves(facet=facet) if facet else fs.graph.shelves()
 
     # One pass over the corpus: tokenize each chunk once, accumulate document
     # frequency (for tf-idf-style term scoring), and bucket chunks by shelf.
@@ -419,6 +431,16 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
             bucket = buckets.get(t.discovery_pass)
             if bucket is None:  # unknown pass — skip defensively
                 continue
+            tcard_h = th.card()
+            card = None
+            if tcard_h is not None:
+                cm = tcard_h.model
+                card = {
+                    "title": cm.title,
+                    "summary": cm.summary,
+                    "evidence_quality": cm.evidence_quality,
+                    "tip": cm.tip,
+                }
             bucket.append({
                 "theme_id": t.theme_id,
                 "label": t.label,
@@ -426,6 +448,7 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
                 "keyword_terms": list(t.keyword_terms),
                 "discovery_pass": t.discovery_pass,
                 "chunks": _theme_chunks(t.theme_id, t.discovery_pass),
+                "card": card,
             })
             n_themes += 1
 
@@ -439,7 +462,7 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
             label=s.display_label or s.label,
             kind="shelf",
             weight=float(s.chunk_count),
-            facet=facet,
+            facet=s.facet,
             attrs={
                 "chunk_count": s.chunk_count,
                 "support_direct": s.support_direct,
@@ -459,12 +482,12 @@ def layer_a_tree(fs: FoodScholar, facet: str = "foods") -> VizGraph:
             ))
 
     return VizGraph(
-        title=f"Layer A tree — {facet}",
+        title=f"Layer A tree — {facet or 'all facets'}",
         nodes=nodes,
         edges=edges,
         level="L3",
         attrs={
-            "facet": facet,
+            "facet": facet or "all",
             "min_chunks_per_shelf": min_chunks,
             "n_shelves": len(nodes),
             "n_eligible": n_eligible,
@@ -586,6 +609,10 @@ def _theme_node(t: Any) -> VizNode:
         weight=float(t.chunk_count),
         attrs={"discovered_by": t.discovered_by, "discovery_version": t.discovery_version},
     )
+
+
+def _has_card(nodes: list[VizNode], card_id: str) -> bool:
+    return any(n.id == card_id and n.kind == "card" for n in nodes)
 
 
 def _card_node(c: Any) -> VizNode:

@@ -167,11 +167,13 @@ class VizView:
             builder.backbone(self._fs, facet=facet, include_cards=include_cards)
         )
 
-    def layer_a_tree(self, facet: str = "foods") -> RenderableGraph:
-        """Full Layer A shelf tree for a facet, themes grouped by origin.
+    def layer_a_tree(self, facet: str | None = "foods") -> RenderableGraph:
+        """Full Layer A shelf tree, themes grouped by origin + their Layer C cards.
 
+        `facet=None` renders the **entire graph across all facets** in one tree.
         Best rendered with the `"tree"` backend:
-        `fs.viz.layer_a_tree("foods").render("tree", output="tree.html")`.
+        `fs.viz.layer_a_tree("foods").render("tree", output="tree.html")` or
+        `fs.viz.layer_a_tree(facet=None).render("tree", output="full_graph.html")`.
         """
         return RenderableGraph(builder.layer_a_tree(self._fs, facet))
 
