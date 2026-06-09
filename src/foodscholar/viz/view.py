@@ -175,6 +175,31 @@ class VizView:
         """
         return RenderableGraph(builder.layer_a_tree(self._fs, facet))
 
+    def bertopic_pernode(
+        self,
+        *,
+        facet: str | None = "foods",
+        scope: str | None = None,
+        min_chunks: int | None = None,
+    ) -> Any:
+        """Per-node BERTopic explorer — fits BERTopic per shelf node and surfaces
+        its flat topics + the Layer C card for its theme, as a collapsible HTML.
+
+        `facet=None` renders every facet (each a top-level branch), so it covers
+        non-`foods` / non-`FOODON:` entities too. `scope` / `min_chunks` default
+        to `config.layer_b.bertopic`. Render with::
+
+            fs.viz.bertopic_pernode(facet="foods").render(output="explorer.html")
+
+        Needs the `[bertopic]` extra (lazy-imported). Returns a `PernodeExplorer`
+        whose `.render(output=...)` writes the HTML.
+        """
+        from foodscholar.viz.bertopic_explorer import build_pernode_explorer
+
+        return build_pernode_explorer(
+            self._fs, facet=facet, scope=scope, min_chunks=min_chunks
+        )
+
     # ------------------------------------------------------------- L4
 
     def ontology_subtree(
