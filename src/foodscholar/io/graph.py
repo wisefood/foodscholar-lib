@@ -64,6 +64,9 @@ class Card(BaseModel):
     controversy_note: str | None = None
     confidence_note: str | None = None
     cited_chunk_ids: list[str]
+    # Stage-1 extractive sentences fed to the LLM that produced this card —
+    # kept for provenance / inspection (the raw material behind the summary).
+    evidence_sentences: list[str] = Field(default_factory=list)
     llm_model: str
     prompt_version: str
     safety_flagged: bool = False

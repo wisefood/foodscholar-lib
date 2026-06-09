@@ -824,6 +824,7 @@ class ElasticCardStore:
                         "tip": {"type": "text"},
                         "evidence_quality": {"type": "keyword"},
                         "cited_chunk_ids": {"type": "keyword"},
+                        "evidence_sentences": {"type": "text"},
                         "llm_model": {"type": "keyword"},
                         "prompt_version": {"type": "keyword"},
                         "safety_flagged": {"type": "boolean"},

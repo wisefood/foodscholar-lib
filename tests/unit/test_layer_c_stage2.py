@@ -62,6 +62,21 @@ def test_stage2_builds_card() -> None:
     assert card.safety_flagged is False
 
 
+def test_stage2_keeps_evidence_sentences_from_extract() -> None:
+    """The Card retains the intermediary extractive sentences fed to the LLM,
+    so the card's provenance can be inspected after the fact."""
+    llm = _OKJsonLLM(_GOOD)
+    s1 = Stage1Output(
+        text="Oats have beta glucan. Beta glucan lowers cholesterol.",
+        n_input_chunks=3, n_input_chars=80, strategy="single", n_groups=1,
+    )
+    card = run_stage2(llm, s1, _StubTheme("t1", "Oats"), ["c1"], LayerCConfig())
+    assert card.evidence_sentences == [
+        "Oats have beta glucan.",
+        "Beta glucan lowers cholesterol.",
+    ]
+
+
 def test_stage2_prompt_uses_extract_not_chunks() -> None:
     llm = _OKJsonLLM(_GOOD)
     run_stage2(llm, _stage1(), _StubTheme("t1", "Oats"), ["c1"], LayerCConfig())

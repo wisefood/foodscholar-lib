@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 from foodscholar.io.graph import Card
+from foodscholar.layer_c.base import split_sentences
 
 if TYPE_CHECKING:
     from foodscholar.config import LayerCConfig
@@ -98,6 +99,8 @@ def run_stage2(
         controversy_note=(data.get("controversy_note") or None),
         confidence_note=(data.get("confidence_note") or None),
         cited_chunk_ids=list(cited_chunk_ids),
+        # The extractive sentences the LLM actually saw (the prompt's EXTRACT).
+        evidence_sentences=split_sentences(stage1.text),
         llm_model=cfg.llm_model,
         prompt_version=cfg.prompt_version,
         safety_flagged=safety,
