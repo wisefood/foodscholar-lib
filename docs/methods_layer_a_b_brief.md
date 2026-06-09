@@ -111,6 +111,37 @@ corpus and want different fixes:
 The first is "a bad shelf lived"; the second is "good shelves died and the
 chunks had nowhere to go."
 
+### Facet routing — populating the non-food facets
+
+A shelf belongs to a **facet**; which facet an entity link lands in is decided by
+`route_link_to_facet`, in precedence order:
+
+1. **NER `entity_type`** (`ENTITY_TYPE_TO_FACET`): `nutrient→nutrients`,
+   `medical condition→health`, `allergen→allergies`, … — the intended signal.
+2. **FOODON id → `foods`**: any `FOODON:` link is a food regardless of entity_type.
+3. **OBO prefix** (`PREFIX_TO_FACET`): `CHEBI`/`CDNO`/`ONS`→nutrients,
+   `UBERON`/`MONDO`/`PATO`→health, `ENVO`/`GAZ`→sustainability.
+
+Step 3 is the load-bearing one on the **prototype corpus**, where the NER tagged *every*
+mention `entity_type='other'` — so step 1 never fires and steps 2/3 carry the whole load.
+Without step 3, the 16k non-FOODON OBO links (CHEBI, UBERON, ENVO, …) route nowhere and
+the non-food facets collapse to a single stub root. With it (and an
+`ontology.prefix_filter` that admits those OBO prefixes, which live inside `foodon.owl`),
+they project onto real OBO hierarchies — measured on the reference corpus:
+
+| Facet | prefix routing off | prefix routing on |
+|---|---|---|
+| nutrients | 1 (stub) | ~120 shelves |
+| health | 1 (stub) | ~64 shelves |
+| sustainability | 1 (stub) | ~6 shelves |
+| foods | 246 | 246 (unchanged) |
+
+The cost: the prototype linker mis-assigns across OBOs (`"heart disease"→UBERON`,
+`"breakfast"→NCIT`), so prefix routing inherits some noise. The clean long-term fix is
+re-annotation with a NER that populates `entity_type` correctly; prefix routing is the
+pragmatic way to use the OBO links already present. `allergies`/`dietary_patterns` stay
+at a stub root because the corpus links no allergen / dietary-pattern entities.
+
 ### How Layer A feeds Layer B
 
 After pruning, `fs.attach()` walks every chunk and resolves each FoodOn id
