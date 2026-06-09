@@ -13,21 +13,34 @@ pages [`concepts/layer-b-themes.md`](concepts/layer-b-themes.md) and
 
 ### 1.1 Where it plugs in
 
-Layer B discovers themes from two signals — **Pass 1** (embedding coherence) and **Pass 2**
-(FoodOn-entity relatedness) — then **merges** them. Historically Pass 1 was *Leiden over a
-similarity graph*. `config.layer_b.algorithm` now selects the Pass-1 backend; **Leiden stays
-the default** and Pass 2 / merge are untouched.
+`config.layer_b.algorithm` selects the discovery backend, and the two backends run
+**different pipelines** — this is the important part:
+
+- **`leiden` (two-pass + merge).** Pass 1 is *Leiden over a similarity graph* (embedding
+  coherence); Pass 2 is *Leiden over an entity-bridge graph* (FoodOn-entity relatedness);
+  the two are then **merged** (greedy Jaccard). Both signals are graph/entity-flavoured, so
+  when they agree on a topic the merge fuses them into a higher-confidence `merged` theme.
+- **`bertopic` (single-pass).** Pass 1 clusters embeddings directly. **Pass 2 and the merge
+  do NOT run.** BERTopic partitions a shelf on an embedding axis that is *orthogonal* to
+  FoodOn entities, so a BERTopic topic and an entity-relatedness community almost never
+  overlap — the merge produced **zero** merged themes and just concatenated two disjoint
+  topic sets. Running Pass 2 there bought noise + double the compute for no synthesis, so
+  bertopic mode skips it. Output is BERTopic topics only (`discovery_pass="global_similarity"`,
+  `discovered_by="bertopic"`).
+
+`leiden` stays the default; the production baseline (notebook §7/§9) is `bertopic`.
 
 ```mermaid
 flowchart TD
     A["facet shelves + attached chunks"] --> P1{"algorithm?"}
     P1 -->|leiden| LG["build mutual-kNN graph<br/>over embeddings"] --> LL["run_leiden"] --> SC["similarity candidates"]
-    P1 -->|bertopic| BT["run_bertopic<br/>(cluster embeddings directly)"] --> SC
-    A --> P2["Pass 2: entity-bridge graph<br/>+ run_leiden (always)"] --> RC["relatedness candidates"]
+    SC --> P2["Pass 2: entity-bridge graph<br/>+ run_leiden"] --> RC["relatedness candidates"]
     SC --> MG["greedy merge<br/>(combined Jaccard ≥ threshold)"]
     RC --> MG
-    MG --> TH["themes: merged / global_similarity / relatedness"]
-    TH --> LBL["label (c-TF-IDF + optional LLM)"] --> PER["persist (Neo4j + ES theme_ids)"]
+    MG --> TH1["themes: merged / global_similarity / relatedness"]
+    P1 -->|bertopic| BT["run_bertopic<br/>(cluster embeddings directly)"] --> TH2["themes: global_similarity only<br/>(no Pass 2, no merge)"]
+    TH1 --> LBL["label (c-TF-IDF + optional LLM)"]
+    TH2 --> LBL --> PER["persist (Neo4j + ES theme_ids)"]
 ```
 
 The integration contract is narrow: both backends produce **the same thing** — sets of

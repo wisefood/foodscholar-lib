@@ -349,22 +349,31 @@ class InMemoryGraphStore:
             self._theme_chunks[theme_id].add(chunk_id)
             self._theme_edge_meta[(chunk_id, theme_id)] = (primary, float(weight))
 
-    def clear_themes(self) -> None:
-        """Drop every theme node + its chunk attachments + per-edge metadata.
+    def clear_themes(self, facet: str | None = None) -> None:
+        """Drop theme nodes + their chunk attachments + per-edge metadata.
 
-        Shelves and the chunk store survive. Chunk-side `theme_ids` denorm
-        is the caller's responsibility — `build_layer_b()` always pairs this
-        with `chunk_store.bulk_set_theme_ids([(cid, []) ...])` for the same
-        set of chunks.
+        With `facet` given, only that facet's themes (and their attachments /
+        cards) are dropped; with `None`, all themes go. Shelves and the chunk
+        store survive. Chunk-side `theme_ids` denorm is the caller's
+        responsibility — `build_layer_b()` always pairs this with
+        `chunk_store.bulk_set_theme_ids([(cid, []) ...])` for the same chunks.
         """
-        self._themes.clear()
-        self._theme_chunks.clear()
-        self._theme_edge_meta.clear()
-        # Theme-target cards become orphans; drop them too.
+        if facet is None:
+            doomed = set(self._themes)
+        else:
+            doomed = {tid for tid, t in self._themes.items() if t.facet == facet}
+
+        for tid in doomed:
+            self._themes.pop(tid, None)
+            self._theme_chunks.pop(tid, None)
+        self._theme_edge_meta = {
+            edge: meta for edge, meta in self._theme_edge_meta.items() if edge[1] not in doomed
+        }
+        # Theme-target cards for the dropped themes become orphans; drop them.
         self._cards = {
             key: card
             for key, card in self._cards.items()
-            if key[1] != "theme"
+            if not (key[1] == "theme" and key[0] in doomed)
         }
 
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None:

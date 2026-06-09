@@ -230,6 +230,12 @@ Pass-2 community even if their embeddings sit ~0.4 cosine apart.
 
 ### The merge step
 
+> **Leiden mode only.** Pass 2 and the merge run when `algorithm="leiden"`.
+> In `bertopic` mode Pass 1 (BERTopic) runs alone — its embedding-clustered
+> topics are orthogonal to FoodOn entities and never merged with relatedness
+> communities, so Pass 2 + merge are skipped there. See
+> `methods_layer_b_c_brief.md` §1.1.
+
 After both passes finish you have two disjoint lists:
 
 - **G** = Pass-1 candidates (can span multiple shelves)

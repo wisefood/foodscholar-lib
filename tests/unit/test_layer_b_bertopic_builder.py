@@ -90,3 +90,67 @@ def test_build_layer_b_dispatches_to_bertopic(monkeypatch) -> None:
     themes = fs.graph_store.list_themes()
     assert themes, "expected a bertopic theme"
     assert any(t.discovered_by == "bertopic" for t in themes)
+
+
+def test_bertopic_mode_skips_pass2_relatedness(monkeypatch) -> None:
+    """In bertopic mode Pass 2 (relatedness) is NOT run — the two passes are
+    orthogonal and never merge, so relatedness just bolts on noise. Only
+    BERTopic (global_similarity) themes should be persisted; no 'relatedness'
+    and no 'merged' themes, even when chunks carry strong entity links that
+    WOULD form relatedness communities in leiden mode."""
+    from foodscholar import FoodScholar, FoodScholarConfig
+    from foodscholar.io.chunk import EntityLink, Mention
+    from foodscholar.io.graph import Shelf
+    from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+
+    def _link(oid: str) -> EntityLink:
+        m = Mention(text="x", start=0, end=1, score=0.95, ner_model_version="v")
+        return EntityLink(mention=m, ontology_id=oid, confidence=0.95,
+                          method="dense", linker_version="v")
+
+    def _chunk_with_entities(cid: str) -> Chunk:
+        # Two shared FoodOn ids across all chunks → a relatedness community
+        # would form if Pass 2 ran.
+        return Chunk(
+            chunk_id=cid, text=f"t {cid}", source_doc_id="d",
+            source_type="abstract", section_type="abstract",
+            embedding=[1.0, 0.0, 0.0], embedding_model="test",
+            entity_links=[_link("FOODON:1"), _link("FOODON:2")],
+        )
+
+    chunk_store = InMemoryChunkStore()
+    graph_store = InMemoryGraphStore()
+    graph_store.upsert_shelves([
+        Shelf(shelf_id="shelf:dairy", label="dairy", facet="foods", depth=1,
+              chunk_count=4),
+    ])
+    chunk_store.upsert([_chunk_with_entities(f"c{i}") for i in range(4)])
+    graph_store.attach_chunks_to_shelf("shelf:dairy", [(f"c{i}", []) for i in range(4)])
+
+    cfg = FoodScholarConfig.model_validate({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {"chunk_store": {"backend": "memory"},
+                    "graph_store": {"backend": "memory"}},
+        "layer_b": {
+            "algorithm": "bertopic",
+            "pass1_mode": "per_shelf",
+            "min_chunks_per_shelf": 2,
+            "min_embedded_fraction": 0.0,
+            "bertopic": {"min_topic_size": 2},
+            "leiden": {"min_community_size": 2},
+            "relatedness": {"min_shared_ids": 2, "max_doc_frequency": 1.0},
+        },
+    })
+    fs = FoodScholar(cfg, chunk_store=chunk_store, graph_store=graph_store)
+
+    monkeypatch.setattr(
+        "foodscholar.layer_b.builder.run_bertopic",
+        lambda ids, store, bcfg: [{"c0", "c1", "c2"}],
+    )
+    art = fs.build_layer_b(facet="foods", dry_run=False)
+
+    passes = {t.discovery_pass for t in fs.graph_store.list_themes()}
+    assert "relatedness" not in passes, "Pass 2 ran in bertopic mode"
+    assert "merged" not in passes, "merge fired in bertopic mode"
+    assert passes == {"global_similarity"}, f"unexpected passes: {passes}"
+    assert "relatedness" not in art.n_themes_by_pass

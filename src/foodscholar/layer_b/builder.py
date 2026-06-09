@@ -362,21 +362,30 @@ def build_layer_b(
             cfg=cfg,
         )
 
-    # 3. Per-shelf Pass 2 (relatedness).
+    # 3. Per-shelf Pass 2 (relatedness) — LEIDEN MODE ONLY.
+    #    Pass 2 (entity co-occurrence) and Pass 1 (embedding similarity) are
+    #    only complementary when both are graph/entity-flavoured, as in the
+    #    leiden×leiden design. BERTopic clusters embeddings on an axis
+    #    orthogonal to FoodOn entities, so its Pass-1 topics and Pass-2
+    #    relatedness communities never merge — the merge step produced 0 merged
+    #    themes and just concatenated two disjoint topic sets. So in bertopic
+    #    mode we skip Pass 2 entirely: cleaner topics, half the compute, and the
+    #    output matches what BERTopic alone actually discovers.
     rel_cands_by_shelf: dict[str, list[ThemeCandidate]] = {}
-    for shelf_id, chunk_ids in shelf_to_chunks.items():
-        if shelf_id not in facet_shelves or shelf_id == synth_root:
-            continue
-        if len(chunk_ids) < cfg.min_chunks_per_shelf:
-            continue
-        chunks = fs.chunk_store.get_many(chunk_ids)
-        embedded = [c for c in chunks if c.embedding is not None]
-        # Embedded-fraction gate: skip if too few are embedded.
-        if len(chunks) > 0 and (len(embedded) / len(chunks)) < cfg.min_embedded_fraction:
-            continue
-        if len(embedded) < cfg.min_chunks_per_shelf:
-            continue
-        rel_cands_by_shelf[shelf_id] = build_shelf_relatedness_candidates(chunks, cfg)
+    if cfg.algorithm != "bertopic":
+        for shelf_id, chunk_ids in shelf_to_chunks.items():
+            if shelf_id not in facet_shelves or shelf_id == synth_root:
+                continue
+            if len(chunk_ids) < cfg.min_chunks_per_shelf:
+                continue
+            chunks = fs.chunk_store.get_many(chunk_ids)
+            embedded = [c for c in chunks if c.embedding is not None]
+            # Embedded-fraction gate: skip if too few are embedded.
+            if len(chunks) > 0 and (len(embedded) / len(chunks)) < cfg.min_embedded_fraction:
+                continue
+            if len(embedded) < cfg.min_chunks_per_shelf:
+                continue
+            rel_cands_by_shelf[shelf_id] = build_shelf_relatedness_candidates(chunks, cfg)
 
     # 4. Merge global x per-shelf.
     theme_dicts, _decisions = merge_global_and_local_candidates(
@@ -402,8 +411,10 @@ def build_layer_b(
     # 6. Label + primary + build Theme records.
     if not theme_dicts:
         # No themes: clear+persist are no-ops but still clear ghost themes.
+        # Scope the clear to THIS facet — building one facet must never wipe
+        # another facet's themes (the notebook loops build_layer_b per facet).
         if not dry_run:
-            fs.graph_store.clear_themes()
+            fs.graph_store.clear_themes(facet=facet)
         return LayerBArtifact(
             artifact_id=meta.artifact_id,
             facet=facet,  # type: ignore[arg-type]
@@ -512,8 +523,10 @@ def build_layer_b(
         chunks_touched_this_run.update(td["chunk_ids"])
 
     # 7. Persist — clear ghost themes, zero stale denorm, write new themes.
+    #    Scoped to THIS facet so a per-facet rebuild loop doesn't clobber the
+    #    themes other facets just built.
     if not dry_run:
-        fs.graph_store.clear_themes()
+        fs.graph_store.clear_themes(facet=facet)
         # Zero theme_ids for every chunk touched this run before persist so
         # stale denorm from prior runs doesn't bleed through (preserve the
         # single-bulk-set-theme-ids contract that the old orchestrator had).

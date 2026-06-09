@@ -205,15 +205,18 @@ class GraphStore(Protocol):
         """
         ...
 
-    def clear_themes(self) -> None:
-        """Delete every `(:Theme)` node along with its `HAS_THEME` and
-        `THEME_OF` edges.
+    def clear_themes(self, facet: str | None = None) -> None:
+        """Delete `(:Theme)` nodes along with their `HAS_THEME` and `THEME_OF`
+        edges. When `facet` is given, delete only that facet's themes; when
+        `None`, delete every theme.
 
-        `fs.build_layer_b()` calls this at the start so a re-run with a
-        different config doesn't leave ghost themes. Shelves and chunks
-        survive (they're Layer A artifacts); chunk-side `theme_ids` denorm
-        is the caller's responsibility via `chunk_store.bulk_set_theme_ids`.
-        Idempotent — a no-op when no themes exist.
+        `fs.build_layer_b()` calls this scoped to the facet it is rebuilding so
+        a re-run with a different config doesn't leave ghost themes — and,
+        critically, building one facet never wipes another facet's themes (the
+        notebook loops over facets). Shelves and chunks survive (they're Layer A
+        artifacts); chunk-side `theme_ids` denorm is the caller's responsibility
+        via `chunk_store.bulk_set_theme_ids`. Idempotent — a no-op when no
+        matching themes exist.
         """
         ...
     def get_shelf(self, shelf_id: ShelfId) -> Shelf | None: ...

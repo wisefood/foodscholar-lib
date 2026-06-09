@@ -274,3 +274,76 @@ def test_build_layer_b_emits_cross_shelf_themes_when_global_finds_them(
     # Artifact reflects the global pass.
     assert artifact.n_themes_total >= 1
     assert "global_similarity" in artifact.n_themes_by_pass
+
+
+# ----------------------------------------------------------------------------
+# clear_themes facet scoping — building facet B must not wipe facet A's themes
+# ----------------------------------------------------------------------------
+
+
+def _theme(theme_id: str, facet: str) -> "object":
+    from foodscholar.io.graph import Theme
+
+    return Theme(
+        theme_id=theme_id,
+        label="t",
+        shelf_ids=[f"shelf:{facet}"],
+        chunk_count=1,
+        discovered_by="leiden",
+        discovery_version="v0.2",
+        facet=facet,
+        discovery_pass="global_similarity",
+        keyword_terms=[],
+        foodon_id_signature=[],
+        config_hash="h",
+        version="v0.2",
+    )
+
+
+def test_clear_themes_facet_scoped_keeps_other_facets() -> None:
+    """`clear_themes(facet="foods")` deletes only foods themes; nutrients survive.
+
+    Regression: the notebook loops build_layer_b over every facet, and each run
+    cleared ALL themes globally — so only the last facet (nutrients) survived
+    and foods came out empty. Scoped clear fixes that.
+    """
+    from foodscholar.storage.memory import InMemoryGraphStore
+
+    gs = InMemoryGraphStore()
+    gs.upsert_themes([_theme("foods/x/a_g1", "foods"), _theme("nutrients/y/b_g1", "nutrients")])
+
+    gs.clear_themes(facet="foods")
+
+    remaining = {t.facet for t in gs.list_themes()}
+    assert remaining == {"nutrients"}, f"scoped clear leaked: {remaining}"
+
+    # No-arg call still wipes everything (back-compat).
+    gs.clear_themes()
+    assert gs.list_themes() == []
+
+
+def test_build_layer_b_per_facet_does_not_clobber_other_facets(
+    cross_shelf_fs,
+) -> None:
+    """Building 'foods' then a second facet leaves foods themes intact.
+
+    Drives the same loop the notebook runs; before the fix the second
+    build_layer_b call's global clear_themes wiped the foods themes.
+    """
+    from foodscholar.io.graph import Shelf
+
+    fs = cross_shelf_fs
+    fs.build_layer_b(facet="foods", dry_run=False)
+    foods_after_first = [t for t in fs.graph_store.list_themes() if t.facet == "foods"]
+    assert foods_after_first, "foods build produced no themes — fixture broken"
+
+    # A second facet with no themeable shelves still triggers its clear path.
+    fs.graph_store.upsert_shelves([
+        Shelf(shelf_id="shelf:vit", label="vit", facet="nutrients", depth=1, chunk_count=0),
+    ])
+    fs.build_layer_b(facet="nutrients", dry_run=False)
+
+    foods_after_second = [t for t in fs.graph_store.list_themes() if t.facet == "foods"]
+    assert foods_after_second, (
+        "building 'nutrients' wiped 'foods' themes — clear_themes is not facet-scoped"
+    )

@@ -491,18 +491,24 @@ class Neo4jGraphStore:
                 rows=rows,
             )
 
-    def clear_themes(self) -> None:
-        """`DETACH DELETE` every `(:Theme)` node — kills HAS_THEME (from
-        shelves), THEME_OF / ATTACHED_TO (from chunks), and DESCRIBES (from
-        theme-target cards) in one shot.
+    def clear_themes(self, facet: str | None = None) -> None:
+        """`DETACH DELETE` `(:Theme)` nodes — kills HAS_THEME (from shelves),
+        THEME_OF / ATTACHED_TO (from chunks), and DESCRIBES (from theme-target
+        cards) in one shot. With `facet`, only that facet's themes are deleted;
+        with `None`, all themes go.
 
-        `build_layer_b()` calls this at the start so re-runs with a different
-        config don't leave ghost themes. Shelves and chunks survive. Cards
-        with `target_type='shelf'` survive (they live on shelves, not themes).
+        `build_layer_b()` calls this scoped to the facet it rebuilds so re-runs
+        with a different config don't leave ghost themes AND building one facet
+        never wipes another (the notebook loops over facets). Shelves and chunks
+        survive. Cards with `target_type='shelf'` survive (they live on shelves,
+        not themes).
         """
         with self._driver.session() as session:
-            session.run("MATCH (t:Theme) DETACH DELETE t")
-        _log.info("neo4j.themes_cleared", url=self.url)
+            if facet is None:
+                session.run("MATCH (t:Theme) DETACH DELETE t")
+            else:
+                session.run("MATCH (t:Theme {facet: $facet}) DETACH DELETE t", facet=facet)
+        _log.info("neo4j.themes_cleared", url=self.url, facet=facet)
 
     # ------------------------------------------------------------------ entities
 
