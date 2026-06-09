@@ -9,10 +9,15 @@ ontology:
   foodon_path: data/foodon.owl
   cache_path: data/foodon_cache.parquet
   include_imports: false           # import_depth=0 in pronto
-  # FoodOn .owl files embed NCBITaxon/CHEBI/BFO/ENVO terms inline. Default
-  # filter keeps only FOODON: ids so the linker doesn't match food queries
-  # against unrelated ontologies.
-  prefix_filter: ["FOODON:"]
+  # FoodOn .owl files embed CHEBI/UBERON/ENVO/… terms inline. We admit FOODON
+  # plus the OBO prefixes that `layer_a.facet.PREFIX_TO_FACET` routes, so the
+  # non-food facets (nutrients/health/sustainability) can project onto real OBO
+  # hierarchies. Keep this list in sync with PREFIX_TO_FACET. (Set to a bare
+  # ["FOODON:"] for a foods-only build.)
+  prefix_filter: ["FOODON:", "CHEBI:", "CDNO:", "ONS:", "UO:", "PR:",
+                  "UBERON:", "MONDO:", "HP:", "NCIT:", "GO:", "OBI:", "PATO:",
+                  "HANCESTRO:", "ENVO:", "ECOCORE:", "GAZ:", "AGRO:", "FAO:",
+                  "PO:", "FLOPO:"]
 
 annotate:
   # NER: GLiNER bio (the validated prototype model). The configured labels

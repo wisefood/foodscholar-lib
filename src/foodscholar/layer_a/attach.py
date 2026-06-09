@@ -156,8 +156,9 @@ def _per_facet_foodon_ids(chunk: Chunk) -> dict[Facet, set[str]]:
         facet = route_link_to_facet(link)
         if facet is None:
             continue
-        if not link.ontology_id.startswith("FOODON:"):
-            continue  # only FOODON-prefixed ids reach FoodOn-projected shelves
+        # FOODON ids and the OBO ids we now project (CHEBI/UBERON/ENVO/… via
+        # PREFIX_TO_FACET) both reach Layer-A shelves; only links that route to
+        # NO facet are dropped above. The id must be a term Layer A can place.
         grouped[facet].add(link.ontology_id)
     for fid in chunk.foodon_ids:
         grouped["foods"].add(fid)
