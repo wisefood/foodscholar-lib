@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import html
 import math
-import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -72,6 +71,12 @@ def bar(value: int | float, maximum: int | float, label: str | None = None) -> s
     width = 0 if maximum <= 0 else max(2, min(100, int(100 * value / maximum)))
     text = html.escape(label if label is not None else fmt(value))
     return f"<div class='bar'><span style='width:{width}%'></span><b>{text}</b></div>"
+
+
+def percent_bar(value: int | float, total: int | float, label: str | None = None) -> str:
+    width = 0 if total <= 0 else max(2, min(100, int(100 * value / total)))
+    text = html.escape(label if label is not None else pct(value, total))
+    return f"<div class='bar pct'><span style='width:{width}%'></span><b>{text}</b></div>"
 
 
 def label(api, fid: str) -> str:
@@ -273,6 +278,35 @@ def main() -> None:
         scope_row("food product subtree", food_product_nodes),
     ]
 
+    composition_rows = [
+        ["FOODON-prefixed terms", fmt(len(foodon_nodes)), percent_bar(len(foodon_nodes), len(ids))],
+        ["Non-FOODON-prefixed terms", fmt(len(non_foodon_nodes)), percent_bar(len(non_foodon_nodes), len(ids))],
+    ]
+    chunk_evidence_rows = [
+        [
+            "Chunks with linked ontology evidence",
+            fmt(len(chunk_terms)),
+            percent_bar(len(chunk_terms), len(chunks)),
+        ],
+        [
+            "Chunks without linked ontology evidence",
+            fmt(len(chunks) - len(chunk_terms)),
+            percent_bar(len(chunks) - len(chunk_terms), len(chunks)),
+        ],
+    ]
+    node_support_rows = [
+        [
+            "Rollup-supported ontology nodes",
+            fmt(len(supported_nodes)),
+            percent_bar(len(supported_nodes), len(ids)),
+        ],
+        [
+            "Empty loaded ontology nodes",
+            fmt(len(empty_nodes)),
+            percent_bar(len(empty_nodes), len(ids)),
+        ],
+    ]
+
     prefix_counts = Counter(prefix_of(fid) for fid in ids)
     prefix_direct_supported = Counter(prefix_of(fid) for fid in direct_supported_nodes)
     prefix_rollup_supported = Counter(prefix_of(fid) for fid in supported_nodes)
@@ -300,6 +334,27 @@ def main() -> None:
         ]
         for prefix in prefix_order
     ]
+    prefix_chart_rows = [
+        [
+            html.escape(prefix),
+            fmt(len(prefix_direct_chunks.get(prefix, set()))),
+            percent_bar(len(prefix_direct_chunks.get(prefix, set())), len(chunk_terms)),
+        ]
+        for prefix in prefix_order[:12]
+    ]
+    scope_support_chart_rows = [
+        [
+            html.escape(name),
+            pct(len(scope & supported_nodes), len(scope)),
+            percent_bar(len(scope & supported_nodes), len(scope)),
+        ]
+        for name, scope in [
+            ("All loaded ontology terms", set(ids)),
+            ("FOODON-prefixed terms", foodon_nodes),
+            ("Non-FOODON-prefixed terms", non_foodon_nodes),
+            ("food product subtree", food_product_nodes),
+        ]
+    ]
 
     support_values = [rollup_counts[fid] for fid in ids]
     positive_support_values = [v for v in support_values if v > 0]
@@ -318,10 +373,10 @@ def main() -> None:
         ["Positive-node support median", fmt(quantile(positive_support_values, 0.50))],
         ["Positive-node support p90", fmt(quantile(positive_support_values, 0.90))],
         ["Node support Gini", fmt(gini(support_values))],
-        ["Direct FoodOn ids per supported chunk median", fmt(quantile(direct_term_counts, 0.50))],
-        ["Direct FoodOn ids per supported chunk p90", fmt(quantile(direct_term_counts, 0.90))],
-        ["Rollup FoodOn nodes per supported chunk median", fmt(quantile(rollup_terms_per_chunk, 0.50))],
-        ["Rollup FoodOn nodes per supported chunk p90", fmt(quantile(rollup_terms_per_chunk, 0.90))],
+        ["Direct ontology ids per supported chunk median", fmt(quantile(direct_term_counts, 0.50))],
+        ["Direct ontology ids per supported chunk p90", fmt(quantile(direct_term_counts, 0.90))],
+        ["Rollup ontology nodes per supported chunk median", fmt(quantile(rollup_terms_per_chunk, 0.50))],
+        ["Rollup ontology nodes per supported chunk p90", fmt(quantile(rollup_terms_per_chunk, 0.90))],
     ]
 
     support_bins = [
@@ -423,15 +478,18 @@ def main() -> None:
 body{{font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:1.5rem auto;max-width:1500px;padding:0 1rem;color:#24313f;}}
 h1{{border-bottom:3px solid #4d6f8c;padding-bottom:.35rem;}}
 h2{{margin-top:1.4rem;color:#2e4f65;}}
+h3{{margin:.2rem 0 .45rem;color:#35586d;font-size:1rem;}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1rem;align-items:start;}}
-.panel{{border:1px solid #d9e0e6;border-radius:8px;padding:.75rem;background:#fff;}}
+.panel{{border:1px solid #d9e0e6;border-radius:8px;padding:.75rem;background:#fff;overflow-x:auto;}}
 .wide{{grid-column:1/-1;}}
+.wide-table table{{min-width:980px;}}
 table{{border-collapse:collapse;width:100%;font-size:.84rem;}}
 th,td{{border:1px solid #dfe5ea;padding:.28rem .38rem;text-align:left;vertical-align:top;}}
 th{{background:#f3f6f8;color:#2d4658;}}
 code{{font-size:.78rem;color:#31506a;}}
 .bar{{position:relative;background:#eef2f5;border-radius:4px;min-height:1.15rem;overflow:hidden;}}
 .bar span{{position:absolute;inset:0 auto 0 0;background:#9fc2ba;}}
+.bar.pct span{{background:#89a8c8;}}
 .bar b{{position:relative;padding-left:.3rem;font-weight:500;}}
 ul.tree,ul.tree ul{{list-style:none;margin:0;padding-left:.9rem;border-left:1px dotted #c8d0d8;}}
 ul.tree{{padding-left:0;border-left:none;max-height:78vh;overflow:auto;}}
@@ -441,17 +499,77 @@ li.empty>*{{color:#a2a9b0;}}
 .c{{color:#85919b;font-size:.82em;margin-left:.35rem;}}
 .more{{color:#b95050;font-style:italic;}}
 .note{{color:#697783;font-size:.88rem;}}
+.explain{{color:#526475;font-size:.88rem;margin:.25rem 0 .65rem;}}
+.kpi{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.7rem;margin:1rem 0;}}
+.tile{{border:1px solid #d9e0e6;border-radius:8px;padding:.65rem;background:#f8fafb;}}
+.tile b{{display:block;font-size:1.25rem;color:#28475d;}}
+.tile span{{color:#667684;font-size:.82rem;}}
 </style>
 </head>
 <body>
 <h1>FoodOn OWL Structure and Corpus Link Metrics</h1>
 <p class="note">Counts are computed from all ontology terms loaded from the FoodOn OWL file, including non-FOODON prefixes. Direct evidence counts all chunk ontology links present in the loaded ontology. Rollup chunks count chunks attached to a node or any of its descendants.</p>
 
+<div class="kpi">
+  <div class="tile"><b>{fmt(len(ids))}</b><span>loaded ontology terms</span></div>
+  <div class="tile"><b>{fmt(len(supported_nodes))}</b><span>rollup-supported nodes</span></div>
+  <div class="tile"><b>{fmt(len(empty_nodes))}</b><span>empty ontology nodes</span></div>
+  <div class="tile"><b>{fmt(len(chunk_terms))}</b><span>chunks with linked ontology evidence</span></div>
+</div>
+
 <div class="grid">
-<section class="panel">{table(["metric", "value"], overview_rows)}</section>
-<section class="panel">{table(["scope", "nodes", "leaf nodes", "intermediate nodes", "rollup-supported", "supported %", "direct-supported", "empty", "empty leaves", "empty intermediate"], split_rows)}</section>
-<section class="panel">{table(["support metric", "value"], support_summary_rows)}</section>
-<section class="panel">{table(["structure metric", "value"], fanout_rows + dag_rows)}</section>
+<section class="panel">
+<h3>Ontology Composition</h3>
+<p class="explain">How much of the loaded OWL term set is native FOODON vocabulary versus imported or referenced ontology vocabulary.</p>
+{table(["group", "terms", "share"], composition_rows)}
+</section>
+<section class="panel">
+<h3>Chunk Evidence Coverage</h3>
+<p class="explain">A chunk is counted as covered when it has at least one linked ontology id present in the loaded ontology.</p>
+{table(["chunk group", "chunks", "share"], chunk_evidence_rows)}
+</section>
+<section class="panel">
+<h3>Node Support Coverage</h3>
+<p class="explain">A supported node has at least one chunk attached directly to it or to one of its descendants.</p>
+{table(["node group", "nodes", "share"], node_support_rows)}
+</section>
+</div>
+
+<div class="grid">
+<section class="panel">
+<h3>Overview</h3>
+<p class="explain">Headline counts for ontology size, corpus coverage, and supported versus empty nodes.</p>
+{table(["metric", "value"], overview_rows)}
+</section>
+<section class="panel">
+<h3>Support Summary</h3>
+<p class="explain">Distribution statistics for rolled-up chunk support across ontology nodes and per-chunk ontology breadth.</p>
+{table(["support metric", "value"], support_summary_rows)}
+</section>
+<section class="panel">
+<h3>Structure Summary</h3>
+<p class="explain">Fan-out and multi-parent metrics describe how tree-like or graph-like the loaded ontology structure is.</p>
+{table(["structure metric", "value"], fanout_rows + dag_rows)}
+</section>
+</div>
+
+<section class="panel wide wide-table">
+<h2>Scope Support Split</h2>
+<p class="explain">This table separates leaf versus intermediate ontology nodes, and empty versus supported nodes, for the whole loaded ontology and key subsets.</p>
+{table(["scope", "nodes", "leaf nodes", "intermediate nodes", "rollup-supported", "supported %", "direct-supported", "empty", "empty leaves", "empty intermediate"], split_rows)}
+</section>
+
+<div class="grid">
+<section class="panel">
+<h2>Support Rate By Scope</h2>
+<p class="explain">The same scope split as above, summarized visually by percentage of nodes with rollup support.</p>
+{table(["scope", "supported %", "bar"], scope_support_chart_rows)}
+</section>
+<section class="panel">
+<h2>Top Prefixes By Direct Chunk Coverage</h2>
+<p class="explain">Prefixes are ranked by how many chunks link directly to at least one id in that prefix. A chunk may contribute to more than one prefix.</p>
+{table(["prefix", "direct chunks", "share of covered chunks"], prefix_chart_rows)}
+</section>
 </div>
 
 <h2>Ontology Tree With Corpus Link Support</h2>
@@ -461,39 +579,47 @@ li.empty>*{{color:#a2a9b0;}}
 </section>
 
 <div class="grid">
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Prefix Coverage</h2>
+<p class="explain">Prefix-level support separates ontology vocabulary size from actual corpus attachment. Direct chunks count exact linked ids; rollup chunks include ancestor propagation inside that prefix.</p>
 {table(["prefix", "ontology terms", "direct-supported ids", "rollup-supported nodes", "direct chunks", "rollup chunks", "supported %"], prefix_rows)}
 </section>
 <section class="panel">
 <h2>Rollup Support Distribution</h2>
+<p class="explain">Most ontology nodes have no corpus support; the nonzero bins show where support begins to concentrate.</p>
 {table(["chunks on node", "nodes", "bar"], support_bin_rows)}
 </section>
 <section class="panel">
 <h2>Depth Distribution</h2>
+<p class="explain">Depth is computed from a representative longest path from ontology roots. Supported and empty counts show where corpus evidence lands by level.</p>
 {table(["depth", "nodes", "supported", "supported %", "empty", "bar"], depth_rows)}
 </section>
 </div>
 
 <div class="grid">
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Top Nodes By Rollup Chunk Support</h2>
+<p class="explain">Rollup support can make broad ancestors large even when direct attachment is low or zero.</p>
 {table(["label", "id", "rollup chunks", "direct chunks", "children", "parents", "depth"], top_rows(top_rollup, ["label", "id", "rollup_chunks", "direct_chunks", "children", "parents", "depth"]))}
 </section>
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Top Nodes By Direct Corpus Attachment</h2>
+<p class="explain">Direct attachment identifies the ontology ids actually linked by corpus annotations before ancestor rollup.</p>
 {table(["label", "id", "direct chunks", "rollup chunks", "children", "parents", "depth"], top_rows(top_direct, ["label", "id", "direct_chunks", "rollup_chunks", "children", "parents", "depth"]))}
 </section>
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Largest Empty Intermediate Nodes</h2>
+<p class="explain">These nodes have children or descendants but no rolled-up corpus support in the current corpus snapshot.</p>
 {table(["label", "id", "descendants", "children", "parents", "depth"], top_rows(top_empty_internal, ["label", "id", "descendants", "children", "parents", "depth"]))}
 </section>
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Highest Fan-Out Nodes</h2>
+<p class="explain">High fan-out nodes are structurally broad and can create large navigation menus if used directly as browse shelves.</p>
 {table(["label", "id", "children", "rollup chunks", "direct chunks", "parents", "depth"], top_rows(top_fanout, ["label", "id", "children", "rollup_chunks", "direct_chunks", "parents", "depth"]))}
 </section>
-<section class="panel wide">
+<section class="panel wide wide-table">
 <h2>Multi-Parent Nodes</h2>
+<p class="explain">Nodes with multiple parents show where the ontology is graph-like rather than a strict tree. The report tree chooses one display parent, but this table preserves the multi-parent signal.</p>
 {table(["label", "id", "parents", "rollup chunks", "direct chunks", "children", "depth"], top_rows(top_multiparent, ["label", "id", "parents", "rollup_chunks", "direct_chunks", "children", "depth"]))}
 </section>
 </div>
