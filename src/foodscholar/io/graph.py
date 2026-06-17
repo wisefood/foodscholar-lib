@@ -22,6 +22,9 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+ShelfStatus = Literal["active", "folded", "absent"]
+
+
 class Shelf(BaseModel):
     shelf_id: ShelfId
     label: str
@@ -34,6 +37,17 @@ class Shelf(BaseModel):
     support_direct: int = 0
     support_lifted: int = 0
     see_also: list[str] = Field(default_factory=list)
+    # Activity status. We keep the browse tree faithful to FoodOn by *marking*
+    # nodes rather than silently dropping them:
+    #   - "active": corpus-supported, shown in the rendered tree;
+    #   - "folded": this shelf absorbed one or more single-child filing-tier
+    #     intermediaries — their FoodOn ids are preserved in `see_also` so no id
+    #     is lost and attach can still route their chunks here;
+    #   - "absent": a real FoodOn node with no corpus support. Not materialized
+    #     as a Shelf today (queryable via the FoodOn API); the value exists so
+    #     callers that DO materialize the full ontology can flag them.
+    # Rendering filters to "active"; the data layer stays FoodOn-faithful.
+    status: ShelfStatus = "active"
 
 
 class Theme(BaseModel):

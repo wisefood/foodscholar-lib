@@ -3,18 +3,24 @@
 The method validated in the bake-off, now official. Instead of the support-driven
 prune cascade, we pick a **backbone** (the supported children of the facet root —
 e.g. the direct children of `food product` for foods) and then **progressively
-expand** each backbone node down its real FoodOn descendants, under browse caps:
+expand** each backbone node down its real FoodOn descendants:
 
   - a child is kept only if its rolled-up support clears `min_support`;
   - single-child filing tiers with no direct chunks of their own are **collapsed**
     (e.g. `Corn -> maize kernel(0) -> corn kernel(83)` shows `corn kernel` under
-    `Corn`) — faithful, since the kept node is still a real is-a descendant;
+    `Corn`) — faithful, since the kept node is still a real is-a descendant. The
+    collapsed-away ids are **recorded in the survivor's `see_also`** and the
+    survivor is marked `status="folded"`, so no FoodOn id is lost and attach can
+    still route the corridor's chunks here;
   - each node is placed under exactly **one** parent (FoodOn is a DAG), so a node
     never appears twice;
   - empty dead-ends (no descendants, no direct chunks) are **pruned**;
-  - fan-out and depth are capped.
+  - depth is capped; **fan-out is NOT** — keeping every supported child avoids
+    silently dropping real FoodOn nodes for a browsability gain that measurement
+    showed to be negligible on real corpora.
 
-All displayed nodes are real FoodOn ids; the tree is is-a faithful. Counts use the
+All displayed nodes are real FoodOn ids; the tree is is-a faithful, and every
+collapsed node is preserved (in `see_also`) rather than discarded. Counts use the
 support table: `chunk_count` = rolled-up distinct chunks, with `support_direct` /
 `support_lifted` split for the D/L badge.
 """
@@ -55,6 +61,11 @@ def build_backbone_shelves(
     """Project `support` into shelves via backbone-first controlled expansion.
 
     Returns [] when no backbone clears `min_support` (caller falls back to a stub).
+
+    `max_children` is accepted for backward compatibility but **no longer caps
+    fan-out** — every supported child is kept (see module docstring). It is
+    retained so existing callers/config (`backbone_max_children`) keep working
+    without a signature break; remove once the config field is retired.
     """
     from foodscholar.io.graph import Shelf
 
@@ -78,11 +89,21 @@ def build_backbone_shelves(
             if c in ontology and allowed(c) and node_support(c) >= min_support
         ]
 
+    # foodon_id of a kept node -> the single-child filing-tier ids it absorbed.
+    # Recorded on the survivor's `see_also` so no real FoodOn id is lost to the
+    # collapse and attach can still route the corridor's chunks here.
+    folded_into: dict[str, list[str]] = defaultdict(list)
+
     def resolve_filing_tier(fid: str) -> str:
         seen: set[str] = set()
+        skipped: list[str] = []
         while fid not in seen and direct(fid) == 0 and len(supported_children(fid)) == 1:
             seen.add(fid)
+            skipped.append(fid)
             fid = supported_children(fid)[0]
+        # `fid` is the kept node; everything before it in the chain was folded.
+        if len(skipped) > 0:
+            folded_into[fid].extend(skipped)
         return fid
 
     def display_children(fid: str) -> list[str]:
@@ -94,7 +115,11 @@ def build_backbone_shelves(
                 seen.add(resolved)
                 out.append(resolved)
         out.sort(key=node_support, reverse=True)
-        return out[:max_children]
+        # No fan-out cap: we keep every supported child so the browse tree never
+        # silently drops a real FoodOn node. (An earlier `max_children` slice
+        # here shed long-tail siblings; on real corpora it barely bound and cost
+        # fidelity for no browsability gain.)
+        return out
 
     # Backbone = supported children of the facet root; else top-level supported
     # terms (those with no supported strict ancestor) so non-foods facets still work.
@@ -169,6 +194,10 @@ def build_backbone_shelves(
         wd = node_support(n)
         d = direct(n)
         p = parent_of[n]
+        # Filing-tier ids this node absorbed (single-child corridors). Preserved
+        # in see_also: keeps the projection FoodOn-faithful (no id lost) and lets
+        # attach route the corridor's chunks here via the by_seealso rung.
+        folded = folded_into.get(n, [])
         shelves.append(Shelf(
             shelf_id=shelf_id_for_foodon(n),
             label=ontology.id_to_label(n) or n,
@@ -179,6 +208,7 @@ def build_backbone_shelves(
             chunk_count=wd,
             support_direct=d,
             support_lifted=max(wd - d, 0),
-            see_also=[],
+            see_also=sorted(folded),
+            status="folded" if folded else "active",
         ))
     return sorted(shelves, key=lambda s: (s.depth, s.label.lower(), s.shelf_id))

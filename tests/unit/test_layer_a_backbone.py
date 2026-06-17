@@ -50,10 +50,22 @@ def _build():
 
 def test_backbone_collapses_filing_tier_and_keeps_real_nodes():
     shelves = {s.foodon_id: s for s in _build()}
-    # olive (0 direct, single child) is a filing tier -> collapsed away.
+    # olive (0 direct, single child) is a filing tier -> collapsed away from the
+    # tree, but NOT discarded: its id is preserved on the survivor's see_also.
     assert OLIVE not in shelves
     # the meaningful nodes survive; sub-threshold siblings (vegetable/peanut) don't.
     assert set(shelves) == {PLANT, FRUIT, APPLE, OIL}
+
+
+def test_backbone_records_collapsed_id_in_see_also_and_marks_folded():
+    shelves = {s.foodon_id: s for s in _build()}
+    # The collapsed corridor id (olive) lives on the kept node (olive oil), and
+    # that node is flagged folded — no FoodOn id is lost, attach can route via it.
+    assert OLIVE in shelves[OIL].see_also
+    assert shelves[OIL].status == "folded"
+    # Nodes that absorbed nothing stay active.
+    assert shelves[APPLE].status == "active"
+    assert shelves[APPLE].see_also == []
 
 
 def test_backbone_reparents_collapsed_child_to_real_ancestor():
