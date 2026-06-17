@@ -8,13 +8,14 @@ shelf** — *themes* — using two complementary signals and merging them.
 Pass 1 (the embedding signal) has **two interchangeable backends**, selected by
 `config.layer_b.algorithm`:
 
-- **`"leiden"`** (default) — build a similarity *graph* over chunk embeddings, run Leiden.
+- **`"leiden"`** (default) — build a similarity *graph* over chunk embeddings, run Leiden,
+  then run Pass 2 (relatedness) and **merge**. Two passes.
 - **`"bertopic"`** — cluster the chunk embeddings *directly* with BERTopic (no graph).
+  **Single pass: no Pass 2, no merge.**
 
-Pass 2 (the entity signal) and the merge step are **identical** for both. Everything below
-describes the shared two-pass/merge architecture first; the
-[BERTopic backend](#pass-1-backend-bertopic) section then explains the alternative and when
-to reach for it.
+The two-pass/merge architecture below describes the **Leiden** path. The
+[BERTopic backend](#pass-1-backend-bertopic) section then explains how BERTopic differs (it
+runs Pass 1 only) and when to reach for it.
 ```
 
 ## Two passes, two signals
@@ -54,12 +55,18 @@ own Leiden run. A theme therefore has a single, well-defined **origin shelf**: t
 shelf whose chunks it was built from.
 ```
 
-Pass 1 also has a `"global"` mode that runs one Leiden over the *entire* facet to find
-cross-shelf "bridge" themes. It was tried and reverted: global communities span many
-shelves and, because a chunk sits on many shelves ({term}`lifted attachment` — *not* the
-same as a shelf's lifted support), they smear a theme across every shelf its members
-touch — a `spice` shelf ends up showing themes about proteins and vegetables. Per-shelf
-Pass 1 avoids this by construction.
+Pass 1 also has a `"global"` mode (`pass1_mode = "global"`) that runs one Leiden over the
+*entire* facet to find cross-shelf "bridge" themes. It is **Leiden-only and opt-in** — kept
+available but off by default, because global communities span many shelves and, because a
+chunk sits on many shelves ({term}`lifted attachment` — *not* the same as a shelf's lifted
+support), they smear a theme across every shelf its members touch — a `spice` shelf ends up
+showing themes about proteins and vegetables. Per-shelf Pass 1 avoids this by construction.
+
+```{note}
+`pass1_mode` is a **Leiden-only** axis. The BERTopic backend is inherently per-shelf and
+**ignores `pass1_mode`** — setting `pass1_mode="global"` with `algorithm="bertopic"` runs
+BERTopic per-shelf anyway (and logs a notice); it never falls back to a Leiden global run.
+```
 
 ```{warning}
 **Naming landmine.** The `discovery_pass` value `global_similarity` is a historical name.
@@ -129,34 +136,46 @@ polishes them.)
 (pass-1-backend-bertopic)=
 ## Pass 1 backend — BERTopic
 
-`config.layer_b.algorithm = "bertopic"` swaps **only Pass 1**: instead of building a
-similarity graph and running Leiden, it clusters the shelf's chunk **embeddings directly**
-with [BERTopic](https://maartengr.github.io/BERTopic/). Pass 2 (relatedness) still runs
-Leiden, and the merge step is unchanged — so a BERTopic build still produces `merged` /
-`global_similarity` / `relatedness` themes exactly as above. The only differences are *how*
-the embedding communities are found and which `discovered_by` value they carry.
+`config.layer_b.algorithm = "bertopic"` clusters each shelf's chunk **embeddings directly**
+with [BERTopic](https://maartengr.github.io/BERTopic/) instead of building a similarity graph
+and running Leiden.
+
+```{important}
+**BERTopic is single-pass.** It runs Pass 1 only — **Pass 2 (relatedness) and the merge step
+do NOT run**. A BERTopic build produces `global_similarity` themes *only* (no `merged`, no
+`relatedness`), and it never invokes a Leiden code path, so the two methods never co-run.
+
+Why: BERTopic partitions a shelf on an embedding axis that is *orthogonal* to FoodOn
+entities, so a BERTopic topic and an entity-relatedness community almost never overlap — the
+merge produced **zero** merged themes and just concatenated two disjoint sets. Running Pass 2
+there bought noise and double the compute for no synthesis, so bertopic mode skips both.
+```
 
 ```{mermaid}
 flowchart LR
     C[shelf chunks + embeddings] --> A{algorithm?}
     A -->|leiden| G[mutual-kNN graph] --> L[Leiden] --> CAND[similarity candidates]
-    A -->|bertopic| B[BERTopic over raw vectors] --> CAND
-    CAND --> MERGE[merge with Pass-2 relatedness]
+    CAND --> MERGE[Pass 2 relatedness + greedy merge]
+    MERGE --> TH1["themes: merged / global_similarity / relatedness"]
+    A -->|bertopic| B[BERTopic over raw vectors] --> BTC[topic candidates]
+    BTC --> TH2["themes: global_similarity only<br/>(no Pass 2, no merge, no Leiden)"]
 ```
 
 Each emitted community becomes a `ThemeCandidate` with `discovered_by="bertopic"` (vs
-`"leiden"`); from there it flows through the identical merge/label/persist path.
+`"leiden"`); in bertopic mode each candidate becomes a theme directly (no merge), then flows
+through the identical label/persist path.
 
-### Two scope choices — `bertopic.scope`
+### Two scope choices — `layer_b.scope`
 
-BERTopic runs **per shelf**, but you choose *which* chunks a shelf contributes:
+Both methods run **per shelf**, and `config.layer_b.scope` chooses *which* chunks each shelf
+contributes to Pass 1 — it applies to **both Leiden and BERTopic**:
 
 ::::{grid} 1 1 2 2
 :gutter: 2
 
 :::{grid-item-card} `"direct"` (default)
 Only the shelf's **own** directly-attached chunks. Themes are local to the node; a chunk is
-clustered once, under the shelf it sits on. Mirrors the Leiden per-shelf scope.
+clustered once, under the shelf it sits on.
 :::
 
 :::{grid-item-card} `"subtree"`
@@ -165,6 +184,12 @@ roll-up themes spanning their branch; the same chunk participates in every ances
 :::
 
 ::::
+
+```{note}
+`layer_b.scope` is the single source of truth and governs both methods. `bertopic.scope` is a
+**deprecated back-compat alias**: it only takes effect for the BERTopic path when set to a
+non-default value, where it overrides `layer_b.scope` for BERTopic only. Prefer `layer_b.scope`.
+```
 
 ```{mermaid}
 flowchart TD
@@ -224,7 +249,7 @@ Leiden's `min_community_size`): topics smaller than this are dropped.
   - Meaning
 * - `scope`
   - `"direct"`
-  - `direct` = own chunks · `subtree` = own + descendants
+  - *Deprecated alias of `layer_b.scope` (shared by both methods) — prefer that knob*
 * - `clusterer`
   - `"hdbscan"`
   - `hdbscan` = auto count + outliers · `kmeans` = matched/auto-K, full coverage
@@ -297,7 +322,7 @@ fs.build_layer_b(facet="foods")
 
 # BERTopic backend (direct scope, HDBSCAN) — the tuned baseline:
 fs.config.layer_b.algorithm = "bertopic"
-fs.config.layer_b.bertopic.scope = "direct"        # or "subtree"
+fs.config.layer_b.scope = "direct"                 # or "subtree" — shared knob, both methods
 fs.config.layer_b.bertopic.clusterer = "hdbscan"   # or "kmeans"
 fs.build_layer_b(facet="foods")
 ```
