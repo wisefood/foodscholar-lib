@@ -32,16 +32,33 @@ pages [`concepts/layer-b-themes.md`](concepts/layer-b-themes.md) and
 
 ```mermaid
 flowchart TD
-    A["facet shelves + attached chunks"] --> P1{"algorithm?"}
-    P1 -->|leiden| LG["build mutual-kNN graph<br/>over embeddings"] --> LL["run_leiden"] --> SC["similarity candidates"]
-    SC --> P2["Pass 2: entity-bridge graph<br/>+ run_leiden"] --> RC["relatedness candidates"]
+    A["facet shelves + attached chunks"] --> SCOPE["per-shelf scoping<br/>scope = direct | subtree<br/>(applies to BOTH methods)"]
+    SCOPE --> P1{"algorithm?"}
+
+    %% --- Leiden: two-pass + merge ---
+    P1 -->|leiden| PM{"pass1_mode?"}
+    PM -->|per_shelf<br/>default| LG["Pass 1: mutual-kNN graph<br/>over embeddings → run_leiden<br/>(per shelf)"]
+    PM -->|global<br/>Leiden only| LGG["Pass 1: one graph over<br/>ALL facet chunks → run_leiden"]
+    LG --> SC["similarity candidates"]
+    LGG --> SC
+    SC --> P2["Pass 2: entity-bridge graph<br/>+ run_leiden (per shelf)"] --> RC["relatedness candidates"]
     SC --> MG["greedy merge<br/>(combined Jaccard ≥ threshold)"]
     RC --> MG
     MG --> TH1["themes: merged / global_similarity / relatedness"]
-    P1 -->|bertopic| BT["run_bertopic<br/>(cluster embeddings directly)"] --> TH2["themes: global_similarity only<br/>(no Pass 2, no merge)"]
+
+    %% --- BERTopic: single-pass, no Pass 2, no merge, always per-shelf ---
+    P1 -->|bertopic| BT["Pass 1: run_bertopic<br/>cluster embeddings directly<br/>(ALWAYS per shelf; ignores pass1_mode)"]
+    BT --> TH2["themes: global_similarity only<br/>(NO Pass 2, NO merge, NO Leiden)"]
+
     TH1 --> LBL["label (c-TF-IDF + optional LLM)"]
     TH2 --> LBL --> PER["persist (Neo4j + ES theme_ids)"]
 ```
+
+**Reading the diagram.** Both methods iterate shelves and honor `scope`. The fork is the
+`algorithm`: **Leiden** runs two passes (similarity + entity relatedness) and **merges** them,
+and its Pass 1 can optionally go `global`; **BERTopic** runs a single per-shelf pass and stops —
+no Pass 2, no merge, and it never touches a Leiden code path (so the two never co-run). `pass1_mode`
+is a Leiden-only knob and is ignored by BERTopic.
 
 The integration contract is narrow: both backends produce **the same thing** — sets of
 chunk-ids that become `ThemeCandidate`s. Leiden returns vertex-index sets from a graph;
@@ -112,14 +129,31 @@ flowchart TD
 
 ### 1.4 Scope — `direct` vs `subtree`
 
-BERTopic runs per shelf, but `bertopic.scope` decides which chunks a shelf contributes:
+Both methods run per shelf (see §1.4a), and `layer_b.scope` decides which chunks each shelf
+contributes to Pass 1 — it applies to **both Leiden and BERTopic**:
 
-- **`direct`** — the shelf's own directly-attached chunks only. Each chunk is clustered once,
-  under its own shelf. Theme granularity matches the node.
+- **`direct`** (default) — the shelf's own directly-attached chunks only. Each chunk is clustered
+  once, under its own shelf. Theme granularity matches the node.
 - **`subtree`** — the shelf's chunks plus **every descendant's**. The builder precomputes a
   `parent → children` map for the facet once, then unions descendant chunk-ids per shelf via an
   iterative DFS. Inner nodes get broad roll-up themes; the same chunk participates in every
   ancestor's run (intentional — a "dairy" theme should see milk and cheese chunks).
+
+> **Config note.** `layer_b.scope` is the single source of truth and governs both methods.
+> `bertopic.scope` is a **deprecated back-compat alias**: it only takes effect for the BERTopic
+> path when set to a non-default value, in which case it overrides `layer_b.scope` for BERTopic
+> only. Resolution lives in `LayerBConfig.resolved_scope()`. New configs should set `layer_b.scope`.
+
+#### 1.4a Per-shelf vs global — the `pass1_mode` axis
+
+`pass1_mode` is **orthogonal to `algorithm`** and is a **Leiden-only** axis:
+
+- **`per_shelf`** (production default) — a separate Pass-1 run per shelf. Every Pass-1 theme is
+  single-shelf. Both methods run this way.
+- **`global`** (experimental, **Leiden only**) — one similarity graph over all of a facet's
+  attached chunks, finding cross-shelf bridges. **BERTopic has no global path**: it is inherently
+  per-shelf. If a config sets `algorithm="bertopic"` + `pass1_mode="global"`, BERTopic **ignores**
+  `pass1_mode` (running per-shelf) and logs a one-line notice — it never falls through to Leiden.
 
 ```mermaid
 flowchart TD
@@ -141,7 +175,9 @@ node sparse on direct chunks can still qualify on its branch total.
 | Knob | Default | When to change |
 |---|---|---|
 | `layer_b.algorithm` | `leiden` | `bertopic` to use embedding-direct discovery |
-| `bertopic.scope` | `direct` | `subtree` for branch-level roll-up themes |
+| `layer_b.scope` | `direct` | `subtree` for branch-level roll-up themes (both methods) |
+| `layer_b.pass1_mode` | `per_shelf` | `global` for cross-shelf bridge themes (**Leiden only**; ignored by BERTopic) |
+| `bertopic.scope` | `direct` | *(deprecated alias of `layer_b.scope` — prefer the shared knob)* |
 | `bertopic.clusterer` | `hdbscan` | `kmeans` for full coverage + controlled count |
 | `bertopic.min_topic_size` | `15` | lower → more, smaller themes (biggest lever) |
 | `bertopic.n_clusters` | `None` | KMeans only; pin to force a count |

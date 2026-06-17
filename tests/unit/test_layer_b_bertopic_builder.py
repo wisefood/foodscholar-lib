@@ -154,3 +154,104 @@ def test_bertopic_mode_skips_pass2_relatedness(monkeypatch) -> None:
     assert "merged" not in passes, "merge fired in bertopic mode"
     assert passes == {"global_similarity"}, f"unexpected passes: {passes}"
     assert "relatedness" not in art.n_themes_by_pass
+
+
+def test_bertopic_ignores_global_pass1_mode_and_never_runs_leiden(monkeypatch) -> None:
+    """bertopic + pass1_mode='global' must NOT fall through to Leiden's global
+    branch (the old silent bug). It runs BERTopic per-shelf and never calls any
+    Leiden candidate builder."""
+    from foodscholar import FoodScholar, FoodScholarConfig
+    from foodscholar.io.graph import Shelf
+    from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+
+    chunk_store = InMemoryChunkStore()
+    graph_store = InMemoryGraphStore()
+    graph_store.upsert_shelves([
+        Shelf(shelf_id="shelf:dairy", label="dairy", facet="foods", depth=1,
+              chunk_count=4),
+    ])
+    chunk_store.upsert([_chunk(f"c{i}") for i in range(4)])
+    graph_store.attach_chunks_to_shelf("shelf:dairy", [(f"c{i}", []) for i in range(4)])
+
+    cfg = FoodScholarConfig.model_validate({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {"chunk_store": {"backend": "memory"},
+                    "graph_store": {"backend": "memory"}},
+        "layer_b": {
+            "algorithm": "bertopic",
+            "pass1_mode": "global",  # the previously-silent bad combo
+            "min_chunks_per_shelf": 2,
+            "min_embedded_fraction": 0.0,
+            "bertopic": {"min_topic_size": 2},
+        },
+    })
+    fs = FoodScholar(cfg, chunk_store=chunk_store, graph_store=graph_store)
+
+    # Trip-wire: Leiden's similarity builder must never be called in bertopic mode.
+    def _boom(*a, **k):
+        raise AssertionError("Leiden build_global_similarity_candidates ran in bertopic mode")
+
+    monkeypatch.setattr(
+        "foodscholar.layer_b.builder.build_global_similarity_candidates", _boom
+    )
+    monkeypatch.setattr(
+        "foodscholar.layer_b.builder.run_bertopic",
+        lambda ids, store, bcfg: [{"c0", "c1", "c2"}],
+    )
+    fs.build_layer_b(facet="foods", dry_run=False)
+
+    themes = fs.graph_store.list_themes()
+    assert themes and all(t.discovered_by == "bertopic" for t in themes)
+
+
+def test_leiden_subtree_scope_unions_descendant_chunks(monkeypatch) -> None:
+    """scope='subtree' for LEIDEN feeds a parent shelf its own chunks PLUS every
+    descendant shelf's chunks into Pass 1 (the knob used to be bertopic-only)."""
+    from foodscholar import FoodScholar, FoodScholarConfig
+    from foodscholar.io.graph import Shelf
+    from foodscholar.storage.memory import InMemoryChunkStore, InMemoryGraphStore
+
+    chunk_store = InMemoryChunkStore()
+    graph_store = InMemoryGraphStore()
+    # parent (fruit) with 1 direct chunk + child (apple) with 3 direct chunks.
+    graph_store.upsert_shelves([
+        Shelf(shelf_id="shelf:fruit", label="fruit", facet="foods", depth=1),
+        Shelf(shelf_id="shelf:apple", label="apple", facet="foods", depth=2,
+              parent_shelf_id="shelf:fruit"),
+    ])
+    chunk_store.upsert([_chunk(f"c{i}") for i in range(4)])
+    graph_store.attach_chunks_to_shelf("shelf:fruit", [("c0", [])])
+    graph_store.attach_chunks_to_shelf("shelf:apple", [(f"c{i}", []) for i in (1, 2, 3)])
+
+    cfg = FoodScholarConfig.model_validate({
+        "corpus": {"chunks_path": "data/chunks.parquet"},
+        "storage": {"chunk_store": {"backend": "memory"},
+                    "graph_store": {"backend": "memory"}},
+        "layer_b": {
+            "algorithm": "leiden",
+            "pass1_mode": "per_shelf",
+            "scope": "subtree",
+            "min_chunks_per_shelf": 3,   # fruit has only 1 direct → needs subtree to qualify
+            "min_embedded_fraction": 0.0,
+        },
+    })
+    fs = FoodScholar(cfg, chunk_store=chunk_store, graph_store=graph_store)
+
+    seen_scoped: dict[str, set] = {}
+
+    def _capture(chunk_ids, chunk_store, cfg):  # noqa: ANN001
+        # record what the fruit shelf was fed; return no candidates (we only
+        # assert on the scoping, not on clustering output).
+        seen_scoped[tuple(sorted(chunk_ids))] = set(chunk_ids)
+        return []
+
+    monkeypatch.setattr(
+        "foodscholar.layer_b.builder.build_global_similarity_candidates", _capture
+    )
+    fs.build_layer_b(facet="foods", dry_run=True)
+
+    # The fruit shelf must have been fed all 4 chunks (its own + apple's), so a
+    # 4-chunk scoped set was seen — impossible under scope='direct' (fruit=1).
+    assert any(len(s) == 4 for s in seen_scoped.values()), (
+        f"subtree scope did not union descendants; saw {seen_scoped}"
+    )

@@ -22,13 +22,41 @@ YYYY-MM-DD  phase-name  artifact_id=...  config_hash=...  notes="..."
 
 ## 1. What Layer B does
 
-For each shelf with ≥ `min_chunks_for_clustering` (default 100) chunks attached, run **two parallel community detections** on different graphs over the same node set, then merge their outputs into a unified theme list.
+Layer B discovers **themes** within each shelf. It offers **two discovery methods**, selected by
+`config.layer_b.algorithm`, that run **different pipelines** — this distinction is load-bearing:
 
-- **Pass 1 — Similarity**: graph edges weighted by chunk-embedding cosine similarity. Captures topical neighborhoods.
-- **Pass 2 — Relatedness**: graph edges weighted by count of shared high-confidence FoodOn IDs between chunks. Captures entity co-occurrence neighborhoods (SiReRAG-inspired).
-- **Merge**: pair every (S<sub>i</sub>, R<sub>j</sub>) candidate, compute combined Jaccard similarity over chunks and entities, merge above `dedupe_threshold` (default 0.70).
+| | **`leiden`** (default) | **`bertopic`** |
+|---|---|---|
+| Passes | **two** (similarity + relatedness) | **one** (embedding clustering) |
+| Merge step | **yes** — fuses agreeing candidates | **no** — candidates *are* the themes |
+| Pass 2 (relatedness) | runs per shelf | **skipped** |
+| Co-run with the other | n/a | **never touches a Leiden path** |
+| Per-shelf? | yes (`pass1_mode="per_shelf"` default; `global` opt-in) | **always** (ignores `pass1_mode`) |
+| `discovered_by` | `"leiden"` | `"bertopic"` |
 
-Both passes use **Leiden** (`leidenalg` + `python-igraph`). HDBSCAN remains the documented fallback for the similarity pass if Leiden produces a degenerate single community at scale, but should not be invoked in v1 unless that happens.
+Both methods run **per shelf** (every shelf with ≥ `min_chunks_per_shelf` scoped chunks) and both
+honor `scope` (`direct` = the shelf's own chunks; `subtree` = its chunks + every descendant's).
+
+**Method A — `leiden` (two-pass + merge).** For each shelf, run **two** community detections over
+the same chunk set, then merge:
+
+- **Pass 1 — Similarity**: graph edges weighted by chunk-embedding cosine similarity. Captures
+  topical neighborhoods. (Optionally `pass1_mode="global"` — one graph over all facet chunks — to
+  find cross-shelf bridges. Leiden-only.)
+- **Pass 2 — Relatedness**: graph edges weighted by count of shared high-confidence FoodOn IDs
+  between chunks. Captures entity co-occurrence neighborhoods (SiReRAG-inspired).
+- **Merge**: pair every (S<sub>i</sub>, R<sub>j</sub>) candidate, compute combined Jaccard over
+  chunks and entities, merge above `dedupe_threshold` (default 0.70).
+
+Both passes use **Leiden** (`leidenalg` + `python-igraph`).
+
+**Method B — `bertopic` (single-pass).** For each shelf, cluster the scoped chunks' embeddings
+directly (UMAP+HDBSCAN, or passthrough+KMeans) into topic groups. **Pass 2 and the merge do NOT
+run** — BERTopic partitions on an embedding axis orthogonal to FoodOn entities, so a BERTopic topic
+and an entity-relatedness community almost never overlap; the merge produced zero merged themes and
+just concatenated two disjoint sets. So bertopic mode is strictly single-pass: cleaner topics, half
+the compute, and the output is exactly what BERTopic alone discovers. It never invokes a Leiden
+candidate builder, so the two methods never co-run.
 
 ---
 
@@ -456,56 +484,59 @@ The whole `layer_b` block participates in the config hash. Changing any knob pro
 
 ## 6. Builder orchestrator (`builder.py`)
 
-As of v0.2 (added 2026-05-27), the orchestrator runs a **hybrid two-pass flow** that separates topical similarity (which is cross-shelf by nature) from entity coherence (which is shelf-local).
+The orchestrator dispatches on **two independent axes**: `algorithm` (`leiden` | `bertopic`) and,
+for Leiden only, `pass1_mode` (`per_shelf` | `global`). Production defaults are
+`algorithm="leiden"`, `pass1_mode="per_shelf"`, `scope="direct"`. The flow:
 
-**Pass 1 — global similarity.** Before iterating shelves, `build_layer_b` calls `ChunkStore.knn_search_chunks` to execute a single kNN query across the entire attached corpus — all shelves in the facet together. This returns a flat list of (chunk, neighbors) pairs drawn from the full embedding space rather than from one shelf at a time. Leiden community detection runs once over this global graph, producing `ThemeCandidate` records with `pass_name="global_similarity"`. Because these candidates span the embedding space without shelf boundaries, they naturally surface topics that recur across multiple shelves.
+```mermaid
+flowchart TD
+    A["collect attachments → shelf → chunks<br/>(exclude synthetic facet root)"] --> SCOPE["per-shelf scope<br/>direct = own chunks · subtree = + descendants<br/>(cfg.resolved_scope — BOTH methods)"]
+    SCOPE --> ALG{"algorithm?"}
 
-**Pass 2 — per-shelf entity coherence.** The orchestrator then iterates shelves exactly as before, running `build_relatedness_graph` + Leiden per shelf and emitting relatedness candidates anchored to that shelf's chunk–FoodOn co-mentions.
+    ALG -->|bertopic| BT["Pass 1 ONLY: run_bertopic per shelf<br/>(ALWAYS per-shelf — ignores pass1_mode)"]
+    BT --> BTD["candidates → theme dicts directly<br/>(NO Pass 2, NO merge, NO Leiden)"]
 
-**Merge step — `merge_global_and_local_candidates`.** For each shelf, the per-shelf relatedness candidates are paired against the subset of global similarity candidates whose chunk membership overlaps that shelf. The merge function is `merge_global_and_local_candidates`, which operates with the same greedy Jaccard logic as the original `merge_candidates` but produces themes whose `shelf_ids` field is the **union of all shelves represented by the contributing global candidate's chunks**. A global candidate that touches three shelves therefore produces a theme with `shelf_ids` containing all three. Unmerged global candidates that survive without a relatedness partner have their `shelf_ids` backfilled from the union of `chunk.shelf_ids` across their member chunks, so no theme ever carries an empty `shelf_ids`.
+    ALG -->|leiden| PM{"pass1_mode?"}
+    PM -->|per_shelf| L1["Pass 1: similarity graph + Leiden, per shelf"]
+    PM -->|global| L1G["Pass 1: one similarity graph over<br/>ALL facet chunks + Leiden"]
+    L1 --> P2["Pass 2: relatedness graph + Leiden, per shelf"]
+    L1G --> P2
+    P2 --> MG["merge_global_and_local_candidates<br/>(greedy Jaccard)"]
 
-```python
-def build_layer_b(
-    facet: str,
-    chunk_store: ChunkStore,
-    graph_store: GraphStore,
-    cfg: LayerBConfig,
-) -> LayerBArtifact:
-    """
-    v0.2 orchestrator: global Pass 1 (similarity) + per-shelf Pass 2 (entity).
-    """
-    # Pass 1: one kNN query + one Leiden over the full attached corpus
-    all_chunks = chunk_store.knn_search_chunks(facet=facet, cfg=cfg.similarity)
-    global_graph = build_global_similarity_graph(all_chunks, cfg.similarity)
-    global_communities = run_leiden(global_graph, cfg.leiden)
-    global_cands = communities_to_candidates(
-        global_communities, global_graph, all_chunks, pass_name="global_similarity"
-    )
-
-    # Pass 2 + merge: per shelf
-    for shelf in graph_store.shelves_in_facet(facet):
-        if shelf.chunk_count < cfg.min_chunks_per_shelf:
-            artifact.n_shelves_skipped += 1
-            continue
-
-        chunks = chunk_store.get_chunks_for_shelf(shelf.id)
-        rel_graph = build_relatedness_graph(chunks, cfg.relatedness)
-        rel_communities = run_leiden(rel_graph, cfg.leiden)
-        rel_cands = communities_to_candidates(
-            rel_communities, rel_graph, chunks, pass_name="relatedness"
-        )
-
-        themes, decisions = merge_global_and_local_candidates(
-            global_cands, rel_cands, shelf.id, cfg.merge
-        )
-        themes = label_themes(themes, chunks, cfg.labeling)
-        persist_themes(themes, shelf.id, graph_store, chunk_store, cfg)
-        ...
-
-    return artifact
+    BTD --> BK["backfill shelf_ids<br/>(per-shelf candidates already tagged)"]
+    MG --> BK
+    BK --> LBL["label + pick primary + build Theme records"]
+    LBL --> PERS["persist: clear_themes(facet) + bulk_set_theme_ids + persist_themes"]
 ```
 
-Use `asyncio` or `concurrent.futures` to parallelize the per-shelf Pass 2 loop once the end-to-end flow is correct. The global Pass 1 is inherently sequential (one Leiden run) and should complete first.
+**Signature.** `build_layer_b(fs, *, facet="foods", dry_run=False) -> LayerBArtifact`. It reads
+attachments and shelves off `fs.graph_store`, chunks off `fs.chunk_store`, and config off
+`fs.config.layer_b`. `dry_run=True` runs the full pipeline but skips all writes.
+
+**Scope (both methods).** Before dispatch, the builder resolves `cfg.resolved_scope()` and, for
+`subtree`, precomputes a `parent → children` map once. Each shelf's Pass-1 input is then the union
+of its own chunks plus every descendant's (`direct` collapses this to the shelf's own chunks). The
+`min_chunks_per_shelf` gate is applied to the **scoped** count, so an inner node sparse on direct
+chunks can still qualify on its branch total.
+
+**`leiden` path.** Pass 1 builds a similarity graph + Leiden **per shelf** (default) — each
+candidate tagged with its origin shelf so the theme attaches to exactly that shelf — or, under
+`pass1_mode="global"`, one graph over all facet chunks (cross-shelf bridges; a theme's `shelf_ids`
+can have length ≥ 2). Pass 2 builds a relatedness graph + Leiden per shelf. `merge_global_and_local_candidates`
+then pairs the two with greedy Jaccard: agreeing candidates fuse into `merged` themes; survivors
+keep their pass label. Unmerged global candidates with no origin shelf get `shelf_ids` backfilled
+from the union of their chunks' `shelf_ids`, so no theme is ever orphaned.
+
+**`bertopic` path.** Pass 1 clusters each shelf's scoped embeddings via `run_bertopic`. That's the
+whole method: **Pass 2 and the merge are skipped entirely** — the candidates are converted straight
+to theme dicts (`_candidate_to_theme_dict`), preserving the exact shape the merge would have emitted
+for an origin-tagged sim-only candidate, so labeling/persist downstream are unchanged. BERTopic is
+**always per-shelf** and ignores `pass1_mode`; if a config sets `pass1_mode="global"`, the builder
+logs `layer_b.bertopic.ignoring_global_pass1_mode` and proceeds per-shelf — it never falls through
+to Leiden's global branch (a previously-silent bug).
+
+> Parallelization: the per-shelf loops (both methods' Pass 1, and Leiden's Pass 2) are independent
+> per shelf and can be parallelized with `concurrent.futures` once the flow is correct.
 
 ---
 

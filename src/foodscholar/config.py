@@ -574,9 +574,14 @@ class BertopicConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     scope: Literal["direct", "subtree"] = "direct"
-    """Per-shelf chunk scope fed to BERTopic.
+    """DEPRECATED alias of ``LayerBConfig.scope`` (kept for back-compat).
 
-    - ``"direct"`` (default): only the shelf's directly-attached chunks.
+    Scope now lives on ``LayerBConfig.scope`` and applies to both methods. When
+    this is left at its default (``"direct"``) the shared knob governs BERTopic;
+    set it to a non-default value only to override scope for the BERTopic path
+    specifically. Resolved via ``LayerBConfig.resolved_scope()``.
+
+    - ``"direct"``: only the shelf's directly-attached chunks.
     - ``"subtree"``: the shelf's chunks PLUS every descendant shelf's chunks."""
     clusterer: Literal["hdbscan", "kmeans"] = "hdbscan"
     """Clustering backend inside BERTopic.
@@ -610,6 +615,15 @@ class LayerBConfig(BaseModel):
     """Pass-1 theme-discovery backend. ``"leiden"`` (default) builds a similarity
     graph and runs Leiden; ``"bertopic"`` clusters chunk embeddings directly via
     BERTopic (see `bertopic`). Pass 2 (relatedness) always uses Leiden."""
+    scope: Literal["direct", "subtree"] = "direct"
+    """Per-shelf chunk scope fed to Pass-1 discovery — applies to BOTH methods.
+
+    - ``"direct"`` (default): only the shelf's directly-attached chunks.
+    - ``"subtree"``: the shelf's chunks PLUS every descendant shelf's chunks.
+
+    This is the single source of truth for scope. ``bertopic.scope`` is a
+    back-compat alias: when it is set to a non-default value it overrides this
+    for the BERTopic path only (see ``resolved_scope``)."""
     bertopic: BertopicConfig = Field(default_factory=BertopicConfig)
     min_chunks_per_shelf: int = 50
     min_embedded_fraction: float = 0.80
@@ -638,6 +652,19 @@ class LayerBConfig(BaseModel):
     global similarity pass would see more chunks than this, skip global Pass 1
     and emit a warning. Dormant under the production ``"per_shelf"`` default,
     which has no megacluster risk."""
+
+    def resolved_scope(self) -> Literal["direct", "subtree"]:
+        """Effective Pass-1 chunk scope, resolving the bertopic.scope alias.
+
+        Precedence: an explicitly-set ``bertopic.scope`` (non-default) wins for
+        BERTopic; otherwise the shared ``LayerBConfig.scope`` applies. For Leiden
+        only ``LayerBConfig.scope`` is consulted. This keeps existing configs
+        that set ``bertopic.scope`` working while making ``scope`` the single
+        knob that governs both methods going forward.
+        """
+        if self.algorithm == "bertopic" and self.bertopic.scope != "direct":
+            return self.bertopic.scope
+        return self.scope
 
 
 class LayerCConfig(BaseModel):

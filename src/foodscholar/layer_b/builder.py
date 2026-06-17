@@ -24,10 +24,30 @@ from foodscholar.layer_b.bertopic_community import run_bertopic
 from foodscholar.layer_b.community import run_leiden
 from foodscholar.layer_b.models import ThemeCandidate
 from foodscholar.layer_b.relatedness_graph import build_relatedness_graph
+from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
     from foodscholar.config import LayerBConfig
     from foodscholar.io.chunk import Chunk
+
+_log = get_logger("foodscholar.layer_b")
+
+
+def _candidate_to_theme_dict(c: ThemeCandidate) -> dict:
+    """Convert one single-pass candidate straight to a theme dict.
+
+    BERTopic is single-pass with no merge, so its candidates ARE the themes —
+    this produces exactly the shape `merge_global_and_local_candidates` would
+    have emitted for a sim-only, origin-tagged candidate (so labeling / persist
+    downstream are unchanged), but without entering the merge at all.
+    """
+    return {
+        "chunk_ids": c.chunk_ids,
+        "foodon_ids": c.foodon_ids,
+        "discovery_pass": c.pass_name,
+        "discovered_by": c.discovered_by,
+        "shelf_ids": [c.origin_shelf_id] if c.origin_shelf_id else [],
+    }
 
 
 def _slugify(text: str) -> str:
@@ -294,57 +314,79 @@ def build_layer_b(
     # can issue one final bulk_set_theme_ids that clears stale denorm.
     chunks_touched_this_run: set[str] = set()
 
-    # 2. Pass 1 (similarity) — global (one corpus-wide graph) or per-shelf
-    #    (a separate graph + Leiden per shelf), selected by cfg.pass1_mode.
+    # Shared subtree helper: union a shelf's chunks with every descendant
+    # shelf's chunks. Used by BOTH methods when scope="subtree" (resolved via
+    # cfg.resolved_scope()). Built once; the parent→children map is empty when
+    # scope="direct" so _subtree_chunk_ids collapses to the shelf's own chunks.
+    scope = cfg.resolved_scope()
+    _children: dict[str, list[str]] = {}
+    if scope == "subtree":
+        for sid, s in facet_shelves.items():
+            pid = getattr(s, "parent_shelf_id", None)
+            if pid is not None:
+                _children.setdefault(pid, []).append(sid)
+
+    def _subtree_chunk_ids(shelf_id: str) -> list[str]:
+        seen: set[str] = set()
+        stack = [shelf_id]
+        while stack:
+            sid = stack.pop()
+            seen.update(shelf_to_chunks.get(sid, ()))
+            stack.extend(_children.get(sid, ()))
+        return sorted(seen)
+
+    def _scoped_chunk_ids(shelf_id: str, chunk_ids: list[str]) -> list[str]:
+        return _subtree_chunk_ids(shelf_id) if scope == "subtree" else sorted(chunk_ids)
+
+    # 2. Pass 1 (discovery). Three mutually-exclusive paths:
+    #    - BERTopic: ALWAYS per-shelf, single-pass, no Pass 2, no merge, never
+    #      co-runs Leiden (ignores pass1_mode — it has no global path);
+    #    - Leiden per_shelf: a separate similarity graph + Leiden per shelf;
+    #    - Leiden global: one corpus-wide similarity graph.
     global_cands: list[ThemeCandidate] = []
-    if cfg.pass1_mode == "per_shelf":
-        # Per-shelf Pass 1: no megacluster risk, so no max-chunks cap needed.
+    is_bertopic = cfg.algorithm == "bertopic"
+
+    if is_bertopic:
+        # BERTopic is inherently per-shelf and has no global path. If a config
+        # set pass1_mode="global", it does NOT silently fall through to Leiden's
+        # global branch (the old bug) — we ignore pass1_mode and log it once.
+        if cfg.pass1_mode == "global":
+            _log.info(
+                "layer_b.bertopic.ignoring_global_pass1_mode",
+                note="BERTopic is per-shelf only; pass1_mode='global' is a "
+                "Leiden-only setting and is ignored here.",
+            )
+        for shelf_id, chunk_ids in shelf_to_chunks.items():
+            if shelf_id not in facet_shelves or shelf_id == synth_root:
+                continue
+            scoped_ids = _scoped_chunk_ids(shelf_id, chunk_ids)
+            if len(scoped_ids) < cfg.min_chunks_per_shelf:
+                continue
+            shelf_cands = build_shelf_bertopic_candidates(
+                chunk_ids=scoped_ids,
+                chunk_store=fs.chunk_store,
+                cfg=cfg,
+            )
+            for c in shelf_cands:
+                c.origin_shelf_id = shelf_id
+            global_cands.extend(shelf_cands)
+    elif cfg.pass1_mode == "per_shelf":
+        # Per-shelf Leiden Pass 1: no megacluster risk, so no max-chunks cap.
         # Each candidate is tagged with its origin shelf so the merge attaches
         # the theme to exactly that shelf — NOT the union of its member chunks'
         # shelves (which over-attaches via lifted, multi-shelf chunks). Pass name
         # stays "global_similarity" for schema continuity.
-        # When BERTopic runs with subtree scope, precompute each shelf's
-        # parent→children map once so we can union descendant chunks per shelf.
-        _children: dict[str, list[str]] = {}
-        if cfg.algorithm == "bertopic" and cfg.bertopic.scope == "subtree":
-            for sid, s in facet_shelves.items():
-                pid = getattr(s, "parent_shelf_id", None)
-                if pid is not None:
-                    _children.setdefault(pid, []).append(sid)
-
-        def _subtree_chunk_ids(shelf_id: str) -> list[str]:
-            seen: set[str] = set()
-            stack = [shelf_id]
-            while stack:
-                sid = stack.pop()
-                seen.update(shelf_to_chunks.get(sid, ()))
-                stack.extend(_children.get(sid, ()))
-            return sorted(seen)
-
         for shelf_id, chunk_ids in shelf_to_chunks.items():
             if shelf_id not in facet_shelves or shelf_id == synth_root:
                 continue
-            if cfg.algorithm == "bertopic":
-                scoped_ids = (
-                    _subtree_chunk_ids(shelf_id)
-                    if cfg.bertopic.scope == "subtree"
-                    else sorted(chunk_ids)
-                )
-                if len(scoped_ids) < cfg.min_chunks_per_shelf:
-                    continue
-                shelf_cands = build_shelf_bertopic_candidates(
-                    chunk_ids=scoped_ids,
-                    chunk_store=fs.chunk_store,
-                    cfg=cfg,
-                )
-            else:
-                if len(chunk_ids) < cfg.min_chunks_per_shelf:
-                    continue
-                shelf_cands = build_global_similarity_candidates(
-                    chunk_ids=sorted(chunk_ids),
-                    chunk_store=fs.chunk_store,
-                    cfg=cfg,
-                )
+            scoped_ids = _scoped_chunk_ids(shelf_id, chunk_ids)
+            if len(scoped_ids) < cfg.min_chunks_per_shelf:
+                continue
+            shelf_cands = build_global_similarity_candidates(
+                chunk_ids=scoped_ids,
+                chunk_store=fs.chunk_store,
+                cfg=cfg,
+            )
             for c in shelf_cands:
                 c.origin_shelf_id = shelf_id
             global_cands.extend(shelf_cands)
@@ -367,12 +409,12 @@ def build_layer_b(
     #    only complementary when both are graph/entity-flavoured, as in the
     #    leiden×leiden design. BERTopic clusters embeddings on an axis
     #    orthogonal to FoodOn entities, so its Pass-1 topics and Pass-2
-    #    relatedness communities never merge — the merge step produced 0 merged
-    #    themes and just concatenated two disjoint topic sets. So in bertopic
-    #    mode we skip Pass 2 entirely: cleaner topics, half the compute, and the
-    #    output matches what BERTopic alone actually discovers.
+    #    relatedness communities never merge. So in bertopic mode we skip Pass 2
+    #    AND the merge entirely (step 4): BERTopic is strictly single-pass —
+    #    cleaner topics, half the compute, no Leiden co-run, and the output is
+    #    exactly what BERTopic alone discovers.
     rel_cands_by_shelf: dict[str, list[ThemeCandidate]] = {}
-    if cfg.algorithm != "bertopic":
+    if not is_bertopic:
         for shelf_id, chunk_ids in shelf_to_chunks.items():
             if shelf_id not in facet_shelves or shelf_id == synth_root:
                 continue
@@ -387,10 +429,16 @@ def build_layer_b(
                 continue
             rel_cands_by_shelf[shelf_id] = build_shelf_relatedness_candidates(chunks, cfg)
 
-    # 4. Merge global x per-shelf.
-    theme_dicts, _decisions = merge_global_and_local_candidates(
-        global_cands, rel_cands_by_shelf, cfg.merge
-    )
+    # 4. Merge global x per-shelf — LEIDEN MODE ONLY. BERTopic is single-pass:
+    #    its candidates ARE the themes, so we convert them directly and never
+    #    enter the merge (which would be a no-op concat anyway, but skipping it
+    #    keeps "BERTopic = single pass, no merge" literally true in the code).
+    if is_bertopic:
+        theme_dicts = [_candidate_to_theme_dict(c) for c in global_cands]
+    else:
+        theme_dicts, _decisions = merge_global_and_local_candidates(
+            global_cands, rel_cands_by_shelf, cfg.merge
+        )
 
     # 5. Backfill shelf_ids for unmerged global_similarity themes that have NO
     #    origin shelf — i.e. true global Pass 1, where a community spans shelves.
