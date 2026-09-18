@@ -1,0 +1,637 @@
+{
+  "anchor": "fish",
+  "method": "leiden",
+  "shelf_id": "foodon:FOODON:00001248",
+  "themes": [
+    {
+      "theme_id": "fish-leiden-afb2a30f",
+      "label": "dietary intake patterns",
+      "label_source": "llm",
+      "chunk_count": 103,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "food",
+        "dietary",
+        "intake",
+        "associated",
+        "intervention"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00000073",
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001133",
+        "FOODON:00001149",
+        "FOODON:00001181",
+        "FOODON:00001253"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1ff9e568816a8071bc4f30e07d0a783501227b23",
+          "excerpt": "Abstract Introduction Newly available data from big scale studies conducted in the UK, such as the UK Biobank, offers the possibility to further explore the prospective association between a diet-quality score and health outcomes after acc…",
+          "source_doc": "https://doi.org/10.1017/S0029665120000208"
+        },
+        {
+          "chunk_id": "446108088aa39f51e8af45b810e9a4556dfb9853",
+          "excerpt": "The average prices of foods vary across cuisines but do these differences reflect the value people assign to different cuisines or how much they are willing to pay? Across four preregistered randomized experiments (total N=1,083), we manip…",
+          "source_doc": "https://doi.org/10.1016/j.appet.2025.107862"
+        },
+        {
+          "chunk_id": "423cc2d0b1b7ee8818e70bef55e3adcdca120647",
+          "excerpt": "BackgroundThe adoption and maintenance of healthy behaviours is essential in the primary prevention of chronic non-communicable diseases. This study evaluated the effectiveness of a minimal intervention on multiple lifestyle factors such a…",
+          "source_doc": "https://doi.org/10.1186/1479-5868-9-108"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-38495dd1",
+      "label": "vegetables and salads",
+      "label_source": "llm",
+      "chunk_count": 97,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "salads",
+        "vegetables",
+        "dishes",
+        "salad",
+        "fat"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001017",
+        "FOODON:00001040",
+        "FOODON:00001180",
+        "FOODON:00001181",
+        "FOODON:00001235",
+        "FOODON:00001253",
+        "FOODON:00001261",
+        "FOODON:00001264"
+      ],
+      "samples": [
+        {
+          "chunk_id": "dbfcaba1-891c-4a78-b114-83151dbd04a1",
+          "excerpt": "Be careful with deals on perishable foods like fruit, veg and salads. No matter how cheap it is, it's not good value if it ends up in the bin!",
+          "source_doc": "EPA_Ireland_Stop-Food-Waste-Pocket-Guide-2022-web.pdf"
+        },
+        {
+          "chunk_id": "9f3a7924-8f33-4e62-877d-612d56d52dc8",
+          "excerpt": "limit sedentary behaviors such as sitting, lying down, watching television, and other forms of screen-based recreation. Cooking Consumers can take these steps to minimize carcinogen formation during cooking: - ■ Marinate meats before cooki…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "da4a8af1-4042-41ae-89b1-394c48663bbf",
+          "excerpt": "Fill half your plate with vegetables, salads or fruit. Choose fruit and raw vegetables such as chopped carrots as tasty, healthy snacks. Add vegetables to stir-fries, stews and curries - the more vegetables the better.",
+          "source_doc": "OK_Ireland_food-guide-on-vegatables-salad-and-fruit_unknown_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-1d3aa3e2",
+      "label": "nonperishable food options",
+      "label_source": "llm",
+      "chunk_count": 94,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fat",
+        "foods",
+        "calories",
+        "fruit",
+        "food"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001133",
+        "FOODON:00001181",
+        "FOODON:00001198",
+        "FOODON:00001235",
+        "FOODON:00001258",
+        "FOODON:00001260"
+      ],
+      "samples": [
+        {
+          "chunk_id": "a92169fa-5766-4402-8af2-521d304d9a00",
+          "excerpt": "- /H18567 Don't drive or use public transportation? Check with your local area Agency on Aging for shopping assistance. Y our community may offer shopping transportation for senior citizens. - /H18567 Keep an emergency supply of nonperisha…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "4fea3bab-57c4-48e3-92b4-1bf31354397b",
+          "excerpt": "If you are familiar with endurance sports, you may have heard of 'hitting the wall' or 'bonking.' These colloquial terms refer to the extreme fatigue that sets in after about 120 minutes of performing an endurance sport, such as marathon r…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "a115a4b3-6f1b-4998-9b57-c1831ff188a2",
+          "excerpt": "- Animal crackers; cereal (dry or with milk); bagel; English muffin; graham crackers; pita (pocket) bread; rice cake; toast; tortilla; air-popped popcorn; pretzels. Go for whole-grain varieties whenever possible.",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-247975f8",
+      "label": "fatty fish and pufas",
+      "label_source": "llm",
+      "chunk_count": 92,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fish",
+        "dha",
+        "fish oil",
+        "pufas",
+        "intake"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001040",
+        "FOODON:00001160",
+        "FOODON:00001248",
+        "FOODON:00001579",
+        "FOODON:00001874",
+        "FOODON:00002170",
+        "FOODON:00002472",
+        "FOODON:00002503"
+      ],
+      "samples": [
+        {
+          "chunk_id": "5e6764b5fe8fe46ec97e2c8da7fd58fdb874256d",
+          "excerpt": "Findings from animal models suggest early exposure to polyunsaturated fatty acids (PUFAs) during pregnancy may influence developmental plasticity including adiposity(1). Birth cohort studies examining associations between offspring weight…",
+          "source_doc": "https://doi.org/10.1017/s0029665124006694"
+        },
+        {
+          "chunk_id": "dcbde24cfaffb759a12662482ada174f462b426c",
+          "excerpt": "PurposeFish is a source of various nutrients beneficial for bone health, but few studies have investigated the association between bone mineral density (BMD) and fish consumption. Thus, the aim was to investigate the relationship between t…",
+          "source_doc": "https://doi.org/10.1007/s00394-018-1665-6"
+        },
+        {
+          "chunk_id": "5bc3fc155a2756019f299c1e328767854af9fa96",
+          "excerpt": "Fatty acids are essential molecules, which function as structural components, energy sources, and signaling mediators(1). Subcutaneous adipose tissue (SAT) is the largest fat depot and plays a crucial role in maintaining health and homeost…",
+          "source_doc": "https://doi.org/10.1017/s0029665124006633"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-b3a0aabf",
+      "label": "omega 3 fatty acids",
+      "label_source": "llm",
+      "chunk_count": 64,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fatty",
+        "fats",
+        "fish",
+        "acids",
+        "omega"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001053",
+        "FOODON:00001172",
+        "FOODON:00001231",
+        "FOODON:00001233",
+        "FOODON:00001290",
+        "FOODON:00001605"
+      ],
+      "samples": [
+        {
+          "chunk_id": "6414a45f-4490-4d21-8050-d3aa45ea0042",
+          "excerpt": "competitor for cholesterol. Keep a collection of nuts in your freezer that can be added to your salads, stir-fry, one-dish foods, soups, desserts, and yogurts. - Appearance. Saturated and trans fats are not good for you and must be placed…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "6ab4d051-976d-4db1-99d8-45c6d3d7c5bb",
+          "excerpt": "There are many sources of omega-3 foods. It is important to strike a proper balance between omega-3 and omega-6 fats in your diet. Research suggests that a diet that is too high in omega-6 fats distorts the balance of proinflammatory agent…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "bdec253a-ba33-4233-93a6-c1ac5064c2e5",
+          "excerpt": "Long chain omega-3 fatty acids are called DHA and EPA. They are only found in oily fish such as herring, mackerel, salmon, sardines, pilchards, kippers and trout. The human body has very limited ability to make these long chain omega-3 fat…",
+          "source_doc": "OK_Ireland_Healthy_Eating_Guidelines_Report_2011_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-e285f902",
+      "label": "vitamin and nutrient intake",
+      "label_source": "llm",
+      "chunk_count": 51,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "vitamin",
+        "iodine",
+        "fortified",
+        "food",
+        "products"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001169",
+        "FOODON:00001253",
+        "FOODON:00001255",
+        "FOODON:00001290",
+        "FOODON:00001579",
+        "FOODON:00001594"
+      ],
+      "samples": [
+        {
+          "chunk_id": "b76ed6be-1fa1-4651-9a4f-c14c91802352",
+          "excerpt": "Liver: A Lesson in Moderation Foods naturally rich in vitamin A pose little risk of toxicity, with the possible exception of liver. When young laboratory pigs eat daily chow made from salmon parts, including the livers, their growth halts,…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "e6a7994f-868a-4a04-9102-475cf552526b",
+          "excerpt": "| Table 7-8, The Fat-Soluble Vitamins-Functions, | Blood/Circulatory System | Deficiency Symptoms | Toxicity Symptoms Elevated blood calcium; calcification of blood vessels and heart tissues | | Chief Functions in the Body Mineralization o…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "ef782cff-05d8-4f9a-b4a6-700c6f8a4de2",
+          "excerpt": "For example, a person taking fish oils and a multivitamin may be getting twice the vitamin D they are aiming for. - Supplements should be kept out of reach of children who are at greater risk because of their small body size. - While liver…",
+          "source_doc": "OK_Ireland_10507_FSAI_Healthy-Eating-Guidelines-Accessible-FA1_unknown_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-ccc1eeda",
+      "label": "protein food portions",
+      "label_source": "llm",
+      "chunk_count": 44,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "_____",
+        "cup",
+        "protein",
+        "_____ cup",
+        "food"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001038",
+        "FOODON:00001059",
+        "FOODON:00001180",
+        "FOODON:00001290",
+        "FOODON:00001856",
+        "FOODON:00002165",
+        "FOODON:00002300"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1efc8f59-afe6-4dde-a38d-e45a416dfcd9",
+          "excerpt": "30g cooked beef ¼ cup (40g) baked beans 35g hummus 1 medium egg 30g cooked lamb ¼ cup (40g) lentils 35g cooked portion tofu 1 heaped teaspoon smooth peanut or nut butter For more food facts and healthy eating tips visit www.gov.ie/healthyi…",
+          "source_doc": "OK_Ireland_meat-shelf_unknown_children1to4yo.pdf"
+        },
+        {
+          "chunk_id": "bca24ad4-22e9-46ad-8f11-810deb2f01bd",
+          "excerpt": "| Food | Serving | Magnesium (mg) | Percent Daily Value | |------------------|-----------|------------------|-----------------------| | Almonds | 1 oz. | 80 | 20 | | Cashews | 1 oz. | 74 | 19 | | Soymilk | 1 c. | 61 | 15 | | Black beans |…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "d149f2f8-e101-4d80-8704-685168f40316",
+          "excerpt": "Supermarket and health-food store shelves offer an extraordinary number of high-protein shake mixes. While the carbohydrate count is lower now in some of these products than a few years ago, they still contain added fats and sugars. They a…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-5d09ddc3",
+      "label": "fish and gut health",
+      "label_source": "llm",
+      "chunk_count": 35,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "gut",
+        "fish",
+        "microbiota",
+        "gut microbiota",
+        "protein"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001055",
+        "FOODON:00001145",
+        "FOODON:00001258",
+        "FOODON:00001660",
+        "FOODON:00001796",
+        "FOODON:00002220",
+        "FOODON:00002472"
+      ],
+      "samples": [
+        {
+          "chunk_id": "f489464cb2b6a1c426111177c7781de934092714",
+          "excerpt": "Emerging evidence from studies evaluating the effect of lean fish consumption in humans suggests that proteins from fish have several beneficial metabolic effects. Rest, or waste, material from the fishing industry contains high-quality pr…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuz016"
+        },
+        {
+          "chunk_id": "685a9f80e894fed853362ee492145d47bd1120ea",
+          "excerpt": "BACKGROUND & AIMS Metabolic flexibility is the ability to adapt fuel oxidation to fuel availability. Metabolic inflexibility has been associated with obesity, the metabolic syndrome and insulin resistance, and can be improved by exercise o…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2019.12.010"
+        },
+        {
+          "chunk_id": "b7a18fe75d0c5b0fe13a6bc9503b6060c1aa70ec",
+          "excerpt": "CONTEXT Consumption of lean fish and fish-derived proteins were effective for improving lipid profiles in published studies; however, evidence remains inconclusive. OBJECTIVE To evaluate the effectiveness of lean fish or fish-derived prote…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuab003"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-4f6796ab",
+      "label": "food safety and bacteria",
+      "label_source": "llm",
+      "chunk_count": 32,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fish",
+        "cooked",
+        "raw",
+        "food",
+        "bacteria"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001133",
+        "FOODON:00001180",
+        "FOODON:00001181",
+        "FOODON:00001235",
+        "FOODON:00001260",
+        "FOODON:00001290",
+        "FOODON:00001300",
+        "FOODON:00001605"
+      ],
+      "samples": [
+        {
+          "chunk_id": "b7dfb604-1a50-42ce-bb56-566ed16c6104",
+          "excerpt": "| PERISHABLE F OOD | KEEPS REFRIGERATED UP TO | |--------------------------------------------------------------|------------------------------| | Cooked fresh vegetables | 3 to 4 days | | Cooked pasta | 3 to 5 days | | Cooked rice | 1 week…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "3e7ef1c8-3390-464d-b719-3c0956c6fdaa",
+          "excerpt": "- /H18567 Be cautious about raw meat and fish; they may carry bacteria and parasites. These menu items are served raw: steak tartare (raw ground beef and raw eggs), carpaccio (thin-sliced raw beef), and sashimi (raw fish). Sushi, often mad…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "51ed4cb5-aea3-4ad3-a1ba-569efbffd0da",
+          "excerpt": "- Avoid unpasteurised milk and any cheese or yoghurts made with unpasteurised milks - Avoid cheeses which have been ripened by mould, e.g. Camembert, Danish Blue - Avoid eating deli meats and deli salads, and pre-packed salads and coleslaw…",
+          "source_doc": "OK_Ireland_Healthy_Eating_Guidelines_Report_2011_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-0a08d4a2",
+      "label": "lipid emulsions in nutrition",
+      "label_source": "llm",
+      "chunk_count": 28,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "hpn",
+        "emulsions",
+        "lipid",
+        "oil",
+        "patients"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00002832",
+        "FOODON:00002877",
+        "FOODON:00003004",
+        "FOODON:00003200",
+        "FOODON:00003210",
+        "FOODON:00003265",
+        "FOODON:00003449",
+        "FOODON:00003837"
+      ],
+      "samples": [
+        {
+          "chunk_id": "62b68fde6c389da6faa3f50db7107f289df08122",
+          "excerpt": "The purpose of this review is to explain the historical and clinical background for intravenous fish oil administration, to evaluate its results by using a product specific metaanalysis, and to stimulate further research in the immune-modu…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2017.07.006"
+        },
+        {
+          "chunk_id": "d97958afdbcdfb8c512b4308b1784065053b399a",
+          "excerpt": "BACKGROUND Home parenteral nutrition (HPN) is a life-sustaining therapy for individuals with intestinal failure in a community setting. It refers to the intravenous infusion of macronutrients, micronutrients, fluids and electrolytes. Routi…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2021.11.009"
+        },
+        {
+          "chunk_id": "71f2df424434799e66d56f874ad51a0be3ffc374",
+          "excerpt": "BACKGROUND & AIMS Medium-chain triglycerides (TG) (MCT) and fish oil (FO) TG are incorporated as the core TG component into intravenous (IV) lipid emulsions for infusion in parenteral nutrition. Bolus injections of IV emulsions, on the oth…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2020.07.002"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-fda47478",
+      "label": "fish and pregnancy nutrition",
+      "label_source": "llm",
+      "chunk_count": 24,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fish",
+        "week",
+        "caffeine",
+        "pregnancy",
+        "women"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001260",
+        "FOODON:00002753",
+        "FOODON:00002918",
+        "FOODON:00003049",
+        "FOODON:00003140",
+        "FOODON:00003206",
+        "FOODON:00003281",
+        "FOODON:00003334"
+      ],
+      "samples": [
+        {
+          "chunk_id": "2cae447c-c07c-4910-a030-b6708500d7ab",
+          "excerpt": "If alcohol is taken, care should be taken to drink sensibly by setting limits and never bingeing. The upper limits are: - 21 standard* drinks per week for men - 14 standard* drinks per week for women These upper limits are not targets to b…",
+          "source_doc": "OK_Ireland_Healthy_Eating_Guidelines_Report_2011_all.pdf"
+        },
+        {
+          "chunk_id": "c64c3fd6-4b17-40ac-8f5a-76643c921f9e",
+          "excerpt": "- /H18567 Enjoy fish at least two or three times a week. Include some fatty fish, such as salmon, herring, and trout. Refer to chapter 12 for guidelines on eating fish during pregnancy and breast-feeding. - /H18567 Be sensible with meat, p…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "44784f09-2cf6-4a86-90c5-8cdfca37de45",
+          "excerpt": "Fatty fish is a good source of omega-3 fatty acids, but some species contain large amounts of the pollutant mercury that can harm the developing fetal brain and nervous system (described in Chapter 12). The benefits of eating fish and shel…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-856b0f6b",
+      "label": "calcium rich dairy products",
+      "label_source": "llm",
+      "chunk_count": 20,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "calcium",
+        "milk",
+        "cheese",
+        "yogurt",
+        "lactose"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001065",
+        "FOODON:00001260",
+        "FOODON:00002203",
+        "FOODON:00002300",
+        "FOODON:00002398",
+        "FOODON:00002472",
+        "FOODON:00002473",
+        "FOODON:00002564"
+      ],
+      "samples": [
+        {
+          "chunk_id": "e55901fe-6f7f-409d-819e-faf36471ebe3",
+          "excerpt": "2 squares graham crackers - 1 cup low-fat fruit yogurt - 1 /2 cup orange juice (perhaps calcium fortified)",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "1171cf58-9090-4f9e-9e22-f6e96df8a683",
+          "excerpt": "If you're lactose intolerant, refer to 'Lactose: Tips for Tolerance' in chapter 21. - /H18567 For something different, try goat cheese. It has a strong and unique flavor. A half-ounce portion of semisoft goat cheese has about 42 milligrams…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "1af41feb-b08f-4f45-82a7-9ac64e045dff",
+          "excerpt": "Create your own 'fat replacer': yogurt cheese as a thick spread, creamy dip, or baked potato topper. It's low in fat, yet high in calcium. Line a strainer with a paper coffee filter, or use a strainer specially meant for making yogurt chee…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-49456285",
+      "label": "sustainable fisheries management",
+      "label_source": "llm",
+      "chunk_count": 19,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fisheries",
+        "pounds",
+        "seaver",
+        "fish",
+        "noaa"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001856",
+        "FOODON:00002679",
+        "FOODON:00003473",
+        "FOODON:00004237",
+        "FOODON:00004327",
+        "FOODON:00004462",
+        "FOODON:00004560",
+        "FOODON:00005194"
+      ],
+      "samples": [
+        {
+          "chunk_id": "91563493-8d9b-455c-9c92-fffa8be2a7f8",
+          "excerpt": "| Rank | Species | Pounds (10 3 ) | Overfished | Overfishing | |--------|-----------|------------------|--------------|---------------| | 1 | Pollock | 2,826,692 | No | No | | 2 | Menhaden | 1,875,035 | No | Yes | | 3 | Salmon | 780,088 |…",
+          "source_doc": "Sustainable_Diets_national_academy_of_sciences_2014.pdf"
+        },
+        {
+          "chunk_id": "ad48e607-7c31-4632-9f6e-c0c7ce6cedce",
+          "excerpt": "An audience member asked Jones whether the global data she shared on fish factored in the overfishing of predator species (e.g., shark, tuna). Jones reiterated Mitloehner's cautionary note about using global averages. Different countries m…",
+          "source_doc": "Sustainable_Diets_national_academy_of_sciences_2014.pdf"
+        },
+        {
+          "chunk_id": "0c186957-2732-46cb-8fdf-de5fa386d788",
+          "excerpt": "By and large, domestic fisheries are well managed and in good condition (see Table 2-1) (NOAA, 2013a). The leading source of capture fisheries harvest in the United States is pollock. Jones described the harvest of pollock as sustainable,…",
+          "source_doc": "Sustainable_Diets_national_academy_of_sciences_2014.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-a7177390",
+      "label": "sodium and salt intake",
+      "label_source": "llm",
+      "chunk_count": 18,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "salt",
+        "sodium",
+        "iodine",
+        "food",
+        "junk"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001055",
+        "FOODON:00001079",
+        "FOODON:00001133",
+        "FOODON:00001180",
+        "FOODON:00001235",
+        "FOODON:00002137",
+        "FOODON:00002385",
+        "FOODON:00002429"
+      ],
+      "samples": [
+        {
+          "chunk_id": "37e897c5-a69e-4912-a599-bbf615886691",
+          "excerpt": "Why limit salt-cured, salt-pickled, and smoked foods? They may increase the risk for stomach cancer, especially among people and cultures who eat a lot of salt-preserved foods. There' s no evidence that the amounts of salt used in cooking…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "2161d300-33b4-41c3-8af4-1a905afdafe9",
+          "excerpt": "estimated 75% of total sodium consumed. Canned meats and soups, condiments, pickled foods, and traditional snacks (chips, pretzels, crackers, etc.) are particularly high in added salt. Soups and condiments, for example, usually have 400 to…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        },
+        {
+          "chunk_id": "a511cb8481337935bb5bba00e13593edf1e6ef34",
+          "excerpt": "Salt is a major determinant of population blood pressure levels. Salt intake in Costa Rica is above levels required for good health. With an increasing number of Costa Ricans visiting fast food restaurants, it is likely that fast-food is c…",
+          "source_doc": "https://doi.org/10.1016/j.appet.2014.08.027"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-leiden-5e1c0dcf",
+      "label": "bariatric surgery outcomes",
+      "label_source": "llm",
+      "chunk_count": 15,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "surgery",
+        "patients",
+        "roux",
+        "bariatric",
+        "rygb"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00003334",
+        "FOODON:00003816",
+        "FOODON:00004327",
+        "FOODON:02020741",
+        "FOODON:02020744",
+        "FOODON:03301297",
+        "FOODON:03302143",
+        "FOODON:03303665"
+      ],
+      "samples": [
+        {
+          "chunk_id": "f718b9c0f3f343d38c6eecb216a15a1d0e095f34",
+          "excerpt": "The Roux-Y gastric bypass (RYGBP) is an effective weight-reducing procedure but the involved mechanisms of action are obscure. The Roux limb is the intestinal segment that following surgery is the primary recipient for food intake. The aim…",
+          "source_doc": "https://doi.org/10.1007/s11695-010-0192-1"
+        },
+        {
+          "chunk_id": "c7b1470328575014f7c8c2a331a7df9a2205053b",
+          "excerpt": "Obesity increases the risk of pelvic floor disorders in individuals with obesity, including faecal incontinence. Faecal incontinence (FI) is a condition with important clinical and psychosocial consequences. Though it is associated with ob…",
+          "source_doc": "https://doi.org/10.1007/s11695-021-05360-7"
+        },
+        {
+          "chunk_id": "ce7cef26163d997318363c8344a030f220967484",
+          "excerpt": "Cardiovascular hemodynamics, electrophysiological characteristics, and heart anatomy are all negatively impacted by obesity. The aim of this study is to compare the impact of sleeve gastrectomy versus single anastomosis sleeve ileal bypass…",
+          "source_doc": "https://doi.org/10.1007/s11695-025-07928-z"
+        }
+      ]
+    }
+  ]
+}

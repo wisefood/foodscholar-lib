@@ -1,0 +1,18 @@
+{
+  "13k (guides + textbooks)": {
+    "foodon": 6290,
+    "shelves": 256,
+    "olive_chunks": 53,
+    "legume_chunks": 760,
+    "olive_themes": 1,
+    "legume_themes": 3
+  },
+  "34k (+ abstracts)": {
+    "foodon": 25188,
+    "shelves": 403,
+    "olive_chunks": 185,
+    "legume_chunks": 1455,
+    "olive_themes": 6,
+    "legume_themes": 6
+  }
+}

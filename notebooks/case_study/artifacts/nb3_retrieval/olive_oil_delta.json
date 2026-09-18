@@ -1,0 +1,65 @@
+{
+  "anchor": "olive_oil",
+  "query": "Is olive oil good for cardiovascular health?",
+  "flat_ids": [
+    "e707a9ba3a10087013cd4619f41139eb86903f2b",
+    "3cdc7304779886b56e92bc1e614bc97cffb7d76e",
+    "ba0d1c1f-1050-4470-8f94-cd66176947f7",
+    "9b4380ad7e23bd54a1924bc12dbedd417e0faa76",
+    "d52afa85-ea8d-4002-9780-d876deb33b58",
+    "f09c5430-67bb-47ee-850a-23dcebdb937d",
+    "5c0c2598ad881f53aa78e2ebe2ad584b8a9c7813",
+    "8bb571012434741ec2816a821f29b69b718e9398",
+    "29333fbe-54a4-4707-a460-7591b0896d22",
+    "9685bcff32ea594744bd4f67edf0a72de84c08fa"
+  ],
+  "graph_ids": [
+    "f09c5430-67bb-47ee-850a-23dcebdb937d",
+    "8bb571012434741ec2816a821f29b69b718e9398",
+    "9685bcff32ea594744bd4f67edf0a72de84c08fa",
+    "e707a9ba3a10087013cd4619f41139eb86903f2b",
+    "3cdc7304779886b56e92bc1e614bc97cffb7d76e",
+    "96e9cb3c-ce6a-43f8-89ab-c8437bc70ad4",
+    "358552ed7ec8591304fc1f2a315c245f2bb40678",
+    "f9baa121bdb62d11f13858e4253913b747574ca6",
+    "bc46ba7c-2832-48bc-bebd-9e8b0f1ff92c",
+    "e8bc77a80fbecb3110dd24af0896c78ccb67398d"
+  ],
+  "delta": [
+    {
+      "chunk_id": "96e9cb3c-ce6a-43f8-89ab-c8437bc70ad4",
+      "source_doc": "Human-Nutrition-1530134911.pdf",
+      "excerpt": "For six years, researchers from the University of Bordeaux in France followed the dietary habits of more than seven thousand individuals age sixty-five and over. Participants who described greater consumption of extravirgin olive oil repor…",
+      "theme_id": "olive_oil-leiden-fc736fe6",
+      "reason": "paraphrase"
+    },
+    {
+      "chunk_id": "358552ed7ec8591304fc1f2a315c245f2bb40678",
+      "source_doc": "https://doi.org/10.1016/j.clnu.2022.10.001",
+      "excerpt": "BACKGROUND Some large prospective studies on olive oil consumption and risk of chronic disease suggested protective effects. OBJECTIVE We conducted an outcome-wide systematic review and meta-analysis of prospective cohort studies and rando…",
+      "theme_id": "olive_oil-leiden-acfbd1d5",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "f9baa121bdb62d11f13858e4253913b747574ca6",
+      "source_doc": "https://doi.org/10.1093/nutrit/nuae166",
+      "excerpt": "CONTEXT Inflammation and endothelial dysfunction are important risk factors for chronic diseases, including cardiovascular diseases and related mortality. OBJECTIVE This systematic review and meta-analysis aimed to assess the effects of 2…",
+      "theme_id": "olive_oil-leiden-acfbd1d5",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "bc46ba7c-2832-48bc-bebd-9e8b0f1ff92c",
+      "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf",
+      "excerpt": "Dietary Reference Intakes - ■ Dietary cholesterol consumption should be as low as possible without compromising the nutritional adequacy of the diet: - ■ A healthy dietary pattern limits cholesterol. extra virgin olive oil minimally proces…",
+      "theme_id": "olive_oil-leiden-fc736fe6",
+      "reason": "paraphrase"
+    },
+    {
+      "chunk_id": "e8bc77a80fbecb3110dd24af0896c78ccb67398d",
+      "source_doc": "https://doi.org/10.1093/nutrit/nuaa014",
+      "excerpt": "Consumption of highly processed foods, such as those high in trans fats and free sugars, coupled with sedentarism and chronic stress increases the risk of obesity and cardiometabolic disorders, while adherence to a Mediterranean diet is in…",
+      "theme_id": "olive_oil-leiden-acfbd1d5",
+      "reason": "different-document"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "anchor": "olive_oil",
+  "query": "Is olive oil good for cardiovascular health?",
+  "ids": [
+    "e707a9ba3a10087013cd4619f41139eb86903f2b",
+    "3cdc7304779886b56e92bc1e614bc97cffb7d76e",
+    "ba0d1c1f-1050-4470-8f94-cd66176947f7",
+    "9b4380ad7e23bd54a1924bc12dbedd417e0faa76",
+    "d52afa85-ea8d-4002-9780-d876deb33b58",
+    "f09c5430-67bb-47ee-850a-23dcebdb937d",
+    "5c0c2598ad881f53aa78e2ebe2ad584b8a9c7813",
+    "8bb571012434741ec2816a821f29b69b718e9398",
+    "29333fbe-54a4-4707-a460-7591b0896d22",
+    "9685bcff32ea594744bd4f67edf0a72de84c08fa"
+  ],
+  "hits": [
+    {
+      "chunk_id": "e707a9ba3a10087013cd4619f41139eb86903f2b",
+      "excerpt": "CONTEXT Olive oil is a vegetable oil that provides health benefits, including a reduction in free radicals and total cholesterol and prevention of chronic diseases. The escalating…"
+    },
+    {
+      "chunk_id": "3cdc7304779886b56e92bc1e614bc97cffb7d76e",
+      "excerpt": "Mediterranean countries have lower rates of mortality from cardiovascular disease and cancer than Northern European or other Western countries. This has been attributed, at least…"
+    },
+    {
+      "chunk_id": "ba0d1c1f-1050-4470-8f94-cd66176947f7",
+      "excerpt": "Some oils are valued for their pleasing flavors or their phytochemicals that may support health. Virgin or extra virgin olive oils are mechanically pressed from olives, a process…"
+    },
+    {
+      "chunk_id": "9b4380ad7e23bd54a1924bc12dbedd417e0faa76",
+      "excerpt": "It is suggested that polyphenols back the cardiovascular protection offered by the Mediterranean diet. This study evaluates the association of specific types of dietary polyphenol…"
+    },
+    {
+      "chunk_id": "d52afa85-ea8d-4002-9780-d876deb33b58",
+      "excerpt": "In addition to their health imparting characteristics, diets have a pivotal role in supporting the transition towards more sustainable agriculture and food systems. However, few d…"
+    },
+    {
+      "chunk_id": "f09c5430-67bb-47ee-850a-23dcebdb937d",
+      "excerpt": "4. Olive oil contains a strong mix of antioxidants and monounsaturated fat, and may lower LDL while leaving HDL intact. Two tablespoons per day in place of less healthy saturated…"
+    },
+    {
+      "chunk_id": "5c0c2598ad881f53aa78e2ebe2ad584b8a9c7813",
+      "excerpt": "Cardiovascular disease risk factors begin in childhood and track into adulthood, increasing the possibility of impaired cardiometabolic health. Adopting healthy dietary patterns c…"
+    },
+    {
+      "chunk_id": "8bb571012434741ec2816a821f29b69b718e9398",
+      "excerpt": "BACKGROUND & AIMS The specific association of olive oil consumption with coronary heart disease (CHD) or stroke has not been totally established. OBJECTIVE to examine whether oliv…"
+    },
+    {
+      "chunk_id": "29333fbe-54a4-4707-a460-7591b0896d22",
+      "excerpt": "The dietary fats in the foods we eat break down in our digestive systems and begin the transport of precious micronutrients. By carrying fat-soluble nutrients through the digestiv…"
+    },
+    {
+      "chunk_id": "9685bcff32ea594744bd4f67edf0a72de84c08fa",
+      "excerpt": "Purpose This study aimed to assess the effect of dietary consumption of olive pomace oil (OPO) on blood lipids (primary outcome) and other cardiovascular disease (CVD) risk factor…"
+    }
+  ]
+}

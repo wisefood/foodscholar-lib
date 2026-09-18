@@ -1,0 +1,595 @@
+{
+  "anchor": "dietary_fibre",
+  "method": "leiden",
+  "shelf_id": "foodon:CDNO:0000005",
+  "themes": [
+    {
+      "theme_id": "dietary_fibre-leiden-4296d980",
+      "label": "dietary intake patterns",
+      "label_source": "llm",
+      "chunk_count": 156,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "intake",
+        "food",
+        "intakes",
+        "diet"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001017",
+        "FOODON:00001142",
+        "FOODON:00001143",
+        "FOODON:00001244",
+        "FOODON:00001253",
+        "FOODON:00001264"
+      ],
+      "samples": [
+        {
+          "chunk_id": "73087212-1037-4bb5-8c1b-377610fa8f5b",
+          "excerpt": "The GBD Study uses data from 195 countries and territories, as well as subnational data from 16 countries, to model health risk and outcome associations [14]. Leading GBD risk factors for NCD includes low intake of fruits, vegetables, legu…",
+          "source_doc": "FAO_WHO_sustainable_healthy_diets_2019.pdf"
+        },
+        {
+          "chunk_id": "b15da7f9506fcb03a69e837a5bad9068bbc9b861",
+          "excerpt": "BackgroundIncreasing inequalities in rates of obesity and chronic disease may be partly fuelled by increasing dietary inequalities, however very few nationally representative analyses of socioeconomic trends in dietary inequalities exist.…",
+          "source_doc": "https://doi.org/10.1186/s12966-018-0666-4"
+        },
+        {
+          "chunk_id": "368eac0689a6fba16dfdab232dfef81d79d50b48",
+          "excerpt": "This study aimed to examine the validity and reliability of the Dietary Index for a Child's Eating (DICE) in children living in New Zealand (NZ). Caregivers of healthy children aged 2-8 years completed a 4-day estimated food record (4DFR)…",
+          "source_doc": "https://doi.org/10.1111/mcn.12758"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-79402a95",
+      "label": "high fiber food choices",
+      "label_source": "llm",
+      "chunk_count": 141,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fiber",
+        "foods",
+        "fat",
+        "vegetables",
+        "calories"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001187",
+        "FOODON:00001198",
+        "FOODON:00001235",
+        "FOODON:00001290",
+        "FOODON:00001304",
+        "FOODON:00001331"
+      ],
+      "samples": [
+        {
+          "chunk_id": "3f8b2b4e-00f4-4117-9dc0-fc02439fecd2",
+          "excerpt": "Getting enough fiber-from whole-grain foods, bran, vegetables, legumes, fruits, nuts, and seeds-is important during pregnancy. The Adequate Intake for total fiber for pregnant women, regardless of age, is 28 grams per day-likely more than…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "5429c660-9cb2-4de8-aeaa-107e20da7ba3",
+          "excerpt": "- monounsaturated fats and may help to lower LDL. Substitute oils for solid fats when possible. - Choose whole-grain and high-fiber foods. Reduced risk for cardiovascular disease has been associated with diets that are high in whole grains…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "1be6dec2-0d93-4b39-916c-ed176dbe47e4",
+          "excerpt": "- Focus on whole food sources of dietary fat, because they come packaged with vitamins, minerals, phytochemicals, and sometimes fiber and protein. - Remember that saturated fats are found in large amounts in foods of animal origin. They sh…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-f0fa26c4",
+      "label": "diet and gut health",
+      "label_source": "llm",
+      "chunk_count": 115,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "microbiota",
+        "gut",
+        "dietary",
+        "gut microbiota",
+        "diet"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001099",
+        "FOODON:00001190",
+        "FOODON:00001253",
+        "FOODON:00001258",
+        "FOODON:00001264",
+        "FOODON:00001304"
+      ],
+      "samples": [
+        {
+          "chunk_id": "b4d4cfb45d871db5f0019d9f1d73a1158ca1000c",
+          "excerpt": "Dietary fiber is considered an important health-promoting food component; however, to better characterize associations between fiber consumption and health outcomes, it is important to identify reliable biomarkers of intake. Dietary fiber…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuaf095"
+        },
+        {
+          "chunk_id": "27463832d5fb84814a17e1e1a3c8f9beb4f9fb2e",
+          "excerpt": "Background The infant gut microbiome undergoes rapid changes in the first year of life, supporting normal development and long-term health. Although diet shapes this process, the role of fibers in complementary foods on gut microbiome matu…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.11.011"
+        },
+        {
+          "chunk_id": "3348d466cb06e1318db6a0f3e7868ffc63fd4140",
+          "excerpt": "The gut microbiota and their metabolites are increasingly recognised for their roles in gut health. Almonds are nuts that are rich in fermentable nutrients and have physiochemical properties that result in poor nutrient bioaccessibility in…",
+          "source_doc": "https://doi.org/10.1017/S0029665122000179"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-7d258a5a",
+      "label": "healthy food choices",
+      "label_source": "llm",
+      "chunk_count": 105,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "foods",
+        "food",
+        "vegetables",
+        "fiber",
+        "protein"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001059",
+        "FOODON:00001181",
+        "FOODON:00001253",
+        "FOODON:00001280",
+        "FOODON:00001579",
+        "FOODON:00002070"
+      ],
+      "samples": [
+        {
+          "chunk_id": "3a8cc7db-add4-4676-90bb-254e891529e0",
+          "excerpt": "It is a visual representation of how different foods and drinks can be combined to contribute towards a healthy balanced diet. The Children's Food Pyramid organises foods and drinks into 5 main shelves, starting from the bottom: Cereals an…",
+          "source_doc": "OK_Ireland_questions-and-answers-8c602ed6-3521-4b6c-b80c-7cd1f213c1d1_unknown_children1to4yo.pdf"
+        },
+        {
+          "chunk_id": "94ab15d8-07dc-42d7-bc1c-dc7d3adf8d3a",
+          "excerpt": "- /H18567 Talk about eating-out options so your teen is prepared to make wise choices with peers. - /H18567 Whether you're a vegetarian or not, be a role model for healthful eating and healthful living. - /H18567 Most of all, be supportive…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "3d74eb2e-9731-40df-9304-8b70245c2ea6",
+          "excerpt": "These foods provide vitamins, minerals and fibre.",
+          "source_doc": "OK_Ireland_vegetable-shelf_unknown_children1to4yo.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-35af46e0",
+      "label": "carbohydrate and fiber intake",
+      "label_source": "llm",
+      "chunk_count": 97,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fiber",
+        "food",
+        "sugars",
+        "fat",
+        "carbohydrates"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001180",
+        "FOODON:00001290",
+        "FOODON:00002274",
+        "FOODON:00002472",
+        "FOODON:00002473",
+        "FOODON:00002739"
+      ],
+      "samples": [
+        {
+          "chunk_id": "fb4a4eae-f7fd-40a2-bd68-0296ede86d2f",
+          "excerpt": "With this approach, you keep track of the total carbohydrate grams you eat and drink for a day, trying to eat about the same number of carbohydrates, at the same time, each day. Remember, carbohydrates have more effect on blood sugar than…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "d035415d-22cc-42b9-b1ee-4e49ffda5edb",
+          "excerpt": "Fiber, vitamins A and C, calcium, and iron are listed because they often come up short. So make food choices that help you eat enough of these nutrients. It' s a way to help improve your health, stay healthy, and perhaps reduce your risk o…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "19c5e8ae-7c3a-4b08-a732-25cb3a133604",
+          "excerpt": "Complex carbohydrates are also called polysaccharides, because they contain many sugars. (The prefix 'poly-' means 'many.') There are 3 main polysaccharides: 1. Starch 2. Glycogen 3. Fiber All three of these polysaccharides are made up of…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-4cb6400f",
+      "label": "dietary cancer risk",
+      "label_source": "llm",
+      "chunk_count": 85,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "intake",
+        "dietary",
+        "risk",
+        "mortality",
+        "cancer"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001209",
+        "FOODON:00001570",
+        "FOODON:00001893",
+        "FOODON:00001981",
+        "FOODON:00002057"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1302ebb9681581dd6ebfe088f6a1972618dd8125",
+          "excerpt": "Background Plant-based diets (PBD) may induce hyperkalemia in chronic kidney disease (CKD) patients. Objectives We explored the safety and feasibility of PBD in hyperkalemic CKD patients receiving the potassium binder sodium zirconium cycl…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.06.025"
+        },
+        {
+          "chunk_id": "83403bb2db8840a5e621995da015027cb08544f1",
+          "excerpt": "Background A high intake of dietary fibre has been associated with a reduced risk of diverticular disease in several studies; however, the dose–response relationship between fibre intake and diverticular disease risk has varied, and the av…",
+          "source_doc": "https://doi.org/10.1007/s00394-019-01967-w"
+        },
+        {
+          "chunk_id": "7485ece9e8d0ac20b8a0c6a30f76c027671c528d",
+          "excerpt": "BACKGROUND AND AIMS Previous studies, mainly focused on quantity rather than variety, have shown beneficial associations between the amount of fruit and vegetable consumed, diet quality and healthy lifestyle. The aim is to evaluate the ass…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2021.02.024"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-b11d13d8",
+      "label": "dietary fiber benefits",
+      "label_source": "llm",
+      "chunk_count": 77,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "fiber",
+        "fibers",
+        "cellulose",
+        "dietary",
+        "bile"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001304",
+        "FOODON:00002207",
+        "FOODON:00002472",
+        "FOODON:00002473",
+        "FOODON:00002510",
+        "FOODON:00002520"
+      ],
+      "samples": [
+        {
+          "chunk_id": "f2ceec2d-4cac-4ec4-b8e4-a9d9f71bba6d",
+          "excerpt": "the amount and type of dietary fiber that is ingested. In developed countries, as much as 10% to 15% of ingested carbo- hydrate may be fermented in the colon; in the third-world (developing) countries, this percentage may be considerably h…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        },
+        {
+          "chunk_id": "0205fe41-b0a5-4f61-84cf-c2098719952c",
+          "excerpt": "Fiber isn't a 'lonely' component of food. And fiber' s benefits in food can't be easily separated from the contributions of other nutrients and plant substances. Most foods with significant amounts of fiber-such as legumes (dry beans), who…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "40feeb7a-f2fc-4dc0-a687-4b932cd0964a",
+          "excerpt": "βGLUCANS β -glucans are homopolymers of glucopyranose units (Figure 4.2f). This water-soluble dietary fiber is found in relatively high amounts in cereal brans, especially oats and barley. Oat β -glucan consists of a chain of glucopyranos…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-d57e73e7",
+      "label": "dietary fiber intake",
+      "label_source": "llm",
+      "chunk_count": 75,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "intake",
+        "dietary",
+        "glucose",
+        "weight",
+        "study"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001093",
+        "FOODON:00001198",
+        "FOODON:00001264",
+        "FOODON:00001304",
+        "FOODON:00001870",
+        "FOODON:00001896",
+        "FOODON:00002274"
+      ],
+      "samples": [
+        {
+          "chunk_id": "e484bcbb285e2ddb14e6ab430db9144e6f3dc419",
+          "excerpt": "Dietary fiber and whole grain foods may contribute to the regulation of appetite; however, evidence has produced inconclusive findings. The objective was to evaluate the effects of an experimental wholemeal pasta on appetite ratings, plasm…",
+          "source_doc": "https://doi.org/10.1016/j.appet.2018.02.004"
+        },
+        {
+          "chunk_id": "70e840b38b0c3a835aa45b7ecde4b77421798f85",
+          "excerpt": "Chickpeas are low glycaemic index foods with delayed digestion and reduced postprandial glycaemic responses (PPGR). However, in vitro studies suggest that mechanical processing of chickpeas, that result in cell wall disruption, significant…",
+          "source_doc": "https://doi.org/10.1017/S0029665120007727"
+        },
+        {
+          "chunk_id": "a0d706c1038a59842bbe5f834caccff8fb379e0c",
+          "excerpt": "BACKGROUND The role of dietary fiber in obesity management remains debatable. Evidence suggests that intake of viscous fiber may have the potential to facilitate weight loss. OBJECTIVE We aimed to summarize and quantify the effects of visc…",
+          "source_doc": "https://doi.org/10.1093/ajcn/nqz292"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-887782fb",
+      "label": "dietary intake interventions",
+      "label_source": "llm",
+      "chunk_count": 65,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "intake",
+        "intervention",
+        "diet",
+        "participants"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001253",
+        "FOODON:00001280",
+        "FOODON:00001579",
+        "FOODON:00002386",
+        "FOODON:00002472",
+        "FOODON:00002646",
+        "FOODON:00003147"
+      ],
+      "samples": [
+        {
+          "chunk_id": "306d292a717bb53d35fc78a0f2421558da691d17",
+          "excerpt": "BACKGROUND & AIMS Debate still exists about the impact of dental implant-supported prostheses on nutritional status of partially and complete edentulous patients. This review aims to answer the focused question: \"Do complete and partial ed…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2021.02.018"
+        },
+        {
+          "chunk_id": "c68639faa1f0cbd3442e9251ef6745be5e1d211a",
+          "excerpt": "BackgroundPromoting positive changes in lifestyle behavior in the whole population may be a feasible and effective approach to reducing type 2 diabetes burden, but the impact of population shifts of modifiable risk factors remains unclear.…",
+          "source_doc": "https://doi.org/10.1186/s12966-017-0489-8"
+        },
+        {
+          "chunk_id": "775ec8c7e7e7a0927e1c96429cda75fa368aa63f",
+          "excerpt": "Research studies suggest that date-palm (Phoenix dactylifera L.) fruits provide a superior nutritional and health benefits, compared to other fruits (1). They are rich source of many essential nutrients including carbohydrates, dietary fib…",
+          "source_doc": "https://doi.org/10.1017/S002966512400435X"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-c7da758f",
+      "label": "dietary fiber intake",
+      "label_source": "llm",
+      "chunk_count": 59,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "intake",
+        "patients",
+        "fiber",
+        "ibd"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001079",
+        "FOODON:00001258",
+        "FOODON:00001579",
+        "FOODON:00001709",
+        "FOODON:00001893",
+        "FOODON:00002214"
+      ],
+      "samples": [
+        {
+          "chunk_id": "6f894c61091229941de8bb20b063c9c3887c80fb",
+          "excerpt": "BACKGROUND AND AIMS Malnourished patients, who undergo gastrointestinal (GI) surgery, have a higher risk of postoperative complications, including higher rates of morbidity and mortality. Generally, a low-fiber diet is recommended after GI…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2025.12.002"
+        },
+        {
+          "chunk_id": "de2b173f6beb90063beffb4ad6e86c2fa2c36ecb",
+          "excerpt": "BACKGROUND & AIMS Chronic alcohol consumption can cause malnutrition that may contribute to alcohol-induced organ injury and psychological disorders. We evaluated the link between nutrient intake, especially dietary fibers (DF) and differe…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2021.03.029"
+        },
+        {
+          "chunk_id": "846b97be1f82fe6c335a9d29cf43c526d6f7f622",
+          "excerpt": "PurposeIncreased awareness of the importance of dietary fibre has led to increased interest in “functional” fibre components like digestion-resistant maltodextrin (RMD). This randomized, placebo-controlled, double-blind study assessed the…",
+          "source_doc": "https://doi.org/10.1007/s00394-015-1045-4"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-6cdcbcd5",
+      "label": "whole grain nutrition",
+      "label_source": "llm",
+      "chunk_count": 52,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "grain",
+        "grains",
+        "fiber",
+        "flour",
+        "wheat"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001181",
+        "FOODON:00001290",
+        "FOODON:00001570",
+        "FOODON:00001759",
+        "FOODON:00002354",
+        "FOODON:00002456"
+      ],
+      "samples": [
+        {
+          "chunk_id": "8eb482f8-d4b6-48a9-bb91-9c2495dbec16",
+          "excerpt": "| Polished, long-grain white rice | 1 ⁄ 2 lb. (1 1 ⁄ 4 cups) | 3 3 ⁄ 4 cups | | Converted white rice | 7 oz. (1 cup) | 3 1 ⁄ 2 cups | | Instant white rice | 8 oz. (2 cups) | 4 cups | macaroni, and fettuccine. Like traditional pasta, wholew…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "06e7612d-c000-4b11-915d-ac276c8be523",
+          "excerpt": "Looking for a creative, even exotic, way to eat more grains? Most of today' s 'new' grains are really as old as the hills. Although unfamiliar to many in the United States, some are staple foods that nourish millions of people around the w…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "9b1ff753-bddb-44b8-8cc0-ed2dbdd4d537",
+          "excerpt": "Figure 4.24. Wheat growing in a field. Before they are harvested, all grains are whole grains. They contain the entire seed (or kernel) of the plant. This seed is made up of three edible parts: the bran, the germ, and the endosperm. The se…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-999a3b15",
+      "label": "daily protein and calorie intake",
+      "label_source": "llm",
+      "chunk_count": 29,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "intakes",
+        "food",
+        "protein",
+        "calories"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00002472",
+        "FOODON:00002753",
+        "FOODON:00003189",
+        "FOODON:00003202",
+        "FOODON:00003265",
+        "FOODON:00003338",
+        "FOODON:00003339"
+      ],
+      "samples": [
+        {
+          "chunk_id": "12e1f8ff-96bc-42b3-b819-0189a1e3c266",
+          "excerpt": "87. Food and Nutrition Board. Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Protein and Amino Acids. Washington, DC: 2. National Academy Press, 2002 or www.nap.edu/ books/0309085373/ html/ 88. Gleeson M. Interrelationship…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        },
+        {
+          "chunk_id": "0dc9dd5c-5464-43af-822c-3d3a72702aba",
+          "excerpt": "| Adult Females (19+) | 46.0 | 10-35 | | * Denotes Adequate Intake | * Denotes Adequate Intake | * Denotes Adequate Intake | Source: Dietary Reference Intakes: Macronutrients. Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat,…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "bb3f43a1-0745-4d1d-bc1f-2e02d7d5a676",
+          "excerpt": "An eating plan that simply meets the AI for carbohydrates is likely inadequate for other nutrients and fiber, and may be high in fat. For that reason, the IOM set Acceptable Macronutrient Distribution Ranges (AMDR) for energy nutrients. Fo…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-c04921e6",
+      "label": "nutrient absorption factors",
+      "label_source": "llm",
+      "chunk_count": 24,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "absorption",
+        "fiber",
+        "resistant maltodextrin",
+        "maltodextrin",
+        "calcium"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001053",
+        "FOODON:00001169",
+        "FOODON:00001235",
+        "FOODON:00001304",
+        "FOODON:00001319",
+        "FOODON:00002472"
+      ],
+      "samples": [
+        {
+          "chunk_id": "ee847fbf-2a5e-4475-9f38-7181a30b3f8f",
+          "excerpt": "As well as considering calcium amounts in food, we also need to take into account bioavailability. Milk and milk-products have calcium bioavailability of around 30%. Bioavailability of calcium from plant foods, which is related to oxalate…",
+          "source_doc": "BDA_association_UK_dietitians_sustainability_one blue dot reference guide.pdf"
+        },
+        {
+          "chunk_id": "37de1291-8836-4b6e-9830-e13388e1855b",
+          "excerpt": "[1]. Absorption of preformed vitamin A following ingestion of pharmacological doses of the vitamin is thought to be nonsaturable [1]. Carotenoids also are absorbed by both carotenoid transporters and passive diffusion [2]. The efficiency o…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        },
+        {
+          "chunk_id": "99f08d73-74e9-44aa-9454-2471800ecaad",
+          "excerpt": "- /H18567 Cooking or food processing may enhance the body's ability to use (bioavailability) some phytonutrients. Carotenoids (including lycopene) are one example. In addition, dietary fat may enhance the absorption of carotenoids; dietary…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-leiden-6e1bb1c0",
+      "label": "dietary choices and health",
+      "label_source": "llm",
+      "chunk_count": 21,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "dash",
+        "igf",
+        "bcaa",
+        "hypertension"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001605",
+        "FOODON:00001874",
+        "FOODON:00002471",
+        "FOODON:00002472",
+        "FOODON:00002753",
+        "FOODON:00003177",
+        "FOODON:00003189"
+      ],
+      "samples": [
+        {
+          "chunk_id": "933f27f4-3f7d-44fd-b30e-dbb9b27ff0ba",
+          "excerpt": "The more detailed our knowledge about nutrition science, it seems, the BGStock72/Shutterstock.com Regular intake of whole foods like these, not individual chemicals, lowers people's cancer risks. simpler the truth becomes: people who consu…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "26b5f4b1-d616-408c-babd-e6d5c2826ac5",
+          "excerpt": "Poor dietary choices and a sedentary lifestyle account for about 300-600 thousand deaths every year according to the US Department of Health and Human Services. That number is thirteen times higher than the deaths due to gun violence. 4 Th…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "f3028949-09c4-404f-878a-ce4ac9c62857",
+          "excerpt": "It' s common knowledge: many Americans fall short on their nutrition report card! Many consume more calories than they need-and too much saturated fat, trans fats, cholesterol, added sugars, and salt. On the flip side, both kids and adults…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "shelves_per_facet": {
+    "allergies": 1,
+    "dietary_patterns": 1,
+    "foods": 402,
+    "nutrients": 391,
+    "health": 157,
+    "sustainability": 67
+  },
+  "total_shelves": 1019,
+  "per_facet": {
+    "foods": {
+      "n_shelves": 402,
+      "n_nonstub": 401,
+      "depth_hist": {
+        "0": 1,
+        "1": 9,
+        "2": 33,
+        "3": 69,
+        "4": 134,
+        "5": 156
+      },
+      "max_chunk_count": 8305,
+      "total_lifted_support": 139292
+    },
+    "nutrients": {
+      "n_shelves": 391,
+      "n_nonstub": 390,
+      "depth_hist": {
+        "0": 1,
+        "1": 6,
+        "2": 19,
+        "3": 69,
+        "4": 148,
+        "5": 148
+      },
+      "max_chunk_count": 16106,
+      "total_lifted_support": 380257
+    },
+    "health": {
+      "n_shelves": 157,
+      "n_nonstub": 156,
+      "depth_hist": {
+        "0": 1,
+        "1": 5,
+        "2": 12,
+        "3": 29,
+        "4": 60,
+        "5": 50
+      },
+      "max_chunk_count": 14260,
+      "total_lifted_support": 154220
+    },
+    "sustainability": {
+      "n_shelves": 67,
+      "n_nonstub": 66,
+      "depth_hist": {
+        "0": 1,
+        "1": 9,
+        "2": 18,
+        "3": 19,
+        "4": 12,
+        "5": 8
+      },
+      "max_chunk_count": 2249,
+      "total_lifted_support": 18543
+    },
+    "dietary_patterns": {
+      "n_shelves": 1,
+      "n_nonstub": 0,
+      "depth_hist": {
+        "0": 1
+      },
+      "max_chunk_count": 0,
+      "total_lifted_support": 0
+    },
+    "allergies": {
+      "n_shelves": 1,
+      "n_nonstub": 0,
+      "depth_hist": {
+        "0": 1
+      },
+      "max_chunk_count": 0,
+      "total_lifted_support": 0
+    }
+  },
+  "foods_depth_histogram": {
+    "0": 1,
+    "1": 9,
+    "2": 33,
+    "3": 69,
+    "4": 134,
+    "5": 156
+  },
+  "foods_n_shelves": 402,
+  "anchors": {
+    "olive_oil": {
+      "support_direct": 180,
+      "support_lifted": 5,
+      "chunk_count": 185
+    },
+    "legume": {
+      "support_direct": 19,
+      "support_lifted": 1436,
+      "chunk_count": 1455
+    },
+    "fish": {
+      "support_direct": 2,
+      "support_lifted": 787,
+      "chunk_count": 789
+    },
+    "dietary_fibre": {
+      "support_direct": 1214,
+      "support_lifted": 298,
+      "chunk_count": 1512
+    }
+  }
+}

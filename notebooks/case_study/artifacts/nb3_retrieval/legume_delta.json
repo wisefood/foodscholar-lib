@@ -1,0 +1,65 @@
+{
+  "anchor": "legume",
+  "query": "How do legumes and dietary fibre affect blood sugar and cholesterol?",
+  "flat_ids": [
+    "90a0e538560918824922be982726832cc9de1041",
+    "1f7bca736cfb4d1d2f20dd5148749d6b841fbf8f",
+    "9cee0314-bdc2-4166-b860-8afc8c753682",
+    "fd34ee5a-439b-4b41-a6af-4dda094c8985",
+    "561d040e-a03a-46bd-99a4-749ca59745a1",
+    "ef597835-c7f4-4407-b52c-9ddbeb1e8891",
+    "39f19870-a80e-42e6-84ce-7db3a5621f99",
+    "c536661b-5aff-4e14-8d4b-343dc56b671b",
+    "f27de645-0eed-42a4-b6c5-802028966309",
+    "9b5e0af041a76b30db08f91cb1995b89af306a72"
+  ],
+  "graph_ids": [
+    "fd34ee5a-439b-4b41-a6af-4dda094c8985",
+    "ef597835-c7f4-4407-b52c-9ddbeb1e8891",
+    "9b5e0af041a76b30db08f91cb1995b89af306a72",
+    "ecf13372-efb7-4190-95ef-12018616f045",
+    "26859b48-1b95-4513-b5b8-69e67528e2cb",
+    "4e06f266-fbc7-4132-adbe-e38055da0734",
+    "1f7bca736cfb4d1d2f20dd5148749d6b841fbf8f",
+    "90a0e538560918824922be982726832cc9de1041",
+    "2408e88138a8969cc2475a8ee80673669eebbcf0",
+    "0a99a60a-749e-4c9d-b6e6-6127f3c94d95"
+  ],
+  "delta": [
+    {
+      "chunk_id": "ecf13372-efb7-4190-95ef-12018616f045",
+      "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf",
+      "excerpt": "Years of research show that soluble fibers in beans, psyllium, oats, flaxseed, and oat bran seem to help lower blood cholesterol levels in some people. In fact, there' s enough sound research for the U.S. Food and Drug Administration to al…",
+      "theme_id": "dietary_fibre-leiden-79402a95",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "26859b48-1b95-4513-b5b8-69e67528e2cb",
+      "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf",
+      "excerpt": "For people with diabetes, fiber, especially soluble fiber, may perform another important functionhelping to control the rise of blood sugar levels after eating. For some people with diabetes, fiber' s role in blood sugar control may help r…",
+      "theme_id": "dietary_fibre-leiden-79402a95",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "4e06f266-fbc7-4132-adbe-e38055da0734",
+      "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf",
+      "excerpt": "- /H18567 Eat more fiber. Fiber-rich foods may help lower blood cholesterol levels, especially for those with high levels, offering some protection from heart disease. Fiber also may improve the ratio between LDL and HDL cholesterol. In th…",
+      "theme_id": "dietary_fibre-leiden-79402a95",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "2408e88138a8969cc2475a8ee80673669eebbcf0",
+      "source_doc": "https://doi.org/10.1007/s00394-025-03783-x",
+      "excerpt": "Legumes are recommended as a sustainable alternative protein source to red and processed meat (RPM). We studied the effects of a partial substitution of RPM with non-soy legumes on nutrient intakes and status, anthropometric measurements,…",
+      "theme_id": "dietary_fibre-leiden-4296d980",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "0a99a60a-749e-4c9d-b6e6-6127f3c94d95",
+      "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf",
+      "excerpt": "Roles of Fiber in Disease Prevention and Management The importance to health of an adequate fiber intake is demonstrated by some of the physiological effects exerted by the various dietary fibers. Particularly noteworthy are the hypoglycem…",
+      "theme_id": "dietary_fibre-leiden-79402a95",
+      "reason": "different-document"
+    }
+  ]
+}

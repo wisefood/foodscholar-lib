@@ -1,0 +1,12 @@
+{
+  "anchor": "dietary_fibre",
+  "theme_id": "dietary_fibre-leiden-d57e73e7",
+  "stage1_extract": "Glucose and insulin responses were significantly reduced at baseline after the Med test meal compared to the Control meal (p < 0.05) and this effect was strengthened after 8 weeks of intervention with the Mediterranean diet (p < 0.05); together with an improvement in OGIS. There may well be a synergy between low amounts of protein and fiber in liquid food systems in their effect on satiety; however, such data are not publicly available at this time. This finding was associated with a lower dietary fibre and a higher trans-fat intake compared with APOE4 carriers, and a lower carbohydrate intake relative to the APOE3/E3 group. Fiber intake was the strongest predictor of weight change; on average, a 10 g increase in fiber intake was associated with 2.2 kg decrease in body weight after 6 months of the dietary intervention. The composition of IF 5:2 was a high protein, moderate fat, low carbohydrate diet with a low fibre intake. Findings from 62 trials (n = 3877) showed that viscous fiber reduced mean body weight (-0.33 kg; 95% CI: -0.51, -0.14 kg; P = 0.004), BMI (in kg/m2) (-0.28; 95% CI: -0.42, -0.14; P = 0.0001), and waist circumference (-0.63 cm; 95% CI: -1.11, -0.16 cm; P = 0.008), with no change in body fat (-0.78%; 95% CI: -1.56%, 0.00%; P = 0.05) when consumed with an ad libitum diet. Therefore, the study's aim was to investigate postprandial glucose and insulin responses to a low glycemic index (GI) meal in the morning compared to night in healthy volunteers. The aim of this study is to evaluate whether 8-h average plasma glucose and insulin profiles during a low- or a high-GI diet in individuals at high risk of developing type 2 diabetes are influenced by sex.",
+  "stage1_strategy": "mapreduce",
+  "stage1_n_input_chunks": 75,
+  "card_title": "Dietary Fiber Intake",
+  "card_summary": "Research indicates that dietary fiber intake is associated with significant health benefits, including reduced glucose and insulin responses, improved weight management, and decreased body weight. A 10g increase in fiber intake was linked to a 2.2kg decrease in body weight after 6 months. Viscous fiber, in particular, has been shown to reduce mean body weight, BMI, and waist circumference when consumed as part of an ad libitum diet.",
+  "card_tip": " Increase fiber intake to manage weight and improve glucose responses",
+  "extract_chars": 1694,
+  "card_summary_chars": 436
+}

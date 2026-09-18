@@ -1,0 +1,78 @@
+{
+  "olive_oil": {
+    "shelf_id": "foodon:FOODON:03301826",
+    "label": "olive oil",
+    "display_label": null,
+    "facet": "foods",
+    "depth": 4,
+    "foodon_id": "FOODON:03301826",
+    "parent_shelf_id": "foodon:FOODON:00002139",
+    "chunk_count": 185,
+    "support_direct": 180,
+    "support_lifted": 5,
+    "fallback_used": false,
+    "breadcrumb": [
+      "Foods",
+      "Plant-based foods",
+      "plant oils and fats",
+      "Refined Plant Oils",
+      "olive oil"
+    ]
+  },
+  "legume": {
+    "shelf_id": "foodon:FOODON:00001264",
+    "label": "legume food product",
+    "display_label": "bean",
+    "facet": "foods",
+    "depth": 3,
+    "foodon_id": "FOODON:00001264",
+    "parent_shelf_id": "foodon:FOODON:00001262",
+    "chunk_count": 1455,
+    "support_direct": 19,
+    "support_lifted": 1436,
+    "fallback_used": false,
+    "breadcrumb": [
+      "Foods",
+      "Plant-based foods",
+      "fruit",
+      "bean"
+    ]
+  },
+  "fish": {
+    "shelf_id": "foodon:FOODON:00001248",
+    "label": "fish food product",
+    "display_label": "fish products",
+    "facet": "foods",
+    "depth": 3,
+    "foodon_id": "FOODON:00001248",
+    "parent_shelf_id": "foodon:FOODON:00001092",
+    "chunk_count": 789,
+    "support_direct": 2,
+    "support_lifted": 787,
+    "fallback_used": false,
+    "breadcrumb": [
+      "Foods",
+      "Meat and Seafood",
+      "vertebrate food product",
+      "fish products"
+    ]
+  },
+  "dietary_fibre": {
+    "shelf_id": "foodon:CDNO:0000005",
+    "label": "dietary fibre",
+    "display_label": "fibre",
+    "facet": "nutrients",
+    "depth": 2,
+    "foodon_id": "CDNO:0000005",
+    "parent_shelf_id": "foodon:CDNO:0000001",
+    "chunk_count": 1512,
+    "support_direct": 1214,
+    "support_lifted": 298,
+    "fallback_used": false,
+    "breadcrumb": [
+      "Nutrients",
+      "Food Components",
+      "fibre"
+    ]
+  }
+}

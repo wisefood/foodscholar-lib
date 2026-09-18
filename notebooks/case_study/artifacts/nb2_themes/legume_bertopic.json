@@ -1,0 +1,91 @@
+{
+  "anchor": "legume",
+  "method": "bertopic",
+  "shelf_id": "foodon:FOODON:00001264",
+  "themes": [
+    {
+      "theme_id": "legume-bertopic-d7a8f585",
+      "label": "plant based protein sources",
+      "label_source": "llm",
+      "chunk_count": 100,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "dietary",
+        "food",
+        "protein",
+        "meat",
+        "intake"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001141",
+        "FOODON:00001149",
+        "FOODON:00001169",
+        "FOODON:00001180",
+        "FOODON:00001198"
+      ],
+      "samples": [
+        {
+          "chunk_id": "70e840b38b0c3a835aa45b7ecde4b77421798f85",
+          "excerpt": "Chickpeas are low glycaemic index foods with delayed digestion and reduced postprandial glycaemic responses (PPGR). However, in vitro studies suggest that mechanical processing of chickpeas, that result in cell wall disruption, significant…",
+          "source_doc": "https://doi.org/10.1017/S0029665120007727"
+        },
+        {
+          "chunk_id": "032ecc5f-679f-4370-8712-5591bb431a1f",
+          "excerpt": "Food labels can help vegans to meet their protein needs but understanding label data is important. Figure C6-3 (p. 213) displays the Nutrition Facts panels from three types of ready-to-eat cereal. A look at the protein content (g) of these…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "2408e88138a8969cc2475a8ee80673669eebbcf0",
+          "excerpt": "Legumes are recommended as a sustainable alternative protein source to red and processed meat (RPM). We studied the effects of a partial substitution of RPM with non-soy legumes on nutrient intakes and status, anthropometric measurements,…",
+          "source_doc": "https://doi.org/10.1007/s00394-025-03783-x"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-bertopic-49fa1583",
+      "label": "protein rich food portions",
+      "label_source": "llm",
+      "chunk_count": 43,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fat",
+        "beans",
+        "foods",
+        "protein",
+        "vegetables"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001015",
+        "FOODON:00001133",
+        "FOODON:00001181",
+        "FOODON:00001264",
+        "FOODON:00001290",
+        "FOODON:00001605",
+        "FOODON:00001801",
+        "FOODON:00002196"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1efc8f59-afe6-4dde-a38d-e45a416dfcd9",
+          "excerpt": "30g cooked beef ¼ cup (40g) baked beans 35g hummus 1 medium egg 30g cooked lamb ¼ cup (40g) lentils 35g cooked portion tofu 1 heaped teaspoon smooth peanut or nut butter For more food facts and healthy eating tips visit www.gov.ie/healthyi…",
+          "source_doc": "OK_Ireland_meat-shelf_unknown_children1to4yo.pdf"
+        },
+        {
+          "chunk_id": "2a4a2ab1-d8f9-4ebc-90ba-7bfbdca1abcb",
+          "excerpt": "Unlike the USDA Dietary Patterns (presented earlier), which sort foods primarily by their vitamin and mineral contents, these lists group foods primarily by their energynutrient contents-carbohydrate, fat, and protein. Consequently, foods…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "b32ca0be-d88b-4745-a448-00ad30f369f9",
+          "excerpt": "| Dark-green vegetables | Dry beans and peas | Other vegetables | |---------------------------------|---------------------------------------|----------------------------------| | bok choy | black beans | artichokes | | broccoli | black-eye…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    }
+  ]
+}

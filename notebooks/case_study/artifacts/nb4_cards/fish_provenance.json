@@ -1,0 +1,562 @@
+{
+  "anchor": "fish",
+  "theme_id": "fish-leiden-247975f8",
+  "card_id": "card:theme:fish-leiden-247975f8",
+  "cited_total": 92,
+  "cited_resolved": 92,
+  "citations": [
+    {
+      "chunk_id": "bbee7d105d8597f38bdf732568e175c80fcd362a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2022.01.002",
+      "excerpt": "BACKGROUND & AIMS Evidence linking the use of omega-3 PUFA supplements with incident dementia is scarce. We aim to assess the relationship between fish oil supplementation and incident dementia risk among older adults with different apolip…"
+    },
+    {
+      "chunk_id": "650a35c75429c2d7871638cc8bc678c51f91402f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-020-02396-w",
+      "excerpt": "Farmed fish are increasingly raised on feeds containing vegetable oils, which affects their composition and possibly health properties. We investigated the effects of consuming farmed salmon, raised on different feeding regimes, on nutrien…"
+    },
+    {
+      "chunk_id": "6a9eb372fa5f60c0073c2816e7d5394c5cb97cb2",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2025.11.013",
+      "excerpt": "BACKGROUND & AIMS In 2023, the Pharmacovigilance Risk Assessment Committee (PRAC) of the European Medicines Agency (EMA) issued new safety information on oral fish oil (FO) pharmacotherapy. This information indicated a dose-related increas…"
+    },
+    {
+      "chunk_id": "259f97913402063456e3e683b758e3669eae2040",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz030",
+      "excerpt": "ABSTRACT Background Little is known about changes in blood fatty acid compositions over time and the correlates of any changes in a general population. Objective The aim of this study was to estimate changes in 27 individual plasma phospho…"
+    },
+    {
+      "chunk_id": "b91e95b8dcac7d2f3daa9d61220da6152d623664",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-018-1777-z",
+      "excerpt": "PurposeWe aimed to assess food intake and adherence to the Mediterranean Diet in patients with T1D compared with nondiabetic individuals.MethodsThis was an observational, multicenter study in 262 T1D subjects and 254 age- and sex-matched n…"
+    },
+    {
+      "chunk_id": "c1ef1cbc184980e676f7c6f034beefffab599fcf",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-019-01981-y",
+      "excerpt": "Purpose Most children do not meet dietary guidelines for fish intake. Fish is the main source of EPA (20:5n-3), DHA (22:6n-3) and vitamin D, but may replace better iron sources such as meat. We investigated if intake of 300 g/week oily fis…"
+    },
+    {
+      "chunk_id": "090bcff817620da44caba88d7af7a9b79620a4ae",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-015-1132-6",
+      "excerpt": "PurposeEpidemiological evidence on the association between fish consumption and risk of type 2 diabetes is heterogeneous across geographical regions. Differences related to fish consumption pattern could possibly help explain the discrepan…"
+    },
+    {
+      "chunk_id": "8dac36b35dcede0ad4e4f5b091d44526eb3f37b7",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa249",
+      "excerpt": "Fish and other seafood are healthful foods that are rich in protein, low in saturated fat, and the primary dietary source for long chain n–3 (omega-3) PUFAs, essential nutrients important for optimal fetal brain development. However, fish…"
+    },
+    {
+      "chunk_id": "3b4cc46dc7420921848c16e6306c1fc53aced263",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2021.03.014",
+      "excerpt": "BACKGROUND Fish could play a role in preventing type 2 diabetes (T2D) but there has been little specification about the type of fish and the preventive mechanism involved in its health claim. The sardine is a source of omega-3 and taurine…"
+    },
+    {
+      "chunk_id": "a4c938e57a8ba7e7c7b3195021886fe31eaefea6",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2023.07.001",
+      "excerpt": "BACKGROUND & AIMS Previous findings for the effects of fish oil on COVID-19-related outcomes remain largely inconclusive and controversy persists. Large population-based studies in real-life settings are required to explore the impact of h…"
+    },
+    {
+      "chunk_id": "5de52c81b969cc01fdc2811fc8a2d4bf15a21e68",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665120003146",
+      "excerpt": "Abstract It is recommended that humans consume fatty fish twice a week to increase dietary intake of eicosapentaenoic acid (EPA) and docosapentaenoic acid (DHA) to achieve long-term health benefits. However current stocks of fish are likel…"
+    },
+    {
+      "chunk_id": "02d8a0b26795808b2e9c8f2861de351e66f5a42a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2017.05.008",
+      "excerpt": "BACKGROUND & AIMS Chronic inflammation is related with cancer and leads to worsening prognosis in cancer patients. n-3 polyunsaturated fatty acids (PUFAs) supplementation has been proposed as adjuvant treatment in cancer due anti-inflammat…"
+    },
+    {
+      "chunk_id": "c3376bac544938301ad609c9f41e56a24a7921fa",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2023.02.007",
+      "excerpt": "BACKGROUND Maternal obesity during pregnancy is associated with increased risk of obesity and metabolic disease in the offspring. Supplementation with fish oil (FO), which is insulin-sensitizing, during pregnancy in mothers with overweight…"
+    },
+    {
+      "chunk_id": "99a349d0897bd39b0d0540e35eb314c3345232c5",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2022.09.007",
+      "excerpt": "BACKGROUND & AIMS Omega-3 fatty acids have anti-inflammatory and analgesic (anti-nociceptive) actions. However, the relation of habitual omega-3 fatty acid intake and fish consumption - its main food source - with pain remains largely unkn…"
+    },
+    {
+      "chunk_id": "c5376321cf7f04851ab5e91b71ca6129f733d2c9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-023-03274-x",
+      "excerpt": "We investigated the associations of socioeconomic position (SEP) with total and type of fish intake in a large general population and validated whether types of fish intake were differently associated with plasma EPA and DHA in a subset of…"
+    },
+    {
+      "chunk_id": "26a182a18b54db5b27c3dc05c38d729b424bb4df",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.jnutbio.2026.110288",
+      "excerpt": "Long-chain polyunsaturated fatty acids (LCPUFA) promote immune development and improve obesity-related inflammation. This study determined the effects of LCPUFA-supplemented diets (age Wk3-10) fed to male and female rats on: 1) anthropomet…"
+    },
+    {
+      "chunk_id": "b1029ccb4a453028724cd61dcc44abdec90d443a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz016",
+      "excerpt": "BACKGROUND The health effects of long-chain omega-3 polyunsaturated fatty acids (n-3 PUFAs) are partly mediated by their oxidized metabolites, i.e., eicosanoids and other oxylipins. Some intervention studies have demonstrated that eicosape…"
+    },
+    {
+      "chunk_id": "45314a15a096f449ea3d80105f441f02fd22b7da",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/advances/nmaa050",
+      "excerpt": "Despite almost 25 y of fish oil supplementation (FS) research in athletes and widespread use by the athletic community, no systematic reviews of FS in athletes have been conducted. The objectives of this systematic review are to: 1) provid…"
+    },
+    {
+      "chunk_id": "812eb97615ca7f51227793012ea7abc7ea3f0fa8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/an.116.013896",
+      "excerpt": "High among the challenges facing mankind as the world population rapidly expands toward 9 billion people by 2050 is the technological development and implementation of sustainable agriculture and food systems to supply abundant and wholeso…"
+    },
+    {
+      "chunk_id": "ed242b73ed6c76876d19a22dc8644ad58a2b2b03",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2023.12.015",
+      "excerpt": "BACKGROUND We previously reported that children of mothers who received fish oil supplementation during pregnancy had higher body mass index [BMI (in kg/m2)] at 6 y of age as well as a concomitant increase in fat-, muscle, and bone mass, b…"
+    },
+    {
+      "chunk_id": "51f73ff4740a8901587ca529901e28b721be3701",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665118002902",
+      "excerpt": "The purpose of this review is to consider the effects of the long-chain n-3 fatty acids found in marine foods, EPA and DHA, on risk for CVD, particularly fatal outcomes. It will examine both epidemiological and randomised controlled trial…"
+    },
+    {
+      "chunk_id": "7ba5f13a322bdb272e8b9caa99c613573a7aebed",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuad151",
+      "excerpt": "Abstract Context In 2020, 13.6 million children under 5 years suffered from severe acute malnutrition (SAM)/wasting. Standard ready-to-use therapeutic foods (RUTFs) improve polyunsaturated fatty acid (PUFA) status but contain suboptimal am…"
+    },
+    {
+      "chunk_id": "569a511b600b3949b0c12ffff4a1ce7712f7e843",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.06.013",
+      "excerpt": "Background Prenatal fish intake is a key source of omega-3 (ω-3) polyunsaturated fatty acids needed for brain development, yet intake is generally low, and studies addressing associations with autism spectrum disorder (ASD) and related tra…"
+    },
+    {
+      "chunk_id": "1ea9184fed842373d98dd9c0eb0e0a66fe520d38",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2018.11.031",
+      "excerpt": "BACKGROUND AND AIMS Long chain polyunsaturated n-3 fatty acids (LC-PUFA) are of functional and structural importance for brain development. Observational studies have shown positive relations between fatty fish consumption and cognitive pe…"
+    },
+    {
+      "chunk_id": "d8023b59ec1e03eb85f53d5a6fadcc940f4f23ab",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.114.091223",
+      "excerpt": "Background: Eicosapentaenoic acid (EPA) plus docosahexaenoic acid (DHA) supplementation has beneficial cardiovascular effects, but postprandial influences of these individual fatty acids are unclear. Objectives: The primary objective was t…"
+    },
+    {
+      "chunk_id": "b321c586d584cb5c3ccd22b14098f848cf5f69d4",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1111/mcn.70058",
+      "excerpt": "Research on early childhood development has focused on child health, nutrition and stimulation. However, less attention has been given to the role of caregiver nutrition in shaping caregiving behaviours. Suboptimal caregiver nutrition may…"
+    },
+    {
+      "chunk_id": "9cf6c2641c32aff6a303c9545a300a2a79112995",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz233",
+      "excerpt": "BACKGROUND Fish oil improves cardiometabolic markers in adults, but results in children are inconsistent. Few children meet the recommended fish intake and no randomized trials have investigated how fish intake per se affects children's ca…"
+    },
+    {
+      "chunk_id": "c2aaab46c789d432ed6684a39975c35fa3ed959e",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S002966511900082X",
+      "excerpt": "The FISH DISH study examined the effect of eating two 140 g portions per week of salmon with either a high (HPUFA) or moderate (SPUFA) content of omega-3 fatty acids, compared with eating no salmon (CONTROL), for 18 weeks in 51 healthy vol…"
+    },
+    {
+      "chunk_id": "5b580f692dfa449b057b654e277db323c0e3c66c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.09.028",
+      "excerpt": "BACKGROUND Persistent tinnitus is common, disabling, and difficult to treat. Diet has been implicated in tinnitus etiology, but studies are inconsistent and longitudinal data are scarce. Seafood intake is associated with lower risk of hear…"
+    },
+    {
+      "chunk_id": "998b5e16efd2e9205a948a6d8d5ee3a6618ce737",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa401",
+      "excerpt": "BACKGROUND The Omega-3 Index (OI) is a proposed marker of coronary artery disease (CAD) risk. Another index, the EPA/arachidonic acid (AA) ratio has also been proposed as a possible risk marker for CAD. OBJECTIVE Our primary objective was…"
+    },
+    {
+      "chunk_id": "72cc54e512bb5b642e61e33e3b79387d584f7955",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1111/mcn.13192",
+      "excerpt": "Abstract Inadequate nutrient intakes are prevalent among many populations in sub‐Saharan Africa and increasing fish consumption among pregnant/lactating women and children is one strategy to improve diets and address nutrient deficiencies.…"
+    },
+    {
+      "chunk_id": "f40e2d219216d627c67bf0eec52b8b8c523d0ed2",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-025-03654-5",
+      "excerpt": "Fish oil and probiotic supplements may be of benefit during pregnancy, but no information on their use across geographically and socioeconomically diverse countries exists. Our aim was to investigate (1) usage of fish oil and probiotic foo…"
+    },
+    {
+      "chunk_id": "a2f832745098f934c7c44b3adce665a22f025d95",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.11.011",
+      "excerpt": "Background The role of nutritional status and the risk of contracting and/or experiencing adverse outcomes from severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2) infection are unclear. Preliminary studies suggest that higher n-3…"
+    },
+    {
+      "chunk_id": "8e42eeef75e577f8133a282e90f342ebabe27605",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120004681",
+      "excerpt": "Abstract Greater consumption of oily fish, and elevated plasma levels of the long-chain marine-derived omega-3 polyunsaturated fatty acids (PUFAs), docosahexaenoic acid (DHA) and eicosapentaenoic acid (EPA), have been strongly and consiste…"
+    },
+    {
+      "chunk_id": "5e6764b5fe8fe46ec97e2c8da7fd58fdb874256d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665124006694",
+      "excerpt": "Findings from animal models suggest early exposure to polyunsaturated fatty acids (PUFAs) during pregnancy may influence developmental plasticity including adiposity(1). Birth cohort studies examining associations between offspring weight…"
+    },
+    {
+      "chunk_id": "d012d1f2f0f0ca0e3f063a11c7f753067f03cce1",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-022-02889-w",
+      "excerpt": "The role of fish oil in the prognosis of hypertensive patients is unknown. This study investigated the associations of fish oil supplementation with the progression of cardiometabolic multimorbidity (CMM) and mortality among patients with…"
+    },
+    {
+      "chunk_id": "c0b24f99bf966a934970de80e28b8248cbcae64d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuad158",
+      "excerpt": "CONTEXT Pregnant women have physiological metabolic changes in glycemic and lipid profiles that are essential for fetal development. OBJECTIVE The aim of this systematic review was to analyze the effects of fish-oil-capsule supplementation…"
+    },
+    {
+      "chunk_id": "23841683974ddb564c308fbb8de84a410ac87bbc",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665121002895",
+      "excerpt": "This abstract was presented as the Whole Body Metabolism Theme highlight . Fish oil is suggested to have a role in the prevention of cardiovascular disease (CVD) with much of the research on modulation of risk factors that contribute to th…"
+    },
+    {
+      "chunk_id": "5ecb88f1f5180c49f344c2c1a15f70f773262662",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.advnut.2025.100391",
+      "excerpt": "Seafood is a source of essential nutrients to support neurocognitive development of children and adolescents, but there are concerns about contaminant exposure. Assessing seafood as a food group, rather than a source of nutrients or contam…"
+    },
+    {
+      "chunk_id": "bc0f609b6bac3c79e9204da3ae5d724471325672",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.111.029314",
+      "excerpt": "Background: Epidemiologic evidence of an association between fish intake and type 2 diabetes (T2D) is inconsistent and unresolved. Objective: The objective was to examine the association between total and type of fish intake and T2D in 8 E…"
+    },
+    {
+      "chunk_id": "2538b9a6fa5432986591538091fe3f2a86aa7e4f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-011-0245-9",
+      "excerpt": "PurposeHigher long-chain polyunsaturated fatty acids (LCP) in infant compared with maternal lipids at delivery is named biomagnification. The decline of infant and maternal docosahexaenoic acid (DHA) status during lactation in Western coun…"
+    },
+    {
+      "chunk_id": "216a24afa95835e2a4bb179a81c388dff0321b5f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.jnutbio.2019.108245",
+      "excerpt": "Cholangiocarcinoma (CCA) is a highly malignant cancer of the bile duct, which has a five-year survival rate less than 5% due to a high metastasis rate and lack of therapeutic options. Although omega-3 polyunsaturated fatty acids (n-3 PUFAs…"
+    },
+    {
+      "chunk_id": "c25bdf26214a3f0c5a5cc7cf19ba9eaa67acf230",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuab026",
+      "excerpt": "The purpose of our letter to the editor is to offer additional perspective regarding 4 statements that do not fully represent the totality of the available scientific evidence. The 4 statements are as follows: (1) \"Multiple studies have sh…"
+    },
+    {
+      "chunk_id": "4ec85e811dc1d35aafc5d7fa789f11daff1c4c3b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120002025",
+      "excerpt": "Abstract Anti-inflammatory properties of olive oil are partly attributed to the inhibition of the Platelet-Activating Factor (PAF), a potent inflammatory mediator that is implicated in the initiation and prolongation of atherosclerosis. PA…"
+    },
+    {
+      "chunk_id": "81e6f51568899a0bd02b03cd95745e716fdbaf70",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa096",
+      "excerpt": "BACKGROUND Adolescents with endometriosis are a particularly underserved population who struggle with chronic pain. Despite widespread use, there are no published trials examining the individual effects of vitamin D and omega-3 (n-3) fatty…"
+    },
+    {
+      "chunk_id": "88496605e2051375c1e50ff2b64893817afc8d84",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/advances/nmac006",
+      "excerpt": "Fish consumption is associated with a reduced risk of cardiovascular diseases (CVD) partly ascribed to the high content in long-chain (LC) n-3 polyunsaturated fatty acids (PUFAs); however, not all fish are equally rich in these components.…"
+    },
+    {
+      "chunk_id": "5fac883ca050fbd8d0cf78e583bb5c128b752441",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqy238",
+      "excerpt": "BACKGROUND A growing amount of data suggests that n-3 (ω-3) polyunsaturated fatty acid (PUFA) intake may modify the genetic association with weight change. OBJECTIVES We aimed to prospectively test interactions of habitual consumption of n…"
+    },
+    {
+      "chunk_id": "49720ae612ee4649532eac4f1685c0d854255b75",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1111/mcn.13373",
+      "excerpt": "Abstract Complementary feeding among children aged 6–23 months is a key determinant of micronutrient deficiencies and childhood stunting, the burdens of which remain high in Kenya. This study examines the affordability of complementary foo…"
+    },
+    {
+      "chunk_id": "ded18b19f43f9e36fda80651da73f805aaf216d6",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuab078",
+      "excerpt": "CONTEXT Randomized controlled trials (RCTs) testing supplementation with eicosapentaenoic (EPA) and docosahexaenoic (DHA) fatty acids have failed to provide evidence supporting a suggested inverse association between fish intake and dement…"
+    },
+    {
+      "chunk_id": "73e80108aedf15aec48d780e27b827fcd61bd6a8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/advances/nmac102",
+      "excerpt": "Fish provide essential nutrients for the critical window of growth and development in the first 1000 d of life and are thus an attractive option for inclusion in nutrition-sensitive and nutrition-specific programming. We conducted a system…"
+    },
+    {
+      "chunk_id": "b256ac012ca8df2fa16773b8106b9d4b1dcd2771",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665124006293",
+      "excerpt": "Chile has the third highest prevalence of diabetes mellitus America, with 12.7% of the population aged 20-79 years, whose 90% have type 2 diabetes mellitus(T2DM)(1). Diet plays an important role in the management of this disease(2). Accord…"
+    },
+    {
+      "chunk_id": "dcffac3d8dba335d98a49482f33199c1fe51854a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuab037",
+      "excerpt": "This manuscript is a response to concerns expressed in a letter by industry-based scientists Bannenburg and Rice in response to our recent narrative review. In the review, we largely discussed why supplementation with n-3 PUFA rich oils mi…"
+    },
+    {
+      "chunk_id": "945286b9ff6ba62337e6288a961df8910f908efe",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2022.01.019",
+      "excerpt": "BACKGROUNDS &AIMS Previous studies have shown that marine omega-3 PUFAs (fish oil) supplements was associated with improved cognitive function, whereas the association between use of fish oil supplements and risk of incident dementia was s…"
+    },
+    {
+      "chunk_id": "7f8468b08987911995bc1f6bdc9918f7f3cb6f1a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2019.03.005",
+      "excerpt": "BACKGROUND & AIMS Observational and clinical trial evidence suggests an inverse association of omega-3 polyunsaturated fatty acids with coronary artery disease (CAD) mortality, although relationships with non-fatal CAD and stroke are less…"
+    },
+    {
+      "chunk_id": "dcbde24cfaffb759a12662482ada174f462b426c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-018-1665-6",
+      "excerpt": "PurposeFish is a source of various nutrients beneficial for bone health, but few studies have investigated the association between bone mineral density (BMD) and fish consumption. Thus, the aim was to investigate the relationship between t…"
+    },
+    {
+      "chunk_id": "6e9cb71e2aa9ac1acb75ecad054f451680c84bc4",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2021.03.040",
+      "excerpt": "BACKGROUND & AIMS Marine-derived omega-3 (n-3) polyunsaturated fatty acids (PUFAs), mainly eicosapentaenoic acid (EPA) and docosahexaenoic acid (DHA), lower circulating levels of triacylglycerols (TAGs), and the plant-derived omega-6 (n-6)…"
+    },
+    {
+      "chunk_id": "73fdcecd434d7433ade77002e6c85fcd09625d10",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz293",
+      "excerpt": "ABSTRACT Background Results from observational studies regarding associations between fish (including shellfish) intake and cardiovascular disease risk factors, including blood pressure (BP) and BMI, are inconsistent. Objective To investig…"
+    },
+    {
+      "chunk_id": "d3929b1c356fe19ebd0523bbede37444065b3802",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-024-03343-9",
+      "excerpt": "Fish and shellfish consumption is suggested to be a cancer-protective factor. However, studies investigating this association for gastric cancer, especially considering Helicobacter pylori (H. pylori) and atrophic gastritis (AG), are limit…"
+    },
+    {
+      "chunk_id": "806f8944cfd2dcab4f5096c555ceed07b5ac9b62",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2025.04.032",
+      "excerpt": "Background Understanding the role of maternal diet in early brain development is critical, as pregnancy represents a period of significant vulnerability and growth for the developing brain. Objectives This study aims to assess the associat…"
+    },
+    {
+      "chunk_id": "86c9e5a8ea22d8d07f181e9217858efcb835623a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/AJCN.2008.26419",
+      "excerpt": "BACKGROUND Fish and seafood n-3 fatty acids may prevent or delay the progression of prostate cancer, but epidemiologic studies do not uniformly support this hypothesis. OBJECTIVE We examined the relation of fish and seafood n-3 fatty acid…"
+    },
+    {
+      "chunk_id": "ddf3e9a0234ea9158433444cce6b27655904fa4e",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa190",
+      "excerpt": "ABSTRACT Background Although emerging evidence indicates a relation between maternal intake of fish and improved child neurodevelopment, the results are inconsistent. Objectives This study investigated whether dietary consumption of fish d…"
+    },
+    {
+      "chunk_id": "bc771871cd49c47b10124a672e5a9c8dbdd63dad",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.03.008",
+      "excerpt": "Background Extracellular vesicles (EVs) are proposed to play a role in the development of cardiovascular diseases (CVDs) and are considered emerging markers of CVDs. n-3 PUFAs are abundant in oily fish and fish oil and are reported to redu…"
+    },
+    {
+      "chunk_id": "5e95b139f28cf4f5eb47aa980410936acbd7a6d9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665124004944",
+      "excerpt": "This abstract was presented as the Nutrition and Optimum Life Course Theme Highlight. The n-3 polyunsaturated fatty acids (n-3 PUFA), eicosapentaenoic acid (EPA; 20:5n-3) and docosahexaenoic acid (DHA; 22:6n-3), are known for their benefic…"
+    },
+    {
+      "chunk_id": "4e27706d2c3d45df1d91d01321811b028d2c570a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2025.01.002",
+      "excerpt": "Diabetic cognitive dysfunction (DCD) refers to the cognitive impairment observed in individuals with diabetes. Epidemiological studies have suggested that supplementation with n-3 polyunsaturated fatty acid (PUFA) or B vitamins may prevent…"
+    },
+    {
+      "chunk_id": "2fb7d6e2b0930f4ac4835e86e1567b87c42dc83f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.112.041343",
+      "excerpt": "Background: Estimation of the intake of oily fish at a population level is difficult. The measurement of eicosapentaenoic acid (EPA) and docosahexaenoic acid (DHA) in biological samples may provide a useful biomarker of intake. Objective:…"
+    },
+    {
+      "chunk_id": "36f44d821231c8d106df9a3d34f675ec6ea9fe76",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2021.12.004",
+      "excerpt": "BACKGROUND & AIMS Accumulating evidence suggests that omega-3 fatty acids (ω-3FAs), carotenoids and vitamin E can improve cognitive performance. However, their collective impact on cognition has not yet been investigated in healthy individ…"
+    },
+    {
+      "chunk_id": "59cf16a5cc82e5c1832e0c469fe8c65950b31c06",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqy298",
+      "excerpt": "Background Using a genome-wide association study (GWAS) approach, our group previously computed a genetic risk score (GRS) from single nucleotide polymorphisms (SNPs) of 10 loci that affect the plasma triglyceride (TG) response to an omega…"
+    },
+    {
+      "chunk_id": "7f0968b1140878023cf1536d95a31041614f2eef",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuz098",
+      "excerpt": "CONTEXT Fish oil and omega-3 polyunsaturated fatty acids (ω-3 PUFAs) have anti-inflammatory properties, but their effect on psoriasis and its comorbidities remains inconclusive. OBJECTIVE The aim of this quantitative systematic review was…"
+    },
+    {
+      "chunk_id": "cbd52bf4113cc6c00660c577f532a2fb2945d479",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.112.042267",
+      "excerpt": "Background: Intestinal damage and malabsorption caused by chronic environmental enteropathy are associated with growth faltering seen in infants in less-developed countries. Evidence has suggested that supplementary omega-3 (n−3) long-chai…"
+    },
+    {
+      "chunk_id": "de3fcc852b97cd15a11a9c08b0a9dec4bf9e41a9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2021.10.005",
+      "excerpt": "BACKGROUND & AIMS Epidemiologic studies are inconsistent regarding the association of dietary omega-3 polyunsaturated fatty acids (PUFA) and/or fish intake with risk of age-related macular degeneration (AMD) incidence and progression. The…"
+    },
+    {
+      "chunk_id": "fc0453415ea666c991851080a751203f5c456f0b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665124000181",
+      "excerpt": "Cardiovascular diseases (CVD) are a major health concern for women. Historically there has been a misconception that men are at greater risk, because CVD tends to occur earlier in life compared to women. Clinical guidelines for prevention…"
+    },
+    {
+      "chunk_id": "6667822707743725e41c3056f12a33af2171f56d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2021.105209",
+      "excerpt": "The COVID-19 pandemic and associated restrictions and mandates have had pronounced implications on the well-being of individuals. This study conducted exploratory analyses of the relationship between COVID-19-related life changes and COVID…"
+    },
+    {
+      "chunk_id": "4411d8d7566527d274dc7dbd6c7ac02980ccd265",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2023.06.008",
+      "excerpt": "Background There is evidence that both omega-3 long-chain polyunsaturated fatty acids (PUFAs) (eicosapentaenoic acid [EPA] and docosahexaenoic acid [DHA]) and cocoa flavanols can improve cognitive performance in both healthy individuals an…"
+    },
+    {
+      "chunk_id": "9edf04b26fc022693a510b7fd269635a8135ca3f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2020.06.027",
+      "excerpt": "BACKGROUND & AIMS Postprandial lipaemic response has emerged as a risk factor for cardiovascular disease. Dietary fats such as medium-chain saturated fatty acids (MCSFA) and long-chain omega-3 polyunsaturated fatty acids (LCn-3PUFA) are kn…"
+    },
+    {
+      "chunk_id": "5b70c9f710ce18771db24adb5c4b97fa609551cb",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120000427",
+      "excerpt": "Abstract High consumption of ω-3 long chain polyunsaturated fatty acids (PUFAs) has long-term health benefits. The principal dietary source of these ω-3 PUFAs (eicosapentaenoic acid, EPA and docosapentaenoic acid, DHA) is seafood, particul…"
+    },
+    {
+      "chunk_id": "2bdb4e7d49e73acfe182effad276d388870c79f3",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2022.10.002",
+      "excerpt": "BACKGROUND Fish oil is one of the most popular supplements in the UK and other developed countries. However, the relationship between fish oil use and chronic obstructive pulmonary disease (COPD) is unclear. OBJECTIVE To prospectively exam…"
+    },
+    {
+      "chunk_id": "1f7a8b923a609fca412252c9cad1cca9220d846d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuaa142",
+      "excerpt": "Abstract Insufficient quantity and inadequate quality of foods in early life are key causes of all forms of malnutrition. Identification of nutrient and dietary gaps in the diets of infants and young children is essential to inform policie…"
+    },
+    {
+      "chunk_id": "065f846322ea8823fdb02300c09122877239c47a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0954422425100127",
+      "excerpt": "The health benefits of the long-chain omega-3 PUFA, eicosapentaenoic acid (EPA) and docosahexaenoic acid (DHA) have been known for over 50 years and underpin the UK population recommendation to consume > 450 mg EPA+DHA per day. These recom…"
+    },
+    {
+      "chunk_id": "0c34ab53d96dc6a545a5bd383ad71430a07caa62",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2025.04.005",
+      "excerpt": "BACKGROUND The association of allergic diseases with the intake of fish-derived proteins and fatty acids remains unclear, with studies showing divergent results. We aimed to examine the association of those nutrients with the occurrence of…"
+    },
+    {
+      "chunk_id": "5bc3fc155a2756019f299c1e328767854af9fa96",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665124006633",
+      "excerpt": "Fatty acids are essential molecules, which function as structural components, energy sources, and signaling mediators(1). Subcutaneous adipose tissue (SAT) is the largest fat depot and plays a crucial role in maintaining health and homeost…"
+    },
+    {
+      "chunk_id": "efb9a0fe84c10d483d0636ba2d15552d52c0720e",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqab157",
+      "excerpt": "BACKGROUND Epidemiologic studies have suggested an inverse association between circulating concentrations of long-chain ω-3 PUFAs and fracture risk. However, whether supplementation of long-chain ω-3 PUFA (i.e. fish oil) is associated with…"
+    },
+    {
+      "chunk_id": "92f666fed79177e20e8edfd162c21be7fc599df8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa050",
+      "excerpt": "BACKGROUND Long-chain n-3 PUFAs (n-3 LCPUFAs) accrete in the brain during childhood and affect brain development. Randomized trials in children show inconsistent effects of n-3 LCPUFAs on cognitive and socioemotional function, and few have…"
+    },
+    {
+      "chunk_id": "5f23035ddc894b26df528aae9d4000655652f1ce",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz229",
+      "excerpt": "BACKGROUND Fatty acids are a vital component of human milk. They influence infant neurodevelopment and immune function, and they provide ∼50% of milk's energy content. OBJECTIVES The objectives of this study were to characterize the compos…"
+    },
+    {
+      "chunk_id": "747e771b9e9445e2f37ea8297ba6b1ff2ce4d600",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.07.009",
+      "excerpt": "Background Dyslipidemia is a well-known risk factor for cardiovascular disease, the leading cause of mortality worldwide. Although habitual intake of fish oil is associated with cardioprotective effects through triglyceride reduction, the…"
+    },
+    {
+      "chunk_id": "8391797b9ea403138ac7acec66ecf4d21053afa8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/advances/nmac102",
+      "excerpt": "ABSTRACT Fish provide essential nutrients for the critical window of growth and development in the first 1000 d of life and are thus an attractive option for inclusion in nutrition-sensitive and nutrition-specific programming. We conducted…"
+    },
+    {
+      "chunk_id": "6ed4370c3c91ab217284fd14ddc8f94035892289",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-021-02671-4",
+      "excerpt": "N-3 polyunsaturated fatty acids (n-3 PUFAs), which are an important nutrient for humans, are particularly essential to the growth and development of the central nervous system (CNS) in fetuses and infants. Consequently, sufficient n-3 PUFA…"
+    },
+    {
+      "chunk_id": "b98aa1eaad093b641592dd70a71f3cd4cfcfd045",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120006886",
+      "excerpt": "Marine n-3 PUFA exert beneficial effects that might inhibit atherosclerosis and reduce vascular disease. Previous studies have, however, reported conflicting results and here we have summarised the early history and the most recent finding…"
+    },
+    {
+      "chunk_id": "22fdfa14cd62c2fcf469dd458c0c553056ca2dba",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665122001641",
+      "excerpt": "The platelet-activating factor (PAF) molecule is a pro-inflammatory phospholipid mediator that functions by binding its receptor PTAFR. PAF is known to have a key role in the mechanism of chronic inflammation. The pathology of cardiovascul…"
+    },
+    {
+      "chunk_id": "33b4821d975c3b70d497e3c782ed2e70067811a9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2017.03.027",
+      "excerpt": "BACKGROUND & AIMS The increased consumption of fish oil enriched-products exposes a wide diversity of people, including elderly and those with impaired health to relatively high amounts of n-3 long-chain polyunsaturated fatty acids (n-3 LC…"
+    },
+    {
+      "chunk_id": "e4aa10b0fa0f1807ef45a5fe2e1699c9ea127338",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqy120",
+      "excerpt": "Background The combined effect of a low-carbohydrate, high-protein (LCHP) diet and omega-3 (n-3) polyunsaturated fatty acid (PUFA) supplementation on patients with type 2 diabetes (T2D) is not known. Objective The aim of this study was to…"
+    },
+    {
+      "chunk_id": "0f92e772e624d5fc9450d8428c5249163e45c0be",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/advances/nmac083",
+      "excerpt": "Research on the effects of fish oil on clinical symptoms and psychosocial functioning in people with psychosis has been inconsistent. We conducted this systematic review and meta-analysis to summarize the available data on the effects of o…"
+    },
+    {
+      "chunk_id": "c7b661097fa57ca1889a02263b0fc7a0f7dd16ab",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2018.08.007",
+      "excerpt": "BACKGROUND & AIMS Many studies have suggested that fish intake is associated with protection from risk of atherosclerotic diseases; however, this association with aortic diseases has not been elucidated worldwide. We hypothesized that fish…"
+    }
+  ],
+  "unresolved": []
+}

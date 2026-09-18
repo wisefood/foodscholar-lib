@@ -1,0 +1,4 @@
+# Regenerable cross-notebook build snapshot (large; rebuilt by NB1/NB2).
+artifacts/shared/
+__pycache__/
+*.pyc

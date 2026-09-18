@@ -1,0 +1,58 @@
+{
+  "anchor": "fish",
+  "query": "What are the cardiovascular and omega-3 benefits of eating fish?",
+  "ids": [
+    "d88a15c5-a728-4f06-9f60-33bdb163611d",
+    "4e1dc335-4a22-4f94-ae7a-1cdcea005e95",
+    "34adafb5-b2eb-42e7-9242-a23c6798f4ec",
+    "380af761-b277-47e9-854e-ea384c045c6b",
+    "8e42eeef75e577f8133a282e90f342ebabe27605",
+    "b86c57c0-b621-42ab-8e4d-d16bf0dda14c",
+    "44784f09-2cf6-4a86-90c5-8cdfca37de45",
+    "34d5ee82-09d8-44f1-88df-35c51b09b3c6",
+    "43ef41f3-7cd0-4b39-96ac-173857fe1865",
+    "1645122b-4e7c-44f7-9a0f-5edce102a29e"
+  ],
+  "hits": [
+    {
+      "chunk_id": "d88a15c5-a728-4f06-9f60-33bdb163611d",
+      "excerpt": "N o doubt about it: seafood can be good for your health. Overall, it has less total fat and less saturated fat than meat and poultry. For this reason, eating fish regularly may he…"
+    },
+    {
+      "chunk_id": "4e1dc335-4a22-4f94-ae7a-1cdcea005e95",
+      "excerpt": "Although fish oil supplements contain omega-3 fatty acids, they're not advised as a substitute for fishor as a dietary supplement for most people. Popping a fish oil capsule won't…"
+    },
+    {
+      "chunk_id": "34adafb5-b2eb-42e7-9242-a23c6798f4ec",
+      "excerpt": "Omega-3 fatty acids. Fatty acids (EPA and DHA) that are highly polyunsaturated. They may help reduce blood clotting in the arteries and protect from hardening of the arteries. Mos…"
+    },
+    {
+      "chunk_id": "380af761-b277-47e9-854e-ea384c045c6b",
+      "excerpt": "There' s increased attention to seafood these days, often for its nutritional benefits. Besides being a good protein source, most seafood is low in fat, especially saturated fat.…"
+    },
+    {
+      "chunk_id": "8e42eeef75e577f8133a282e90f342ebabe27605",
+      "excerpt": "Abstract Greater consumption of oily fish, and elevated plasma levels of the long-chain marine-derived omega-3 polyunsaturated fatty acids (PUFAs), docosahexaenoic acid (DHA) and…"
+    },
+    {
+      "chunk_id": "b86c57c0-b621-42ab-8e4d-d16bf0dda14c",
+      "excerpt": "Assessing both adverse and beneficial health consequences of food consumption is crucial to define interventions for improving health of populations. Fish consumption is a classic…"
+    },
+    {
+      "chunk_id": "44784f09-2cf6-4a86-90c5-8cdfca37de45",
+      "excerpt": "Fatty fish is a good source of omega-3 fatty acids, but some species contain large amounts of the pollutant mercury that can harm the developing fetal brain and nervous system (de…"
+    },
+    {
+      "chunk_id": "34d5ee82-09d8-44f1-88df-35c51b09b3c6",
+      "excerpt": "Fat: it' s an essential nutrient. For their health benefits, most should be monounsaturated and polyunsaturated, supplied mostly by foods' healthy oils. Key nutrients: Not only hi…"
+    },
+    {
+      "chunk_id": "43ef41f3-7cd0-4b39-96ac-173857fe1865",
+      "excerpt": "Diet and nutrition can play a significant role in reducing the risk of cardiovascular disease. It is helpful to lower sodium intake, increase consumption of dietary fiber, and lim…"
+    },
+    {
+      "chunk_id": "1645122b-4e7c-44f7-9a0f-5edce102a29e",
+      "excerpt": "Fish oil and omega-3 supplements are among the most commonly used dietary supplements in the United States. Researchers have hypothesized that these supplements might decrease ris…"
+    }
+  ]
+}

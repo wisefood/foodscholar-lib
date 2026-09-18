@@ -1,0 +1,8 @@
+{
+  "graph": "/mnt/workspaces/wisefood/foodscholar-lib/notebooks/case_study/artifacts/shared/layer_a_graph.json",
+  "chunks": "/mnt/workspaces/wisefood/foodscholar-lib/notebooks/case_study/artifacts/shared/layer_a_chunks.parquet",
+  "n_chunks": "34359",
+  "n_shelves": "1019",
+  "n_themes": "0",
+  "n_cards": "0"
+}

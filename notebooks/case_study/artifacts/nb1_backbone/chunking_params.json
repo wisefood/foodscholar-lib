@@ -1,0 +1,28 @@
+{
+  "status": "UNCONFIRMED \u2014 chunking parameters (token size, overlap) are NOT recorded in any artifact.",
+  "finding": "The chunks were produced UPSTREAM by the NER/NEL prototype (a separate codebase not present in this repo). chunk_metadata records only bibliographic/structural fields (title/venue/DOI for abstracts; file/heading/page_number for textbooks), no chunking config. No chunk_size/overlap/splitter config exists anywhere in src/ or the data dir. The 256-token/50-overlap figure from the upstream \u00a76.1.1 spec could NOT be verified and is not asserted for this corpus.",
+  "empirical_sizes_measured_from_chunks": {
+    "textbook": {
+      "n_chunks": 12194,
+      "words_mean": 112.2,
+      "words_median": 118.0,
+      "approx_tokens_mean": 146,
+      "words_p95": 183
+    },
+    "guide": {
+      "n_chunks": 1150,
+      "words_mean": 74.2,
+      "words_median": 61.0,
+      "approx_tokens_mean": 96,
+      "words_p95": 179
+    },
+    "abstract": {
+      "n_chunks": 21015,
+      "words_mean": 275.6,
+      "words_median": 267,
+      "approx_tokens_mean": 358,
+      "words_p95": 415
+    }
+  },
+  "note": "Empirical word counts differ markedly by source (abstracts ~3x longer than textbook chunks), which is itself inconsistent with a single fixed 256-token policy across sources."
+}

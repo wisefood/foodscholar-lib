@@ -1,0 +1,259 @@
+{
+  "anchor": "olive_oil",
+  "method": "leiden",
+  "shelf_id": "foodon:FOODON:03301826",
+  "themes": [
+    {
+      "theme_id": "olive_oil-leiden-e6d1729f",
+      "label": "healthy oil options",
+      "label_source": "llm",
+      "chunk_count": 31,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "oil",
+        "fat",
+        "olive",
+        "olive oil",
+        "flavor"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001181",
+        "FOODON:00001198",
+        "FOODON:00001233",
+        "FOODON:00001235",
+        "FOODON:00001290",
+        "FOODON:00001605",
+        "FOODON:00002457",
+        "FOODON:00002472"
+      ],
+      "samples": [
+        {
+          "chunk_id": "314feaf0-d876-47a4-abe7-276ce45a92a9",
+          "excerpt": "| Legumes (beans, peas, lentils, and soy products) | ■ Keep a variety of low-sodium canned legumes, such as kidney beans, chickpeas (garbanzo beans), black beans, and others on hand. ■ Use rinsed, drained beans as salad toppers. For intere…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "9f656020-bc47-4f01-9a63-383ea47e18f4",
+          "excerpt": "6. /H18567 As easy substitutions, try modified ingredients. For example, use cholesterol-free egg products, reduced-fat cheese, or sodium-reduced chicken broth in some recipes. Follow package directions if the product needs to be prepared…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "3ffb2677-cd46-4a63-b234-ad3e5b8667a4",
+          "excerpt": "- /H18567 Roast or grill vegetables and fruit (sliced eggplant, pineapple slices, bell pepper chunks, sliced zucchini) as a low-fat way to bring out the flavor. They're great as kebobs! Coat them lightly with vegetable oil spray or olive o…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-leiden-5665c525",
+      "label": "mediterranean diet adherence",
+      "label_source": "llm",
+      "chunk_count": 31,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "adherence",
+        "dietary",
+        "diet",
+        "meddiet",
+        "mediterranean"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001017",
+        "FOODON:00001053",
+        "FOODON:00001149",
+        "FOODON:00001253",
+        "FOODON:00001709"
+      ],
+      "samples": [
+        {
+          "chunk_id": "3c2792fd1f43ece20aa4615878c6e69c64efbc46",
+          "excerpt": "Age-related Macular Degeneration (AMD), is one of the most prevalent eye diseases among the aging population worldwide. It is a leading cause of blindness in individuals over 55, particularly in industrialized Western countries. The preval…",
+          "source_doc": "https://doi.org/10.1017/S0954422424000015"
+        },
+        {
+          "chunk_id": "9cd50428c88c5428abf20e627cd1e249bebfea19",
+          "excerpt": "BACKGROUND & AIMS Fatty acid supplementation increases muscle mass and function in older adults, but the effect of habitual dietary intake is uncertain. Therefore, the objective of this study was to examine the association between habitual…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2020.03.018"
+        },
+        {
+          "chunk_id": "17c765f1b5aa40842e79d275111e84473a73039e",
+          "excerpt": "BACKGROUND & AIMS Fried food has usually shown neutral or detrimental effects on many chronic diseases, possibly depending on the type of food fried and the frying oil, but its relationship with unhealthy aging is unknown. We examined how…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2020.05.018"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-leiden-fc736fe6",
+      "label": "healthy fats and oils",
+      "label_source": "llm",
+      "chunk_count": 27,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "oil",
+        "fats",
+        "fat",
+        "olive",
+        "oils"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001172",
+        "FOODON:00001290",
+        "FOODON:00001605",
+        "FOODON:00002456",
+        "FOODON:00002568",
+        "FOODON:00002700",
+        "FOODON:00002739",
+        "FOODON:00002855"
+      ],
+      "samples": [
+        {
+          "chunk_id": "dc2b0a22-d952-46ad-a9f1-cc2a7fd0c2ee",
+          "excerpt": "Choose any 2 servings each day Spreads and oils provide essential fats but these are only needed in very small amounts. Choose low fat and reduced fat spreads and oils such as rapeseed or olive oil (monunsaturated) instead of hard margarin…",
+          "source_doc": "OK_Ireland_227cb9a85c3b4853982f845940a583a8_unknown_all.pdf"
+        },
+        {
+          "chunk_id": "ba0d1c1f-1050-4470-8f94-cd66176947f7",
+          "excerpt": "Some oils are valued for their pleasing flavors or their phytochemicals that may support health. Virgin or extra virgin olive oils are mechanically pressed from olives, a process that retains the phytochemicals that confer a characteristic…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "f0ec81df-aa00-429a-b48a-0015ae80a7b4",
+          "excerpt": "Soft or liquid margarines made from unhydrogenated vegetable oils are mostly unsaturated, so they make better choices than butter or stick margarines. Some margarines are made with extra virgin olive oil or omega-3 fatty acids, but researc…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-leiden-acfbd1d5",
+      "label": "olive oil consumption",
+      "label_source": "llm",
+      "chunk_count": 27,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "oil",
+        "olive",
+        "olive oil",
+        "consumption",
+        "studies"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001015",
+        "FOODON:00001160",
+        "FOODON:00002079",
+        "FOODON:00002472",
+        "FOODON:00002932",
+        "FOODON:00003202",
+        "FOODON:00003220",
+        "FOODON:00003226"
+      ],
+      "samples": [
+        {
+          "chunk_id": "8bb571012434741ec2816a821f29b69b718e9398",
+          "excerpt": "BACKGROUND & AIMS The specific association of olive oil consumption with coronary heart disease (CHD) or stroke has not been totally established. OBJECTIVE to examine whether olive oil consumption is associated with subclinical atheroscler…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2021.11.002"
+        },
+        {
+          "chunk_id": "38c2910974b9a3f204e8d7fb4a49d4b542caa216",
+          "excerpt": "Current nutritional rating systems, like the health star rating, help consumers understand the nutritional value of food and were designed in an effort to combat obesity. However, these systems have limitations, especially for edible oils,…",
+          "source_doc": "https://doi.org/10.1017/S0029665125001119"
+        },
+        {
+          "chunk_id": "667f07c56f51c28ed9dbdac6d49092c4a8776740",
+          "excerpt": "Dietary oils and fats contain different fatty acid compositions which are associated with cardiometabolic disease risk and other health outcomes. (1,2) Despite their in ﬂ uence on health and disease, the types of dietary oils and fats pred…",
+          "source_doc": "https://doi.org/10.1017/s0029665123000812"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-leiden-4c3780a4",
+      "label": "olive oil health benefits",
+      "label_source": "llm",
+      "chunk_count": 25,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "postprandial",
+        "oil",
+        "evoo",
+        "glucose",
+        "dietary"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001087",
+        "FOODON:00001149",
+        "FOODON:00002274",
+        "FOODON:00002456",
+        "FOODON:00002472",
+        "FOODON:00002859",
+        "FOODON:00003187",
+        "FOODON:00003189"
+      ],
+      "samples": [
+        {
+          "chunk_id": "22c287fb776ff5b860b6a3cb9d078bc78eb23b0d",
+          "excerpt": "Abstract Extra-virgin olive oil (EVOO), a popular functional food and major source of fat in the Mediterranean diet, possesses a variety of healthful components, including monounsaturated fatty acids and bioactive phenolic compounds that,…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuaa148"
+        },
+        {
+          "chunk_id": "acb16035c0e6785fc23fe5c225d0f5d594056bb9",
+          "excerpt": "AbstractPurpose Nutritional factors, especially dietary lipids, may have a role in the etiology of breast cancer. We aimed to analyze the effects of high-fat diets on the susceptibility of the mammary gland to experimental malignant transf…",
+          "source_doc": "https://doi.org/10.1007/s00394-015-0958-2"
+        },
+        {
+          "chunk_id": "d1e027eac03ebc7bbd6a08cf58ee9d78b1f57b93",
+          "excerpt": "BACKGROUND & AIMS Oleuropein, a component of extra virgin olive oil (EVOO), reduces post-prandial glycemia with a mechanism counteracting oxidative stress-mediated incretin down-regulation. In this study we evaluated if the intake of an ol…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2019.09.006"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-leiden-2bb36643",
+      "label": "fatty acid supplements",
+      "label_source": "llm",
+      "chunk_count": 21,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "epa",
+        "dha",
+        "nma",
+        "oil",
+        "mct"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001243",
+        "FOODON:00002066",
+        "FOODON:00002877",
+        "FOODON:00003210",
+        "FOODON:00003265",
+        "FOODON:00003449",
+        "FOODON:00004560",
+        "FOODON:02010033"
+      ],
+      "samples": [
+        {
+          "chunk_id": "672dcb971e2d66d31da0ee4084773ff28e74eee6",
+          "excerpt": "We read with great interest the systematic review authored by Vors and colleagues (1). The authors aimed to compare the effect of DHA and EPA on several markers of systemic inflammation by pairwise and network meta-analyses (NMAs) of rando…",
+          "source_doc": "https://doi.org/10.1093/advances/nmaa128"
+        },
+        {
+          "chunk_id": "8ccc0b105a8d7b8f346188d2ad983d701725db73",
+          "excerpt": "BACKGROUND & AIMS Intestinal failure associated liver disease (IFALD) is one of the leading complications and causes of deaths in adult patients receiving home parenteral nutrition for chronic intestinal failure (CIF). Early diagnosis of I…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2019.02.039"
+        },
+        {
+          "chunk_id": "068abf3ba3d0c7dfbd08d9816304d09a5b941a8d",
+          "excerpt": "s of Original Communications A Scientific Meeting was held at the Hilton Brighton Metropole, Brighton, UK, 1–2 November 2006, when the following papers were presented. All abstracts are prepared as camera-ready material. The Editors of the…",
+          "source_doc": "https://doi.org/10.1017/S0029665107005733"
+        }
+      ]
+    }
+  ]
+}

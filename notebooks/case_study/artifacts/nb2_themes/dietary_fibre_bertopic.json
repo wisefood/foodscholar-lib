@@ -1,0 +1,553 @@
+{
+  "anchor": "dietary_fibre",
+  "method": "bertopic",
+  "shelf_id": "foodon:CDNO:0000005",
+  "themes": [
+    {
+      "theme_id": "dietary_fibre-bertopic-714f2a7d",
+      "label": "dietary intake in children",
+      "label_source": "llm",
+      "chunk_count": 167,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "food",
+        "intake",
+        "dietary",
+        "diet",
+        "children"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001017",
+        "FOODON:00001062",
+        "FOODON:00001079",
+        "FOODON:00001142",
+        "FOODON:00001181",
+        "FOODON:00001244"
+      ],
+      "samples": [
+        {
+          "chunk_id": "368eac0689a6fba16dfdab232dfef81d79d50b48",
+          "excerpt": "This study aimed to examine the validity and reliability of the Dietary Index for a Child's Eating (DICE) in children living in New Zealand (NZ). Caregivers of healthy children aged 2-8 years completed a 4-day estimated food record (4DFR)…",
+          "source_doc": "https://doi.org/10.1111/mcn.12758"
+        },
+        {
+          "chunk_id": "0fd77ffaad585a0a399a5f378a29ed094353ffaf",
+          "excerpt": "CVD is a major burden on the health system in the UK. On average, diets are not aligned with current dietary recommendations, including those for salt, saturated fat, fibre, fruit and vegetables. Obesity prevalence is high and the majority…",
+          "source_doc": "https://doi.org/10.1017/S0029665119000600"
+        },
+        {
+          "chunk_id": "89298abeb2c1ccb5aaa48c5bf6bed8deb8af6835",
+          "excerpt": "Abstract A diet rich in plant-based foods with fewer animal products may offer improved health and environmental benefits. There is little consensus on the definition for a plant-based diet in the literature with some defining it as one ri…",
+          "source_doc": "https://doi.org/10.1017/S002966512000511X"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-5618b0be",
+      "label": "complex carbohydrate digestion",
+      "label_source": "llm",
+      "chunk_count": 121,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fiber",
+        "glucose",
+        "food",
+        "carbohydrates",
+        "foods"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001059",
+        "FOODON:00001180",
+        "FOODON:00001290",
+        "FOODON:00001304",
+        "FOODON:00002207",
+        "FOODON:00002418"
+      ],
+      "samples": [
+        {
+          "chunk_id": "719cbbb0-3164-456e-a038-2634b7588bb9",
+          "excerpt": "Do you like to nibble on popcorn? It' s a whole-grain snack that helps boost fiber in your diet. Again, dietary fiber comes only from plant sources of food: fruits, vegetables, legumes, grains, nuts, and seeds. Plantbased foods actually co…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "022d9c31-b805-43d8-9e33-bad74247c4de",
+          "excerpt": "With the breakdown of the salivary enzyme in the stomach, starch digestion ceases, but it resumes at full speed in the small intestine, where another starch-splitting enzyme is delivered by the pancreas. This enzyme breaks starch down into…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "2c5d167c-f7e7-4071-b0ef-95d52170b889",
+          "excerpt": "Complex carbohydrates are long chains of simple sugars that can be unbranched or branched. During digestion, the body breaks down digestible complex carbohydrates to simple sugars, mostly glucose. Glucose is then transported to all our cel…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-7dbf7bc4",
+      "label": "diet and gut microbiota",
+      "label_source": "llm",
+      "chunk_count": 96,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "microbiota",
+        "gut",
+        "gut microbiota",
+        "microbiome",
+        "dietary"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001190",
+        "FOODON:00001198",
+        "FOODON:00001253",
+        "FOODON:00001258",
+        "FOODON:00001264",
+        "FOODON:00001304"
+      ],
+      "samples": [
+        {
+          "chunk_id": "b4d4cfb45d871db5f0019d9f1d73a1158ca1000c",
+          "excerpt": "Dietary fiber is considered an important health-promoting food component; however, to better characterize associations between fiber consumption and health outcomes, it is important to identify reliable biomarkers of intake. Dietary fiber…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuaf095"
+        },
+        {
+          "chunk_id": "27463832d5fb84814a17e1e1a3c8f9beb4f9fb2e",
+          "excerpt": "Background The infant gut microbiome undergoes rapid changes in the first year of life, supporting normal development and long-term health. Although diet shapes this process, the role of fibers in complementary foods on gut microbiome matu…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.11.011"
+        },
+        {
+          "chunk_id": "3348d466cb06e1318db6a0f3e7868ffc63fd4140",
+          "excerpt": "The gut microbiota and their metabolites are increasingly recognised for their roles in gut health. Almonds are nuts that are rich in fermentable nutrients and have physiochemical properties that result in poor nutrient bioaccessibility in…",
+          "source_doc": "https://doi.org/10.1017/S0029665122000179"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-3005c0a9",
+      "label": "dietary fiber intake",
+      "label_source": "llm",
+      "chunk_count": 84,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "intake",
+        "dietary",
+        "fiber",
+        "mortality",
+        "risk"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001209",
+        "FOODON:00001258",
+        "FOODON:00001570",
+        "FOODON:00001981",
+        "FOODON:00002057",
+        "FOODON:00002214"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1302ebb9681581dd6ebfe088f6a1972618dd8125",
+          "excerpt": "Background Plant-based diets (PBD) may induce hyperkalemia in chronic kidney disease (CKD) patients. Objectives We explored the safety and feasibility of PBD in hyperkalemic CKD patients receiving the potassium binder sodium zirconium cycl…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.06.025"
+        },
+        {
+          "chunk_id": "f4673371-b9ed-4999-a538-ab65f50ca1ad",
+          "excerpt": "Symptoms of IBS significantly decrease a person's quality of life as they are present for at least twelve consecutive or nonconsecutive weeks in a year. Large meals and foods high in fat and added sugars, or those that contain wheat, rye,…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "6f894c61091229941de8bb20b063c9c3887c80fb",
+          "excerpt": "BACKGROUND AND AIMS Malnourished patients, who undergo gastrointestinal (GI) surgery, have a higher risk of postoperative complications, including higher rates of morbidity and mortality. Generally, a low-fiber diet is recommended after GI…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2025.12.002"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-e389e43a",
+      "label": "high fiber foods",
+      "label_source": "llm",
+      "chunk_count": 80,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fiber",
+        "foods",
+        "colon",
+        "chapter",
+        "high"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001077",
+        "FOODON:00001169",
+        "FOODON:00001304",
+        "FOODON:00001579",
+        "FOODON:00002196",
+        "FOODON:00002274"
+      ],
+      "samples": [
+        {
+          "chunk_id": "9488d55c-1d95-45ba-aaac-cbbf8dc4d882",
+          "excerpt": "The chances of developing diverticulosis can be reduced with fiber intake because of what the breakdown products of the fiber do for the colon. The bacterial breakdown of fiber in the large intestine releases short-chain fatty acids. These…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "5429c660-9cb2-4de8-aeaa-107e20da7ba3",
+          "excerpt": "- monounsaturated fats and may help to lower LDL. Substitute oils for solid fats when possible. - Choose whole-grain and high-fiber foods. Reduced risk for cardiovascular disease has been associated with diets that are high in whole grains…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "5126da1a-bc4a-492b-9633-d63da2be0e30",
+          "excerpt": "consumption, and that only with these cofactors does carotene supplementation increase cancer risk [51,52]. Carotenoids and Health Claims approved by the U.S. Food and Drug Administration are targeted at carotenoid-rich foods (fruits and v…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-1474526c",
+      "label": "dietary glucose intake",
+      "label_source": "llm",
+      "chunk_count": 64,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "intake",
+        "glucose",
+        "study",
+        "dietary",
+        "weight"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001198",
+        "FOODON:00001264",
+        "FOODON:00001304",
+        "FOODON:00001747",
+        "FOODON:00001796",
+        "FOODON:00001809",
+        "FOODON:00001896"
+      ],
+      "samples": [
+        {
+          "chunk_id": "70e840b38b0c3a835aa45b7ecde4b77421798f85",
+          "excerpt": "Chickpeas are low glycaemic index foods with delayed digestion and reduced postprandial glycaemic responses (PPGR). However, in vitro studies suggest that mechanical processing of chickpeas, that result in cell wall disruption, significant…",
+          "source_doc": "https://doi.org/10.1017/S0029665120007727"
+        },
+        {
+          "chunk_id": "f2e84d901e2874f7b2db5043099c6d64d4df7c40",
+          "excerpt": "Abstract Keeping in view the therapeutic importance of dietary fiber azadiracta indica gum in anti-inflammatory action, in the present work, gum has been modified to develop the drug delivery carrier for methyl prednisolone used for treatm…",
+          "source_doc": "https://doi.org/10.1016/j.fhfh.2021.100011"
+        },
+        {
+          "chunk_id": "78ab736b9177d08cb90f1ec9075405a4e2e13468",
+          "excerpt": "BACKGROUND The Diet Intervention Examining The Factors Interacting with Treatment Success (DIETFITS) trial demonstrated that meaningful weight loss can be achieved with either a \"healthy low-carbohydrate diet\" (LCD) or \"healthy low-fat die…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.12.014"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-7fe9a13d",
+      "label": "whole grain nutrition",
+      "label_source": "llm",
+      "chunk_count": 38,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "grain",
+        "grains",
+        "flour",
+        "fiber",
+        "wheat"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001181",
+        "FOODON:00001570",
+        "FOODON:00001605",
+        "FOODON:00001759",
+        "FOODON:00002354",
+        "FOODON:00002456",
+        "FOODON:00002472",
+        "FOODON:00002532"
+      ],
+      "samples": [
+        {
+          "chunk_id": "8eb482f8-d4b6-48a9-bb91-9c2495dbec16",
+          "excerpt": "| Polished, long-grain white rice | 1 ⁄ 2 lb. (1 1 ⁄ 4 cups) | 3 3 ⁄ 4 cups | | Converted white rice | 7 oz. (1 cup) | 3 1 ⁄ 2 cups | | Instant white rice | 8 oz. (2 cups) | 4 cups | macaroni, and fettuccine. Like traditional pasta, wholew…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "06e7612d-c000-4b11-915d-ac276c8be523",
+          "excerpt": "Looking for a creative, even exotic, way to eat more grains? Most of today' s 'new' grains are really as old as the hills. Although unfamiliar to many in the United States, some are staple foods that nourish millions of people around the w…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "9b1ff753-bddb-44b8-8cc0-ed2dbdd4d537",
+          "excerpt": "Figure 4.24. Wheat growing in a field. Before they are harvested, all grains are whole grains. They contain the entire seed (or kernel) of the plant. This seed is made up of three edible parts: the bran, the germ, and the endosperm. The se…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-94893cd7",
+      "label": "low fat protein sources",
+      "label_source": "llm",
+      "chunk_count": 35,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fat",
+        "foods",
+        "protein",
+        "beans",
+        "meat"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001198",
+        "FOODON:00001235",
+        "FOODON:00001290",
+        "FOODON:00001331",
+        "FOODON:00001605",
+        "FOODON:00002133",
+        "FOODON:00002300",
+        "FOODON:00002413"
+      ],
+      "samples": [
+        {
+          "chunk_id": "dcd3b42e-36e9-4398-b610-5db817ca80bd",
+          "excerpt": "Vegetarian alternatives - such as eggs, peas, beans and lentils are a low-cost source of good-quality protein. These foods are also low in fat and calories and are a good source of fibre. The most expensive food items tend to be at eye lev…",
+          "source_doc": "OK_Ireland_10507_FSAI_Healthy-Eating-Guidelines-Accessible-FA1_unknown_all.pdf"
+        },
+        {
+          "chunk_id": "418c862e-ef54-4e9e-8f06-c4051df338e4",
+          "excerpt": "- /H18567 For meals or snacks, consider the growing array of crackers, including those with 'less fat,' '0 grams trans fat,' or 'less sodium.' Typically low in fat, or even fat-free: packaged bread sticks, graham crackers, melba toast, ric…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "11579171-dcc2-4abf-97ff-e9d5239ce700",
+          "excerpt": "Plan weekly meals and make a grocery list. - Use coupons, vouchers and special deals to buy items on the grocery list. - Shop at low-cost supermarkets if possible. - Do a weekly grocery shop, even when shopping for one. - Cook meals and ma…",
+          "source_doc": "OK_Ireland_10507_FSAI_Healthy-Eating-Guidelines-Accessible-FA1_unknown_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-be6c03c0",
+      "label": "fruit and vegetable nutrition",
+      "label_source": "llm",
+      "chunk_count": 29,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "vegetables",
+        "fruit",
+        "fruits",
+        "vitamin",
+        "fiber"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001290",
+        "FOODON:00002070",
+        "FOODON:00002472",
+        "FOODON:00002473",
+        "FOODON:00003041",
+        "FOODON:00003083",
+        "FOODON:00003265"
+      ],
+      "samples": [
+        {
+          "chunk_id": "efcdccce-b022-4d1d-8004-f50099a7d83e",
+          "excerpt": "More than a colorful garnish on your plate or crisp texture in a sandwich, vegetables are loaded with different nutrients and phytonutrients. Eat plenty of them to promote your overall health. Key nutrients. Vegetables are important source…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "b797b40b-d130-4804-be90-45fa98c0a7d5",
+          "excerpt": "Researchers aren't sure why some antioxidant supplements have turned out to be dangerous. It may come back to the fact that free radicals play important roles in the body, and adding high doses of antioxidant supplements overwhelms the nor…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "24860583-4828-4f57-b386-4c7295a85188",
+          "excerpt": "Some juice-machine promoters may lead you to believe that juicing makes fruits and vegetables healthier. Of course, their juices are healthful, offering most of the vitamins, minerals, and phytonutrients found in the whole fruit or vegetab…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-514b0991",
+      "label": "daily calorie intake",
+      "label_source": "llm",
+      "chunk_count": 26,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "calories",
+        "daily calories",
+        "daily",
+        "grams",
+        "amdr"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00002472",
+        "FOODON:00002753",
+        "FOODON:00003060",
+        "FOODON:00003189",
+        "FOODON:00003265",
+        "FOODON:00003334",
+        "FOODON:00003338",
+        "FOODON:00003339"
+      ],
+      "samples": [
+        {
+          "chunk_id": "2161b8c6-c06e-4ede-a6ee-c2f6bdaefdab",
+          "excerpt": "During the first trimester, a pregnant woman has the same energy requirements as normal and should consume the same number of calories as usual. However, as the pregnancy progresses, a woman must increase her caloric intake. According to t…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "7e424dbd-4c09-45e4-83da-2f7e6ff14b91",
+          "excerpt": "Due to reductions in lean body mass and metabolic rate, older adults have lower calorie needs than younger adults. The energy requirements for people ages 51 and older are 1,600 to 2,200 calories for women and 2,000 to 2,800 calories for m…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "9d4be760-e56b-4bf5-afc3-be1870cf530e",
+          "excerpt": "Choose wholemeal for fibre and the healthiest calories 3 to 5 * servings a day *Up to 7 for teenage boys and men age 19-50",
+          "source_doc": "OK_Ireland_10507_FSAI_Healthy-Eating-Guidelines-Accessible-FA1_unknown_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-4e95aed8",
+      "label": "reading food labels",
+      "label_source": "llm",
+      "chunk_count": 22,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "food",
+        "fat",
+        "serving",
+        "labels",
+        "claims"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001290",
+        "FOODON:00002472",
+        "FOODON:00002739",
+        "FOODON:00003202",
+        "FOODON:00003265",
+        "FOODON:00003334",
+        "FOODON:00003337"
+      ],
+      "samples": [
+        {
+          "chunk_id": "d035415d-22cc-42b9-b1ee-4e49ffda5edb",
+          "excerpt": "Fiber, vitamins A and C, calcium, and iron are listed because they often come up short. So make food choices that help you eat enough of these nutrients. It' s a way to help improve your health, stay healthy, and perhaps reduce your risk o…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "c5bfa42c-55c8-435a-92d6-07992d38a9fd",
+          "excerpt": "Health claims are very specific and precise in their language, and they convey the level of scientific certainty supporting them. In contrast, structure-function claims are intentionally vague statements about nutrients playing some role i…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "e3d51e81-242e-469f-b994-6e7ec98e61bc",
+          "excerpt": "- /H18567 A nutrient content claim such as 'low-fat' or 'high-fiber' helps you easily find foods that meet your specific nutrition goals. See 'Label Lingo' in this chapter for specific nutrient content claims. - /H18567 The Nutrition Facts…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-52067746",
+      "label": "dietary behavior change",
+      "label_source": "llm",
+      "chunk_count": 21,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "intervention",
+        "meddiet",
+        "diet",
+        "dietary",
+        "participants"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001280",
+        "FOODON:00001579",
+        "FOODON:00002386",
+        "FOODON:00002472",
+        "FOODON:00003147",
+        "FOODON:00003152",
+        "FOODON:00003189",
+        "FOODON:00003265"
+      ],
+      "samples": [
+        {
+          "chunk_id": "42cfc1a9-0753-4e76-888f-1a0dfc63640c",
+          "excerpt": "The image is a list of behavioral weight-loss treatment topics, including the following: Self-monitoring, healthy food choices, physical activity, stimulus control, eating patterns, lifestyle activity, thoughts on weight control, changing…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        },
+        {
+          "chunk_id": "c68639faa1f0cbd3442e9251ef6745be5e1d211a",
+          "excerpt": "BackgroundPromoting positive changes in lifestyle behavior in the whole population may be a feasible and effective approach to reducing type 2 diabetes burden, but the impact of population shifts of modifiable risk factors remains unclear.…",
+          "source_doc": "https://doi.org/10.1186/s12966-017-0489-8"
+        },
+        {
+          "chunk_id": "ed706522e03fe1471008c43ad9032d818cf44a97",
+          "excerpt": "Long-term nutrition trials may fail to respond to their original hypotheses if participants do not comply with the intended dietary intervention. We aimed to identify baseline factors associated with successful dietary changes towards an e…",
+          "source_doc": "https://doi.org/10.1007/s00394-021-02697-8"
+        }
+      ]
+    },
+    {
+      "theme_id": "dietary_fibre-bertopic-ab98ec99",
+      "label": "nutrition for pregnancy",
+      "label_source": "llm",
+      "chunk_count": 18,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "pregnancy",
+        "postpartum",
+        "women",
+        "gdm",
+        "intake"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00002472",
+        "FOODON:00003189",
+        "FOODON:00003202",
+        "FOODON:00003265",
+        "FOODON:00003281",
+        "FOODON:00003335",
+        "FOODON:00003816"
+      ],
+      "samples": [
+        {
+          "chunk_id": "57e71350d84897cb576f9c52c14862f7411870e2",
+          "excerpt": "The aim of this review is to provide an overview of dietary interventions delivered during pregnancy for the prevention of gestational diabetes mellitus (GDM). GDM increases the risk of adverse pregnancy and neonatal outcomes, and also inc…",
+          "source_doc": "https://doi.org/10.1017/s0029665123004822"
+        },
+        {
+          "chunk_id": "33cc696031dd95189935b72d78c61a7208e70559",
+          "excerpt": "BACKGROUND Obesity prevalence remains high in the United States, and there is an increased risk among women who do not lose their gestational weight gain during the postpartum period. Indicators of dietary carbohydrate quality including ad…",
+          "source_doc": "https://doi.org/10.1093/ajcn/nqaa156"
+        },
+        {
+          "chunk_id": "674608df2284811c69c8c5d6d7d0035d250c5a29",
+          "excerpt": "Good nutrition during the postpartum period, which is also the inter-pregnancy period for many women, has short and long-term health benefits for the mother and her offspring(1). Gaining a better understanding of mothers’ dietary patterns…",
+          "source_doc": "https://doi.org/10.1017/s0029665124005275"
+        }
+      ]
+    }
+  ]
+}

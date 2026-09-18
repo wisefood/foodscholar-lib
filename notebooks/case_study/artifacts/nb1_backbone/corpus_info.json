@@ -1,0 +1,17 @@
+{
+  "n_chunks": 34359,
+  "source_types": {
+    "textbook": 12194,
+    "guide": 1150,
+    "abstract": 21015
+  },
+  "snapshot": "/mnt/workspaces/wisefood/foodscholar-lib/data/annotated_with_abstracts.parquet",
+  "bge_cache": {
+    "cache_vectors": 14487,
+    "chunks_in_store": 34359,
+    "attached": 14487,
+    "dim": 768
+  },
+  "real_embedded_fraction": 0.4216,
+  "load_path": "fs.load_chunks(annotated.parquet) + cs.load_real_embeddings (BGE cache)"
+}

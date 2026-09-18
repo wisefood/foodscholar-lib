@@ -1,0 +1,12 @@
+{
+  "anchor": "olive_oil",
+  "theme_id": "olive_oil-leiden-fc736fe6",
+  "stage1_extract": "- Monounsaturated fat. Monounsaturated and polyunsaturated fats are the 'good' fats because they lower the harmful cholesterol in your blood and are good for your heart. Both oils are high in monounsaturated fatty acids and low in saturated fatty acids. Olive oil and canola oil are also rich in monounsaturated fats. Some evidence has shown that replacing saturated fats with plant sources of monounsaturated fats, such as olive oil and nuts, may be associated with a reduced risk of CVD. An eating plan that's low in saturated fats, trans fats, and cholesterol and moderate in total fat is recommended for heart health. Monounsaturated fats are of plant origin and are found in most nuts, seeds, seed oils, olive oil, canola oil, and legumes. Canola, nut, and olive oils are high in monounsaturated fatty acids.",
+  "stage1_strategy": "single",
+  "stage1_n_input_chunks": 27,
+  "card_title": "Healthy Fats and Oils",
+  "card_summary": "Monounsaturated and polyunsaturated fats are considered 'good' fats as they lower harmful cholesterol levels and are beneficial for heart health. These fats are found in high amounts in olive oil, canola oil, nuts, seeds, and legumes. An eating plan low in saturated fats, trans fats, and cholesterol, and moderate in total fat, is recommended for heart health. Replacing saturated fats with plant sources of monounsaturated fats may reduce the risk of cardiovascular disease.",
+  "card_tip": "Use olive, canola, or nut oils in your diet for a healthier fat intake",
+  "extract_chars": 813,
+  "card_summary_chars": 476
+}

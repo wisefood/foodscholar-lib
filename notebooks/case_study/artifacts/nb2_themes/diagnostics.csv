@@ -1,0 +1,9 @@
+anchor,method,n_themes,subtree_chunks,coverage,median_chunks_per_theme
+olive_oil,leiden,6,185,0.876,27
+olive_oil,bertopic,2,185,0.989,127
+legume,leiden,6,187,0.888,34
+legume,bertopic,2,187,0.765,100
+fish,leiden,15,789,0.933,35
+fish,bertopic,9,789,0.833,30
+dietary_fibre,leiden,14,1216,0.905,77
+dietary_fibre,bertopic,13,1216,0.659,38

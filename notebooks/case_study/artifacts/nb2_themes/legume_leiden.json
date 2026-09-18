@@ -1,0 +1,259 @@
+{
+  "anchor": "legume",
+  "method": "leiden",
+  "shelf_id": "foodon:FOODON:00001264",
+  "themes": [
+    {
+      "theme_id": "legume-leiden-54406f69",
+      "label": "legume based dietary intake",
+      "label_source": "llm",
+      "chunk_count": 43,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "intake",
+        "food",
+        "diet",
+        "pulses"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001149",
+        "FOODON:00001180",
+        "FOODON:00001198",
+        "FOODON:00001209",
+        "FOODON:00001227"
+      ],
+      "samples": [
+        {
+          "chunk_id": "fa6a58bc74580eb25d8d055520171eb3fabde4d8",
+          "excerpt": "PurposeNational data on folate status are missing in Sweden, and regional data indicate folate insufficiency in up to more than 25% of the study populations. The objectives were to determine folate intake and status in the adult Swedish po…",
+          "source_doc": "https://doi.org/10.1007/s00394-016-1328-4"
+        },
+        {
+          "chunk_id": "5e910fd4d4cf95950e2813d1b985d00eb05a3c50",
+          "excerpt": "Abstract Pulses, defined as dry-harvested leguminous crops, include several varieties of beans, peas, lentils, and chickpeas. There is no consensus around a recommended serving size of pulses within a balanced diet, which prevents the deve…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nux058"
+        },
+        {
+          "chunk_id": "2408e88138a8969cc2475a8ee80673669eebbcf0",
+          "excerpt": "Legumes are recommended as a sustainable alternative protein source to red and processed meat (RPM). We studied the effects of a partial substitution of RPM with non-soy legumes on nutrient intakes and status, anthropometric measurements,…",
+          "source_doc": "https://doi.org/10.1007/s00394-025-03783-x"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-leiden-d39adfa3",
+      "label": "legumes and portion sizes",
+      "label_source": "llm",
+      "chunk_count": 35,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "beans",
+        "cooked",
+        "cup",
+        "fat",
+        "butter"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001133",
+        "FOODON:00001181",
+        "FOODON:00001264",
+        "FOODON:00001290",
+        "FOODON:00002222",
+        "FOODON:00002334",
+        "FOODON:00002472",
+        "FOODON:00002473"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1efc8f59-afe6-4dde-a38d-e45a416dfcd9",
+          "excerpt": "30g cooked beef ¼ cup (40g) baked beans 35g hummus 1 medium egg 30g cooked lamb ¼ cup (40g) lentils 35g cooked portion tofu 1 heaped teaspoon smooth peanut or nut butter For more food facts and healthy eating tips visit www.gov.ie/healthyi…",
+          "source_doc": "OK_Ireland_meat-shelf_unknown_children1to4yo.pdf"
+        },
+        {
+          "chunk_id": "b32ca0be-d88b-4745-a448-00ad30f369f9",
+          "excerpt": "| Dark-green vegetables | Dry beans and peas | Other vegetables | |---------------------------------|---------------------------------------|----------------------------------| | bok choy | black beans | artichokes | | broccoli | black-eye…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "829bae76-5fbf-453b-baaa-1f678808b454",
+          "excerpt": "Table 9.9 Dietary Sources of Vitamin K | Food | Serving | Vitamin K (mcg) | Percent Daily Value | |-------------|-----------|-------------------|-----------------------| | Broccoli | ½c. | 160 | 133 | | Asparagus | 4 spears | 34 | 28 | | C…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-leiden-73f58e3b",
+      "label": "protein rich foods",
+      "label_source": "llm",
+      "chunk_count": 34,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "foods",
+        "protein",
+        "food",
+        "beans",
+        "meat"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001015",
+        "FOODON:00001264",
+        "FOODON:00001605",
+        "FOODON:00002133",
+        "FOODON:00002196",
+        "FOODON:00002203",
+        "FOODON:00002472",
+        "FOODON:00002570"
+      ],
+      "samples": [
+        {
+          "chunk_id": "032ecc5f-679f-4370-8712-5591bb431a1f",
+          "excerpt": "Food labels can help vegans to meet their protein needs but understanding label data is important. Figure C6-3 (p. 213) displays the Nutrition Facts panels from three types of ready-to-eat cereal. A look at the protein content (g) of these…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "2a4a2ab1-d8f9-4ebc-90ba-7bfbdca1abcb",
+          "excerpt": "Unlike the USDA Dietary Patterns (presented earlier), which sort foods primarily by their vitamin and mineral contents, these lists group foods primarily by their energynutrient contents-carbohydrate, fat, and protein. Consequently, foods…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "53a3bfb2-7f3b-4d25-98ed-07bb8614525a",
+          "excerpt": ". . . if potatoes can substitute for bread since they're both high in starches? Potatoes are among the starchy vegetables in the Vegetable Group. Breadfruit, cassava, corn, green peas, hominy, lima beans, rutabaga, taro, and yautia are som…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-leiden-4ab38151",
+      "label": "alternative protein sources",
+      "label_source": "llm",
+      "chunk_count": 20,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "acceptance",
+        "meat",
+        "food",
+        "products",
+        "consumers"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001015",
+        "FOODON:00001141",
+        "FOODON:00001169",
+        "FOODON:00001209",
+        "FOODON:00001253",
+        "FOODON:00001261",
+        "FOODON:00001264",
+        "FOODON:00001314"
+      ],
+      "samples": [
+        {
+          "chunk_id": "e81d250a459ad39f66a82215e172f6d02f7b3898",
+          "excerpt": "Consumers' dietary patterns have a significant impact on planetary and personal health. To address health and environmental challenges one of the many possible solutions is to substitute meat consumption with alternative protein sources. T…",
+          "source_doc": "https://doi.org/10.1016/j.appet.2020.105058"
+        },
+        {
+          "chunk_id": "c8b7f504007781575587d8a32807eab62a2b824e",
+          "excerpt": "Alternative proteins provide a better way to feed the world(1) and have great potential to support the United Nations’ sustainable development goals in ending hunger, promoting sustainable energy use, protecting the climate, and promoting…",
+          "source_doc": "https://doi.org/10.1017/s0029665124005305"
+        },
+        {
+          "chunk_id": "4f864b44079b27874bdb4d6b7141c2c012c453c5",
+          "excerpt": "Abstract The eating context influences eating behaviour as well as the hedonic response to food. This study investigated temporal changes in the perceived flavour of chocolate ice cream when consumed in a laboratory, cafe, university study…",
+          "source_doc": "https://doi.org/10.1016/J.FOODQUAL.2019.05.002"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-leiden-c9422827",
+      "label": "legume based protein sources",
+      "label_source": "llm",
+      "chunk_count": 19,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "postprandial",
+        "flour",
+        "protein",
+        "iron",
+        "insulin"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001015",
+        "FOODON:00001141",
+        "FOODON:00001198",
+        "FOODON:00001264",
+        "FOODON:00001896",
+        "FOODON:00002274",
+        "FOODON:00002472",
+        "FOODON:00002918"
+      ],
+      "samples": [
+        {
+          "chunk_id": "70e840b38b0c3a835aa45b7ecde4b77421798f85",
+          "excerpt": "Chickpeas are low glycaemic index foods with delayed digestion and reduced postprandial glycaemic responses (PPGR). However, in vitro studies suggest that mechanical processing of chickpeas, that result in cell wall disruption, significant…",
+          "source_doc": "https://doi.org/10.1017/S0029665120007727"
+        },
+        {
+          "chunk_id": "685a9f80e894fed853362ee492145d47bd1120ea",
+          "excerpt": "BACKGROUND & AIMS Metabolic flexibility is the ability to adapt fuel oxidation to fuel availability. Metabolic inflexibility has been associated with obesity, the metabolic syndrome and insulin resistance, and can be improved by exercise o…",
+          "source_doc": "https://doi.org/10.1016/j.clnu.2019.12.010"
+        },
+        {
+          "chunk_id": "0d09296709826a2ed75f5e13d72c16fa2c624054",
+          "excerpt": "BACKGROUND Dietary intake of pulses is associated with beneficial effects on body weight management and cardiometabolic health, but some of these effects are now known to depend on integrity of plant cells, which are usually disrupted by f…",
+          "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.12.008"
+        }
+      ]
+    },
+    {
+      "theme_id": "legume-leiden-f6aaeac0",
+      "label": "dietary diversity in children",
+      "label_source": "llm",
+      "chunk_count": 15,
+      "discovery_pass": "global_similarity",
+      "discovered_by": "leiden",
+      "keyword_terms": [
+        "dietary",
+        "diversity",
+        "children",
+        "food",
+        "dietary diversity"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001209",
+        "FOODON:00001264",
+        "FOODON:00001809",
+        "FOODON:00002472",
+        "FOODON:00002753",
+        "FOODON:00003265",
+        "FOODON:00003403",
+        "FOODON:00003414"
+      ],
+      "samples": [
+        {
+          "chunk_id": "de8ba83183190dabb4e09144c31d40bf4062378b",
+          "excerpt": "Abstract A quarter of 400 million urban Indian residents are poor. Urban poor women are as undernourished as or worse than rural women but urban averages mask this disparity. We present the spectrum of malnutrition and their determinants f…",
+          "source_doc": "https://doi.org/10.1111/mcn.12978"
+        },
+        {
+          "chunk_id": "29d23d4be1f2963dd82a1ffa2b7a2981537dfc54",
+          "excerpt": "Abstract Dietary diversity, define as the number of food items or food groups consumed over a given period of time measured at the household or individual level, is widely recognized as a key dimension of diet quality. This analysis invest…",
+          "source_doc": "https://doi.org/10.1017/S0029665120006527"
+        },
+        {
+          "chunk_id": "60b38bb2fd6f3342f65feaa2e0c71d4921730955",
+          "excerpt": "Abstract Little is known about fasting practices and dietary changes during Ramadan in low‐ and lower‐middle‐income countries. Although pregnant women are exempt from fasting, they may still fast. This is of interest as dietary habits duri…",
+          "source_doc": "https://doi.org/10.1111/mcn.13135"
+        }
+      ]
+    }
+  ]
+}

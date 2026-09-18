@@ -1,0 +1,460 @@
+{
+  "anchor": "dietary_fibre",
+  "theme_id": "dietary_fibre-leiden-d57e73e7",
+  "card_id": "card:theme:dietary_fibre-leiden-d57e73e7",
+  "cited_total": 75,
+  "cited_resolved": 75,
+  "citations": [
+    {
+      "chunk_id": "826e2d2a720bda5d52fbcaa00bf2e2b6b6f22cce",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.117.158501",
+      "excerpt": "1. Meng H, Matthan NR, Ausman LM, Lichtenstein AH. Effect of macronutrients and fiber on postprandial glycemic responses and meal glycemic index and glycemic load value determinations. Am J Clin Nutr 2017;105:842–53. 2. Wolever TM, Brand-M…"
+    },
+    {
+      "chunk_id": "b5774250eac902ca5b04d512bfb2612ae4603b91",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqaa435",
+      "excerpt": "BACKGROUND Microbiota-accessible carbohydrates (MACs) are critical substrates for intestinal microbes; the subsequent production of SCFAs may have some potential benefits for patients with type 2 diabetes mellitus (T2DM). OBJECTIVES We con…"
+    },
+    {
+      "chunk_id": "793ebdb4e053b517f675b05c8be2e2f1e5563af8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqac025",
+      "excerpt": "ABSTRACT Background Despite the established relation between energy restriction (ER) and metabolic health, the most beneficial nutrient composition of a weight-loss diet is still a subject of debate. Objectives The aim of the study was to…"
+    },
+    {
+      "chunk_id": "0752db42131d40493118ea86da343580d36bdb6c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2020.10.030",
+      "excerpt": "BACKGROUND & AIMS Evening chronotype has been linked with obesity, diabetes and metabolic syndrome (MetS) in middle-aged and older adults. However, few studies have analyzed this association in young adults. The aim of this study was to as…"
+    },
+    {
+      "chunk_id": "edc3c76ac123ed76b8bf0c1c77863073c2ae359b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120001949",
+      "excerpt": "Abstract Introduction: In Iceland there are extreme seasonal differences in natural light. How these might affect the physiology of young women is largely unknown and prompted The Cycles-Iceland study. Both seasonal differences and the men…"
+    },
+    {
+      "chunk_id": "8e4357d05d67ab3baa304b8c2d4b84187c165307",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2015.03.011",
+      "excerpt": "A poor appetite in older adults is an important determinant of reduced food intake and undernutrition. Food preferences may influence food intake. The aim of this study was to investigate food preferences of older adults with a poor appeti…"
+    },
+    {
+      "chunk_id": "c51133e00d0ec2062f3af13a7cabfca32647755d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2020.05.025",
+      "excerpt": "BACKGROUND & AIMS Postprandial metabolic abnormalities are considered important and independent risk factors for cardiovascular diseases. However, the effects of the Mediterranean diet on postprandial metabolism and the mechanism underpinn…"
+    },
+    {
+      "chunk_id": "d60276bbc8458189a1e3d2a7599de87788d1d863",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2021.11.038",
+      "excerpt": "BACKGROUND & AIMS The association of quantity and quality of carbohydrate sources with appetite during long-term weight-loss maintenance (WLM) after intentional weight loss (WL) is unclear. We aimed to investigate longitudinal associations…"
+    },
+    {
+      "chunk_id": "26c80982e05c04b94fbc5873f1c968bc0ef6766f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.advnut.2022.10.008",
+      "excerpt": "Bread is a major source of grain-derived carbohydrates worldwide. High intakes of refined grains, low in dietary fiber and high in glycemic index, are linked with increased risk for type 2 diabetes mellitus (T2DM) and other chronic disease…"
+    },
+    {
+      "chunk_id": "ce142e5daf2d4cf2ab3afc7b96c394430d7c74e9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2018.08.028",
+      "excerpt": "High fiber diets promote satiety and sustain normal blood glucose by delaying digestion and slowing glucose absorption, but their longer-term impact on body weight loss is thought to be due primarily to their lower energy density. Starches…"
+    },
+    {
+      "chunk_id": "bc3c1001fc876356acf0ed1336e1b03844df6c0f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120000993",
+      "excerpt": "Abstract Introduction Precision medicine is changing the way people are diagnosed and treated into a more personalized approach. In medical research, several statistical methods have been proposed for estimating personalized treatment effe…"
+    },
+    {
+      "chunk_id": "de50eb627d453c5e5cb45d226350a204781c129b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665124001964",
+      "excerpt": "It is well-known that many modern lifestyles, including the use of artificial light, shift work, irregular or short sleep, sedentary activity, and unhealthy diet can disrupt the circadian rhythm. This disruption can result in the so-called…"
+    },
+    {
+      "chunk_id": "78ab736b9177d08cb90f1ec9075405a4e2e13468",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.12.014",
+      "excerpt": "BACKGROUND The Diet Intervention Examining The Factors Interacting with Treatment Success (DIETFITS) trial demonstrated that meaningful weight loss can be achieved with either a \"healthy low-carbohydrate diet\" (LCD) or \"healthy low-fat die…"
+    },
+    {
+      "chunk_id": "e484bcbb285e2ddb14e6ab430db9144e6f3dc419",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2018.02.004",
+      "excerpt": "Dietary fiber and whole grain foods may contribute to the regulation of appetite; however, evidence has produced inconclusive findings. The objective was to evaluate the effects of an experimental wholemeal pasta on appetite ratings, plasm…"
+    },
+    {
+      "chunk_id": "f486310ea36bbd466bc447870668e8cf48e97d54",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/AJCN/76/1.266S",
+      "excerpt": "The glycemic index concept is an extension of the fiber hypothesis, suggesting that fiber consumption reduces the rate of nutrient influx from the gut. The glycemic index has particular relevance to those chronic Western diseases associate…"
+    },
+    {
+      "chunk_id": "57690b9068e9ebc5af67ddb6e3f91b7f439fbefc",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.08.013",
+      "excerpt": "BACKGROUND Crossover studies can induce order effects, especially when they lack a wash-out period. OBJECTIVE We performed a secondary analyses comparing groups of subjects randomized to different diet orders in two inpatient crossover stu…"
+    },
+    {
+      "chunk_id": "e7a4d590380e0eb57200e8cb3f8f6e65fc3ac48a",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/AJCN/86.5.1808",
+      "excerpt": "We thank Dr Estep for agreeing with our position (1) that liquid meal replacements (MRs) can promote both satiety and weight loss. Not everyone, however, shares our point of view. Our colleague, Dr Mattes, has recently argued (2) that the…"
+    },
+    {
+      "chunk_id": "4fa6ec85f42cc88fe13ac3142b9b798f1a4a88db",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-016-1242-9",
+      "excerpt": "PurposeType 2 diabetes (T2DM) is increasing, particularly in South-East Asia. Intake of high-glycaemic foods has been positively associated with T2DM, and feasible routes to reduce the glycaemic response to carbohydrate-rich staple foods a…"
+    },
+    {
+      "chunk_id": "273970a38af047638a7a49fe4975252e8f0781d1",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2020.10.032",
+      "excerpt": "BACKGROUND & AIMS Soluble dietary fiber is prompted as an important part of reducing blood glucose, ameliorating insulin resistance and controlling body weight. Thus, we performed this systematic review and meta-analysis of randomized cont…"
+    },
+    {
+      "chunk_id": "f48932d26c481ea2e8ac7d88a5a4d95800c83e38",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2014.12.099",
+      "excerpt": "INTRODUCTION Dietary fibers help to control energy intake and reduce the risk of developing obesity. Recent studies show that the consumption of polydextrose reduces energy intake at a subsequent meal. In this systematic review and meta-an…"
+    },
+    {
+      "chunk_id": "925093f2ffdf8c6e7f436ec43b210ed9d79b3580",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuz040",
+      "excerpt": "Abstract Refined carbohydrates result from milling techniques that remove the outer layers of a cereal grain and grind the endosperm into a flour ingredient that is devoid of dietary fiber. Technologies have been developed to produce high-…"
+    },
+    {
+      "chunk_id": "77b42c566fdf40b385654c2198488c43b89b4ee7",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120002475",
+      "excerpt": "Abstract Combinable broad beans (Vicia faba) is a major agricultural crop in Europe with annual production around 1.5 million mt. During its milling the seed testa (hull) is removed and is a significant underutilised secondary product. The…"
+    },
+    {
+      "chunk_id": "13481c9c86ff5a531d02db06406de7b3e1de1ea9",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2021.105802",
+      "excerpt": "Dietary fiber has numerous health benefits, such as increasing satiety, and is regularly included in healthy dietary recommendations. However, different types and sources of fiber vary in their chemical properties and biological effects. T…"
+    },
+    {
+      "chunk_id": "efb8d63e06870ef0b161d4f534a1bd5496af828c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2023.107124",
+      "excerpt": "This virtual (online) study tested the common but largely untested assumptions that food energy density, level of processing (NOVA categories), and carbohydrate-to-fat (CF) ratio are key determinants of food reward. Individual participants…"
+    },
+    {
+      "chunk_id": "fb6d5457e04d77271e2eb2c395f76c04faead41b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3390/ijms23179766",
+      "excerpt": "Body mass index (BMI) has been suggested to play an important role in the relationship between the APOLIPOPROTEIN (APO)E genotype and cardiovascular disease (CVD) risk. Using data from the BODYCON cross-sectional study (n = 360 adults) we…"
+    },
+    {
+      "chunk_id": "059a15c9b2c6609dd9d80e9b5ae8ec106abd421b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665125101353",
+      "excerpt": "Remission of T2DM has been shown to be possible with dietary modifications and significant weight loss in clinical trials as well as real-world studies (1,2). Low-Carbohydrate Diets (LCDs; <130 g carbohydrates/d(3)) have been shown to be e…"
+    },
+    {
+      "chunk_id": "4959fb8787f274275bb1a3c273ee47d706fa4557",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s002966512000258x",
+      "excerpt": "Abstract Various diets have been examined as potential weight-loss treatment for individuals with overweight and obesity. POUNDS LOST was a 2-year randomized clinical trial examining effects of four calorie-restricted diets of varying macr…"
+    },
+    {
+      "chunk_id": "9c765dfb8ce42d0653b156516effc6f1d8daf5dd",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665124000582",
+      "excerpt": "When and what you eat can be linked to circadian preference (i.e., chronotype) and occupation (e.g., shift worker). Evening chronotypes, with a later circadian preference, tend to have meals later, distribute energy intake toward the end o…"
+    },
+    {
+      "chunk_id": "814ec19d574937a585b4a38195472c96f36caaec",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2019.104495",
+      "excerpt": "This study examined the effects of a key feature of mindful eating (paying attention to the sensory properties of food) on calorie and macronutrient intake over a half-day period. Female participants (n = 60) were given a 635 kcal lunch of…"
+    },
+    {
+      "chunk_id": "466cf6464be7f3a3e0f0f0fd1c025c99e47ce57f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-025-03726-6",
+      "excerpt": "The world’s population requires adequate food supply, satisfying specific nutrient requirements to meet dietary recommendations, promote nutrition security and sustain health, while stimulating agriculture biodiversity. This study assessed…"
+    },
+    {
+      "chunk_id": "d01f7c45338d84368b170ed9909bc4ff366f0f8d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-017-1450-y",
+      "excerpt": "PurposeRye products have been reported to elicit postprandial insulin and glucose responses which may be beneficial for prevention of type-2 diabetes. However, mechanisms underlying variations in responses related to processing techniques…"
+    },
+    {
+      "chunk_id": "534627c82bc7ff720a9d1208b1782572deb24268",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-022-03080-x",
+      "excerpt": "Purpose Diabetes remission is a phenomenon described in the context of drastic weight loss due to bariatric surgery or low-calorie diets. Evidence suggests that increasing the intake of plant protein could reduce the risk of type 2 diabete…"
+    },
+    {
+      "chunk_id": "54e9a2957faacfbd2cb84a2a3391bb09d96b9ada",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2023.01.010",
+      "excerpt": "BACKGROUND Short-term trials indicate improvement of intrahepatic lipids (IHLs) and metabolism by dietary protein or unsaturated fatty acids (UFAs) beyond weight loss. OBJECTIVES We aimed to assess the effect of a dietary intervention high…"
+    },
+    {
+      "chunk_id": "1b05c2f10d51a1369958e32cf52df16fe253f963",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2025.08.003",
+      "excerpt": "BACKGROUND & AIMS Increasing evidence from epidemiological studies indicates that dietary fibers are protective against the development of type 2 diabetes mellitus. Supplementation of dietary fiber may therefore be a strategy to improve me…"
+    },
+    {
+      "chunk_id": "d985afe2cdaadbabf56b2538c2b63cc934c0067c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2017.09.027",
+      "excerpt": "BACKGROUND & AIMS Several studies with diabetes-specific formulas (DSFs) for hyperglycaemic patients in need of nutritional support have been conducted in non-malnourished patients, mainly comparing products with varying macronutrient comp…"
+    },
+    {
+      "chunk_id": "319c059600679a36d5ed9b46afee7a9d8b2d052b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqac154",
+      "excerpt": "Abstract Background Consensus has not been reached on what constitutes an optimal diet in individuals with prediabetes and type 2 diabetes mellitus (T2DM), especially between low-carbohydrate options. Objectives We compared 2 low-carbohydr…"
+    },
+    {
+      "chunk_id": "495ee7e5d5e3b4fe92c49a69119221007382ad55",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120006035",
+      "excerpt": "Abstract Introduction: An increase in dietary fat intake - at the expense of dietary carbohydrate intake - may play an important role in the accumulation of adipose tissue at different sites and liver fat accumulation. Thus, the present st…"
+    },
+    {
+      "chunk_id": "5bf8576fa88076fce548f8d2379b7f570d4218e6",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665124000685",
+      "excerpt": "A growing body of research has identified interactions between microorganisms and nutrients within the gut, collectively referred to as the ‘gut microbiome’(1). Alongside this, distinct structural characteristics/components of dietary fibr…"
+    },
+    {
+      "chunk_id": "373cb0dcde26d2ffc9818a80409c004e0f9f7ac3",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2020.02.022",
+      "excerpt": "BACKGROUND & AIM Intermittent fasting (IF) is a dietary intervention that has been investigated as an alternative weight-loss diet due to conventional approaches having poor long-term adherence. However, the macronutrient and micronutrient…"
+    },
+    {
+      "chunk_id": "329f15649e3a0a2e7f3302e66f606687707db7b8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2025.107949",
+      "excerpt": "Functional meat products to reduce appetite is a feasible approach to decreasing meat consumption, especially in the current global pandemic of overweight and sustainability issues in meat production. The meat itself is highly satiating be…"
+    },
+    {
+      "chunk_id": "24cb96abd4676f1f52daf825a9c1bfe8d0bd6e39",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S002966512000751X",
+      "excerpt": "The increasing global prevalence of type 2 diabetes mellitus (T2DM) means there is a clear need for prevention strategies focussing on the diet and lifestyle factors of high-risk individuals. Low carbohydrate (LC) diets (<130 g carbohydrat…"
+    },
+    {
+      "chunk_id": "842faef5646a57a31813289687994a234980e77c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665119001381",
+      "excerpt": "In 2015, Public Health England challenged food manufacturers to reduce the free sugars content of sweetened food products by 20%, to address the prevalence of obesity within the UK. Whilst progress has been made in reformulating sweetened…"
+    },
+    {
+      "chunk_id": "0aac279347171b2d6ae8d90ae89d3bbee47c2a54",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120007454",
+      "excerpt": "Research indicates that diets high in fibre (DF) reduces risks of cardiovascular diseases, diabetes and cancers . There is an increasing emphasis on incorporation of plant-based natural products in diets for improving nutrition and health…"
+    },
+    {
+      "chunk_id": "cf24a400d95f5520388de03cbba66c091fc2f8a6",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665120005935",
+      "excerpt": "Abstract In Western societies, unbalanced diets may lead to intestinal allostatic stress, with microbial dysbiosis and alteration of the gut barrier function. These local modifications may induce a low-grade inflammation via endotoxemic pr…"
+    },
+    {
+      "chunk_id": "72b3ed8d6c8089b6f790e523a84e466d9d1b7b9c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665111004599",
+      "excerpt": "Supplementing the diet with fermentable carbohydrate (FC) has been suggested to reduce appetite and body weight. Recent findings have demonstrated that inulin-type fructans reduce food intake, body weight and fat mass in rodents. However,…"
+    },
+    {
+      "chunk_id": "ef171894f75b3e0b0c823896ac6e07ecaece63ec",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120006941",
+      "excerpt": "Epidemiological and clinical evidence highlight the benefit of dietary fibre consumption on body weight. This benefit is partly attributed to the interaction of dietary fibre with the gut microbiota. Dietary fibre possesses a complex food…"
+    },
+    {
+      "chunk_id": "eeef3606ce0be210325e50dc95d28d415e6334f0",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqy307",
+      "excerpt": "Background Epidemiological studies suggest that an increased red meat intake is associated with a higher risk of type 2 diabetes, whereas an increased fiber intake is associated with a lower risk. Objectives We conducted an intervention st…"
+    },
+    {
+      "chunk_id": "7272d80bb40c9468f41e32e312b0ef59001907fc",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuz082",
+      "excerpt": "Carbohydrates are increasingly being implicated in the epidemics of obesity, diabetes, and their downstream cardiometabolic diseases. The \"carbohydrate-insulin model\" has been proposed to explain this role of carbohydrates. It posits that…"
+    },
+    {
+      "chunk_id": "3a2bd700b57f2b699a30cc6ca5990a720e967e10",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120001433",
+      "excerpt": "Abstract Obesity predisposes to such health conditions, as cardiovascular diseases, hypertension, diabetes, hyperlipidemia, osteoarthritis. Poor diet is among the common causes of obesity. The purpose of this study was to evaluate the inta…"
+    },
+    {
+      "chunk_id": "730f2a4632824679ae7f22300bb5492c038d5af1",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.3945/ajcn.2008.26708",
+      "excerpt": "BACKGROUND Available data suggest that substitution of refined carbohydrate in the diet with protein and fiber may benefit blood pressure. Lupin kernel flour is high in protein and fiber and low in carbohydrate. OBJECTIVE Our objective was…"
+    },
+    {
+      "chunk_id": "22a4ec723bf26f31a1b3b541116a14662308edb8",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.07.004",
+      "excerpt": "Background For over 45 y increasingly comprehensive food tables of glycemic index (GI) and glycemic load (GL) have been published in the American Journal of Clinical Nutrition to determine the GI and GL values of diets. Recently the WHO ba…"
+    },
+    {
+      "chunk_id": "8416e5fa556ac32864034b9f7dc29b9b1e2d6424",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.01.008",
+      "excerpt": "BACKGROUND Previous clinical studies showing that cinnamon spice lowers blood glucose concentrations had inconsistent results. OBJECTIVES To determine the effect of daily cinnamon spice supplementation in an amount commonly used for season…"
+    },
+    {
+      "chunk_id": "d07a7127271d4d9567d2be303b5e3f916bcbf238",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-015-0983-1",
+      "excerpt": "AbstractPurposeThe optimal macronutrient composition of the diet for the management of type 2 diabetes is debated, particularly with regard to the ideal proportion of fat and carbohydrates. The aim of the study was to explore the associati…"
+    },
+    {
+      "chunk_id": "e1d7eab7bbcd48822df1167771e995a696fbc478",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.fhfh.2021.100026",
+      "excerpt": "Abstract Understanding the correlations between dietary fibers' physical properties and postprandial appetite response helps to design novel functional products with satiety enhancing capability. In the present study, the partially degrade…"
+    },
+    {
+      "chunk_id": "47662c4ac9b86f4831afa7008be4cf06c47a148f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120000117",
+      "excerpt": "Lifestyle intervention may be effective in reducing type 2 diabetes mellitus incidence and cardiometabolic risk. A more personalised nutritional approach based on an individual or subgroup-based metabolic profile may optimise intervention…"
+    },
+    {
+      "chunk_id": "e0c5f7de7c468f56dd9aae50d9eab0097fdec276",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/s0029665125000795",
+      "excerpt": "Shift workers in Australia constitute approximately 16% of the workforce, with nearly half working a rotating shift pattern(1). Whilst poor dietary habits of shift workers have been extensively reported, along with increased risk of metabo…"
+    },
+    {
+      "chunk_id": "a0d706c1038a59842bbe5f834caccff8fb379e0c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqz292",
+      "excerpt": "BACKGROUND The role of dietary fiber in obesity management remains debatable. Evidence suggests that intake of viscous fiber may have the potential to facilitate weight loss. OBJECTIVE We aimed to summarize and quantify the effects of visc…"
+    },
+    {
+      "chunk_id": "11ae26b3e1bece77f9c948e74d53819e9f70b86b",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1101/2025.01.04.25319987",
+      "excerpt": "Obesity and the increased postprandial glycaemic response (PPGR) are risk factors for type 2 diabetes. Few studies have explored the association of body weight with PPGRs. The study aimed to investigate the PPGR between healthy adults with…"
+    },
+    {
+      "chunk_id": "8af54c7f04afff3a7f62b3a8f05278f550e3bc03",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S002966511900079X",
+      "excerpt": "Consumption of dietary fibre (DF) may promote satiety and reduce the risk of many diseases, including heart diseases, diabetes and bowel cancer. Despite current recommendations, DF consumption remains too low, possibly due to a lower senso…"
+    },
+    {
+      "chunk_id": "0d09296709826a2ed75f5e13d72c16fa2c624054",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.12.008",
+      "excerpt": "BACKGROUND Dietary intake of pulses is associated with beneficial effects on body weight management and cardiometabolic health, but some of these effects are now known to depend on integrity of plant cells, which are usually disrupted by f…"
+    },
+    {
+      "chunk_id": "2f2757e7d3c09c7fff7b74500fdbddb9ff63ed24",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-018-1644-y",
+      "excerpt": "PurposeType 2 diabetes mellitus (T2DM) is characterized by both impaired pancreatic β-cell function (BCF) and insulin resistance. In the etiology of T2DM, BCF basically determines whether a person with a certain degree of insulin resistanc…"
+    },
+    {
+      "chunk_id": "a41d17c5a9d1ac1ae7e3d574d1a250a346c2a583",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2024.05.018",
+      "excerpt": "BACKGROUND Short-term trials have shown a reduction in liver fat when saturated fatty acids (SFA) are substituted with polyunsaturated fatty acids (PUFA), or with low-glycemic carbohydrates. However, few cohort studies have been conducted…"
+    },
+    {
+      "chunk_id": "7e6a509c34fa6a50e724f07458998b47404a096c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2022.106340",
+      "excerpt": "In light of the increasing prevalence of obesity and cardiometabolic diseases, the underconsumption of fiber is concerning due to its various associated health benefits such as weight management. Adding extracted or isolated dietary fibers…"
+    },
+    {
+      "chunk_id": "5951f6dbaed0509b301f2c7cedef35b5c78511f6",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2022.12.015",
+      "excerpt": "BACKGROUND Soluble dietary fibers are known to reduce the levels of blood glucose and lipids in patients with type 2 diabetes mellitus (type 2 diabetes). Although several different dietary fiber supplements are utilized, to our knowledge,…"
+    },
+    {
+      "chunk_id": "bbed5b5986a2659dd32b91b14de0e396acf8bc5f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2016.08.118",
+      "excerpt": "Dietary fibre has been shown to increase subjective satiating ratings. However data from human trials has produced mixed results, possibly due to different types of fibre which have diverse physicochemical properties and gastrointestinal t…"
+    },
+    {
+      "chunk_id": "a5804cfb552bdb96849d5e0ea9fd77cf233b681f",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2023.05.011",
+      "excerpt": "BACKGROUND & AIMS Diet and weight loss affect circulating metabolome. However, metabolite profiles induced by different weight loss maintenance diets and underlying longer term weight loss maintenance remain unknown. Herein, we investigate…"
+    },
+    {
+      "chunk_id": "d3356e7bb0d65643e0a67b2e381a34930f739fc7",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2017.11.010",
+      "excerpt": "BACKGROUND & AIMS Glucose metabolism is, in part, regulated by the circadian rhythm. Postprandial glucose response is exaggerated and insulin sensitivity is reduced at night compared with the morning. Sustained poor glucose tolerance may b…"
+    },
+    {
+      "chunk_id": "4f1f42fe8c024b76795cb4f69fe9046462d9089d",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.clnu.2023.08.016",
+      "excerpt": "BACKGROUND & AIMS Recent evidence suggests that the ability to regulate glucose and insulin homeostasis is different in men and women. Against this background, it has been hypothesized that the impact on daily plasma glucose and insulin pr…"
+    },
+    {
+      "chunk_id": "b3f69e2bb115b5c706c00cb4802524b290ed9b5e",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.appet.2024.107361",
+      "excerpt": "Eating behaviour that does not centralise weight, otherwise known as weight-neutral, is associated with improved physical and psychological health, and greater health promoting behaviours. However, consolidated evidence is lacking. This st…"
+    },
+    {
+      "chunk_id": "897b26bfa111eb316c061a9b0b2d52bb527c6628",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/ajcn/nqac085",
+      "excerpt": "ABSTRACT Background Noncommunicable disease development is related to impairments in glycemic and insulinemic responses, which can be modulated by fiber intake. Fiber's beneficial effects upon metabolic health can be partially attributed t…"
+    },
+    {
+      "chunk_id": "36390f1d94dc52f9dfd8162f362dc4e75a1c5890",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1007/s00394-020-02438-3",
+      "excerpt": "We investigated the effects of the macronutrient composition of diets with differing satiety values on fasting appetite-related hormone concentrations after weight loss and examined whether the hormone secretion adapted to changes in body…"
+    },
+    {
+      "chunk_id": "039f3ca24d6536590f610ac55f7638b3bb353a62",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuae193",
+      "excerpt": "CONTEXT Dietary fiber (DF) exhibits variations in its chemical and physical complexity, as well as in its utilization by the gut microbiota. However, the impact of these differences on the health status of adults with overweight or obesity…"
+    },
+    {
+      "chunk_id": "6363c5fbe0a789448ddadad8e4d33bf5584c132c",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1093/nutrit/nuad141",
+      "excerpt": "CONTEXT Ramadan fasting (RF) is associated with various physiological and metabolic changes among fasting Muslims. However, it remains unclear whether these effects are attributable to changes in meal timing or changes in dietary energy an…"
+    },
+    {
+      "chunk_id": "70e840b38b0c3a835aa45b7ecde4b77421798f85",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1017/S0029665120007727",
+      "excerpt": "Chickpeas are low glycaemic index foods with delayed digestion and reduced postprandial glycaemic responses (PPGR). However, in vitro studies suggest that mechanical processing of chickpeas, that result in cell wall disruption, significant…"
+    },
+    {
+      "chunk_id": "4da48468709a1f1fd656cd67a112179ca238bb81",
+      "resolved": true,
+      "source_doc": "https://doi.org/10.1016/j.ajcnut.2023.11.013",
+      "excerpt": "BACKGROUND Weight loss is the most effective treatment for non-alcoholic fatty liver disease (NAFLD). There is evidence that Mediterranean diets rich in unsaturated fatty acids and fiber have beneficial effects on weight homeostasis and me…"
+    }
+  ],
+  "unresolved": []
+}

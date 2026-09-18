@@ -1,0 +1,385 @@
+{
+  "anchor": "fish",
+  "method": "bertopic",
+  "shelf_id": "foodon:FOODON:00001248",
+  "themes": [
+    {
+      "theme_id": "fish-bertopic-3ea4c133",
+      "label": "fish and bone health",
+      "label_source": "llm",
+      "chunk_count": 307,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fish",
+        "study",
+        "associated",
+        "food",
+        "fish oil"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00000073",
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001040",
+        "FOODON:00001055",
+        "FOODON:00001133",
+        "FOODON:00001145"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1ff9e568816a8071bc4f30e07d0a783501227b23",
+          "excerpt": "Abstract Introduction Newly available data from big scale studies conducted in the UK, such as the UK Biobank, offers the possibility to further explore the prospective association between a diet-quality score and health outcomes after acc…",
+          "source_doc": "https://doi.org/10.1017/S0029665120000208"
+        },
+        {
+          "chunk_id": "90e8024281faa24003d5bc6f18b5792bd26696e7",
+          "excerpt": "Background Some dietary factors have been linked to outcomes of infertility treatment with assisted reproductive technology (ART), but the role of intake of meats and other protein-rich foods remains unclear. Objective The aim of this manu…",
+          "source_doc": "https://doi.org/10.1093/ajcn/nqy185"
+        },
+        {
+          "chunk_id": "dcbde24cfaffb759a12662482ada174f462b426c",
+          "excerpt": "PurposeFish is a source of various nutrients beneficial for bone health, but few studies have investigated the association between bone mineral density (BMD) and fish consumption. Thus, the aim was to investigate the relationship between t…",
+          "source_doc": "https://doi.org/10.1007/s00394-018-1665-6"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-e9b13bc1",
+      "label": "starchy vegetables and legumes",
+      "label_source": "llm",
+      "chunk_count": 112,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "vegetables",
+        "fat",
+        "salads",
+        "rice",
+        "salad"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001017",
+        "FOODON:00001065",
+        "FOODON:00001180",
+        "FOODON:00001181",
+        "FOODON:00001198",
+        "FOODON:00001235",
+        "FOODON:00001261",
+        "FOODON:00001264"
+      ],
+      "samples": [
+        {
+          "chunk_id": "dbfcaba1-891c-4a78-b114-83151dbd04a1",
+          "excerpt": "Be careful with deals on perishable foods like fruit, veg and salads. No matter how cheap it is, it's not good value if it ends up in the bin!",
+          "source_doc": "EPA_Ireland_Stop-Food-Waste-Pocket-Guide-2022-web.pdf"
+        },
+        {
+          "chunk_id": "314feaf0-d876-47a4-abe7-276ce45a92a9",
+          "excerpt": "| Legumes (beans, peas, lentils, and soy products) | ■ Keep a variety of low-sodium canned legumes, such as kidney beans, chickpeas (garbanzo beans), black beans, and others on hand. ■ Use rinsed, drained beans as salad toppers. For intere…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "53a3bfb2-7f3b-4d25-98ed-07bb8614525a",
+          "excerpt": ". . . if potatoes can substitute for bread since they're both high in starches? Potatoes are among the starchy vegetables in the Vegetable Group. Breadfruit, cassava, corn, green peas, hominy, lima beans, rutabaga, taro, and yautia are som…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-87644660",
+      "label": "high protein food sources",
+      "label_source": "llm",
+      "chunk_count": 67,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "cup",
+        "calcium",
+        "protein",
+        "_____",
+        "milk"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001038",
+        "FOODON:00001059",
+        "FOODON:00001198",
+        "FOODON:00001258",
+        "FOODON:00001260",
+        "FOODON:00001579",
+        "FOODON:00001605",
+        "FOODON:00001856"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1efc8f59-afe6-4dde-a38d-e45a416dfcd9",
+          "excerpt": "30g cooked beef ¼ cup (40g) baked beans 35g hummus 1 medium egg 30g cooked lamb ¼ cup (40g) lentils 35g cooked portion tofu 1 heaped teaspoon smooth peanut or nut butter For more food facts and healthy eating tips visit www.gov.ie/healthyi…",
+          "source_doc": "OK_Ireland_meat-shelf_unknown_children1to4yo.pdf"
+        },
+        {
+          "chunk_id": "4dd47a19-666c-4bb6-91ff-063017b7498a",
+          "excerpt": "Examples of foods with a PDCAAS of 100 include milk protein (casein), egg white, ground beef, and tuna, along with some other animal products. Soybean protein has a PDCAAS of 94, and the values for various lentils, peas, and legumes range…",
+          "source_doc": "advanced-nutrition-and-human-metabolism_compress.pdf"
+        },
+        {
+          "chunk_id": "3a13527d-832d-4a03-bfb7-4f94fed2a69e",
+          "excerpt": "| Percentage | Food Item | |--------------|----------------------------------------------------------------------------------------------| | 90-99 | Nonfat milk, cantaloupe, strawberries, watermelon, lettuce, cabbage, celery, spinach, squa…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-64c22bdf",
+      "label": "vitamin rich food sources",
+      "label_source": "llm",
+      "chunk_count": 54,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "vitamin",
+        "iodine",
+        "fish",
+        "fortified",
+        "food"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001055",
+        "FOODON:00001248",
+        "FOODON:00001253",
+        "FOODON:00001255",
+        "FOODON:00001594",
+        "FOODON:00001854"
+      ],
+      "samples": [
+        {
+          "chunk_id": "1f7a8b923a609fca412252c9cad1cca9220d846d",
+          "excerpt": "Abstract Insufficient quantity and inadequate quality of foods in early life are key causes of all forms of malnutrition. Identification of nutrient and dietary gaps in the diets of infants and young children is essential to inform policie…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuaa142"
+        },
+        {
+          "chunk_id": "b76ed6be-1fa1-4651-9a4f-c14c91802352",
+          "excerpt": "Liver: A Lesson in Moderation Foods naturally rich in vitamin A pose little risk of toxicity, with the possible exception of liver. When young laboratory pigs eat daily chow made from salmon parts, including the livers, their growth halts,…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "e6a7994f-868a-4a04-9102-475cf552526b",
+          "excerpt": "| Table 7-8, The Fat-Soluble Vitamins-Functions, | Blood/Circulatory System | Deficiency Symptoms | Toxicity Symptoms Elevated blood calcium; calcification of blood vessels and heart tissues | | Chief Functions in the Body Mineralization o…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-b229e3bb",
+      "label": "types of dietary fats",
+      "label_source": "llm",
+      "chunk_count": 30,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fats",
+        "fat",
+        "fatty",
+        "oils",
+        "trans"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001015",
+        "FOODON:00001053",
+        "FOODON:00001172",
+        "FOODON:00001231",
+        "FOODON:00001233",
+        "FOODON:00001290",
+        "FOODON:00001579"
+      ],
+      "samples": [
+        {
+          "chunk_id": "6414a45f-4490-4d21-8050-d3aa45ea0042",
+          "excerpt": "competitor for cholesterol. Keep a collection of nuts in your freezer that can be added to your salads, stir-fry, one-dish foods, soups, desserts, and yogurts. - Appearance. Saturated and trans fats are not good for you and must be placed…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "e8f3a2b0-c552-4c69-8a71-2e7c5fcc96d4",
+          "excerpt": "- Trans fatty acids. Stick margarines, shortening, fast foods, commercial baked goods, and some snack foods contain trans fats. Limit your consumption of these products to keep trans fats to less than 1 percent of your fat consumption. - O…",
+          "source_doc": "Human-Nutrition-1530134911.pdf"
+        },
+        {
+          "chunk_id": "918e6c9f-3a3b-44c6-a00e-28a0b36d961d",
+          "excerpt": "Hydrogenation creates both saturated and trans fatty acids. Trans fatty acids are actually unsaturated fatty acids, but they have the linear shape of saturated fatty acids. (The carbon chains are not bent like naturally-occurring unsaturat…",
+          "source_doc": "nutrition_and_science_callahan.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-e1c742c1",
+      "label": "dietary guidelines for pregnancy",
+      "label_source": "llm",
+      "chunk_count": 28,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fish",
+        "alcohol",
+        "women",
+        "caffeine",
+        "pregnancy"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001260",
+        "FOODON:00001290",
+        "FOODON:00001300",
+        "FOODON:00001579",
+        "FOODON:00002472",
+        "FOODON:00002652",
+        "FOODON:00002753",
+        "FOODON:00003206"
+      ],
+      "samples": [
+        {
+          "chunk_id": "2cae447c-c07c-4910-a030-b6708500d7ab",
+          "excerpt": "If alcohol is taken, care should be taken to drink sensibly by setting limits and never bingeing. The upper limits are: - 21 standard* drinks per week for men - 14 standard* drinks per week for women These upper limits are not targets to b…",
+          "source_doc": "OK_Ireland_Healthy_Eating_Guidelines_Report_2011_all.pdf"
+        },
+        {
+          "chunk_id": "cb893726-c9d4-44e6-aff9-2fd57f42bb03",
+          "excerpt": "- . . . how much you need to worry about mayonnaise in picnic foods and brown-bag lunches? Mayonnaise is a perishable spread, so it must stay chilled. Homemade mayonnaise, made with uncooked eggs, is potentially more hazardous than its com…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "4dd96e75-09a5-4d8c-a68d-a4ae87db0c8c",
+          "excerpt": "However, certain types of fish need to be avoided because they contain contaminants such as mercury which may be harmful to the developing baby. For this reason, pregnant women should avoid eating large predatory fish such as marlin, shark…",
+          "source_doc": "OK_Ireland_Healthy_Eating_Guidelines_Report_2011_all.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-19a69ca1",
+      "label": "fatty fish nutrition benefits",
+      "label_source": "llm",
+      "chunk_count": 22,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "fish",
+        "omega",
+        "seafood",
+        "fatty",
+        "pound"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001856",
+        "FOODON:00002404",
+        "FOODON:00002679",
+        "FOODON:00003265",
+        "FOODON:00003339",
+        "FOODON:00003473",
+        "FOODON:00004237",
+        "FOODON:00004298"
+      ],
+      "samples": [
+        {
+          "chunk_id": "816a1d4b-d807-4bd4-b014-d0a2441a4baa",
+          "excerpt": "Fish in many forms-fresh, frozen, and canned-makes a nutritious choice because EPA and DHA, along with other key nutrients, survive most cooking and processing. However, the type of fish is critical. Among frozen selections, for example, p…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "34adafb5-b2eb-42e7-9242-a23c6798f4ec",
+          "excerpt": "Omega-3 fatty acids. Fatty acids (EPA and DHA) that are highly polyunsaturated. They may help reduce blood clotting in the arteries and protect from hardening of the arteries. Mostly they come from seafood, especially fatty fish such as al…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "4b511ada-bc86-4603-93c1-ca27e2e47692",
+          "excerpt": "Specifically, fatty-fleshed deep-sea fish (such as salmon, mackerel, tuna, herring, and sardines) are particularly rich in omega-3 fatty acids, which contribute to: - proper heart function, - normal vision, - brain function, - and maintain…",
+          "source_doc": "OK_Hungary_60pluszegeszseg_kiadvany_web_2020_60plus.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-26bda551",
+      "label": "healthy eating for kids",
+      "label_source": "llm",
+      "chunk_count": 20,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "kids",
+        "foods",
+        "children",
+        "child",
+        "food"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00002331",
+        "FOODON:00002417",
+        "FOODON:00002472",
+        "FOODON:00002478",
+        "FOODON:00002672",
+        "FOODON:00002753",
+        "FOODON:00003049",
+        "FOODON:00003083"
+      ],
+      "samples": [
+        {
+          "chunk_id": "2444717b-7f7a-43d7-ad19-8d159e067798",
+          "excerpt": "A steady diet of the offerings on most 'children's menus' in restaurants, such as fried chicken nuggets, hot dogs, and French fries, invites both nutrient shortages and gains of body fat. Often, better choices can be found among appetizers…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "ed6452d8-cbbf-4892-9993-0027b561d91e",
+          "excerpt": "- /H18567 Store food out of sight; be careful about bringing a lot of higher-calorie foods into the house. When food sits on the kitchen counter, grabbing a cookie or chips may be more habit than hunger. For many peoplekids, too-just seein…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "d28d1c96-dc71-4c62-92fe-6f5dc1fe223e",
+          "excerpt": "8. On warm days, go in-line skating or ride bikes (remember the helmet and pads), or run through sprinkler 'rain. ' 9. Enjoy a hike together in a nearby park or forest preserve. Have kids find ten points of natural interest to enjoy as you…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    },
+    {
+      "theme_id": "fish-bertopic-d3f4e759",
+      "label": "healthy eating habits",
+      "label_source": "llm",
+      "chunk_count": 17,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "calories",
+        "foods",
+        "eat",
+        "fat",
+        "food"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001181",
+        "FOODON:00002404",
+        "FOODON:00002472",
+        "FOODON:00002753",
+        "FOODON:00003060",
+        "FOODON:00003083",
+        "FOODON:00003265"
+      ],
+      "samples": [
+        {
+          "chunk_id": "7d2973d5-87c2-4878-83f3-14d79c51a5ba",
+          "excerpt": "- /H18567 Whether traveling on business or leisure, be a wise restaurant consumer. As with any meal out, the 'Restaurant Eater' s Tip List' and 'Fast Food, Healthful Food' in this chapter apply. - /H18567 On an expense account? Avoid the u…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "b3406014-6b0f-4a67-80ad-d90fe15fa6f1",
+          "excerpt": "- /H18567 Stick to a regular eating schedule. (There' s no hard-and-fast rule about eating three meals a day.) Studies show that missed meals can lead to impulsive snacking and overeating and may lower the rate at which your body burns ene…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "9dc68822-bed4-4320-9a7a-240fe6ee9d5a",
+          "excerpt": "Look at your eating habits. Do you snack on highcalorie foods at work because everyone else does? Do you eat fast so you can get on quickly with your day? Are you a stand-up diner? - /H18567 Rethink your old ways of eating-and identify tho…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        }
+      ]
+    }
+  ]
+}

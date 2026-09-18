@@ -1,0 +1,143 @@
+{
+  "olive_oil": {
+    "raw": {
+      "foodon_id": "FOODON:03301826",
+      "label": "olive oil",
+      "raw_depth": 16,
+      "raw_immediate_parents": [
+        "olive fat or oil refined food product"
+      ],
+      "raw_n_children": 8,
+      "raw_sibling_fanout": 2,
+      "raw_longest_single_child_run": 0,
+      "raw_ancestor_labels": [
+        "material entity",
+        "food product",
+        "plant food product",
+        "plant lipid food product",
+        "food material component",
+        "olive fat or oil refined food product",
+        "plant based refined or partially-refined food product",
+        "plant fat or oil refined food product",
+        "refined or partially-refined food product",
+        "food material",
+        "food material by process",
+        "lipid food product",
+        "plant material",
+        "processed food",
+        "organism material",
+        "extract, concentrate or isolate of plant or animal"
+      ]
+    },
+    "projected": {
+      "projected_depth": 4,
+      "projected_parent": "Refined Plant Oils",
+      "projected_breadcrumb": [
+        "Foods",
+        "Plant-based foods",
+        "plant oils and fats",
+        "Refined Plant Oils",
+        "olive oil"
+      ],
+      "projected_chunk_count": 185
+    },
+    "depth_reduction": 12
+  },
+  "legume": {
+    "raw": {
+      "foodon_id": "FOODON:00001264",
+      "label": "legume food product",
+      "raw_depth": 7,
+      "raw_immediate_parents": [
+        "botanical fruit food product"
+      ],
+      "raw_n_children": 13,
+      "raw_sibling_fanout": 2,
+      "raw_longest_single_child_run": 0,
+      "raw_ancestor_labels": [
+        "material entity",
+        "food product",
+        "plant food product",
+        "botanical fruit food product",
+        "food material",
+        "plant material",
+        "organism material"
+      ]
+    },
+    "projected": {
+      "projected_depth": 3,
+      "projected_parent": "fruit",
+      "projected_breadcrumb": [
+        "Foods",
+        "Plant-based foods",
+        "fruit",
+        "bean"
+      ],
+      "projected_chunk_count": 1455
+    },
+    "depth_reduction": 4
+  },
+  "fish": {
+    "raw": {
+      "foodon_id": "FOODON:00001248",
+      "label": "fish food product",
+      "raw_depth": 8,
+      "raw_immediate_parents": [
+        "vertebrate food product"
+      ],
+      "raw_n_children": 162,
+      "raw_sibling_fanout": 19,
+      "raw_longest_single_child_run": 0,
+      "raw_ancestor_labels": [
+        "material entity",
+        "food product",
+        "vertebrate food product",
+        "food material",
+        "animal food product",
+        "vertebrate material",
+        "organism material",
+        "animal material"
+      ]
+    },
+    "projected": {
+      "projected_depth": 3,
+      "projected_parent": "vertebrate food product",
+      "projected_breadcrumb": [
+        "Foods",
+        "Meat and Seafood",
+        "vertebrate food product",
+        "fish products"
+      ],
+      "projected_chunk_count": 789
+    },
+    "depth_reduction": 5
+  },
+  "dietary_fibre": {
+    "raw": {
+      "foodon_id": "CDNO:0000005",
+      "label": "dietary fibre",
+      "raw_depth": 2,
+      "raw_immediate_parents": [
+        "dietary chemical component"
+      ],
+      "raw_n_children": 10,
+      "raw_sibling_fanout": 12,
+      "raw_longest_single_child_run": 0,
+      "raw_ancestor_labels": [
+        "material entity",
+        "dietary chemical component"
+      ]
+    },
+    "projected": {
+      "projected_depth": 2,
+      "projected_parent": "Food Components",
+      "projected_breadcrumb": [
+        "Nutrients",
+        "Food Components",
+        "fibre"
+      ],
+      "projected_chunk_count": 1512
+    },
+    "depth_reduction": 0
+  }
+}

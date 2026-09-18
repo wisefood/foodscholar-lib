@@ -1,0 +1,91 @@
+{
+  "anchor": "olive_oil",
+  "method": "bertopic",
+  "shelf_id": "foodon:FOODON:03301826",
+  "themes": [
+    {
+      "theme_id": "olive_oil-bertopic-c4ca126d",
+      "label": "olive oil health benefits",
+      "label_source": "llm",
+      "chunk_count": 127,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "oil",
+        "olive",
+        "study",
+        "olive oil",
+        "diet"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001002",
+        "FOODON:00001010",
+        "FOODON:00001015",
+        "FOODON:00001017",
+        "FOODON:00001053",
+        "FOODON:00001087",
+        "FOODON:00001149",
+        "FOODON:00001160"
+      ],
+      "samples": [
+        {
+          "chunk_id": "38c2910974b9a3f204e8d7fb4a49d4b542caa216",
+          "excerpt": "Current nutritional rating systems, like the health star rating, help consumers understand the nutritional value of food and were designed in an effort to combat obesity. However, these systems have limitations, especially for edible oils,…",
+          "source_doc": "https://doi.org/10.1017/S0029665125001119"
+        },
+        {
+          "chunk_id": "667f07c56f51c28ed9dbdac6d49092c4a8776740",
+          "excerpt": "Dietary oils and fats contain different fatty acid compositions which are associated with cardiometabolic disease risk and other health outcomes. (1,2) Despite their in ﬂ uence on health and disease, the types of dietary oils and fats pred…",
+          "source_doc": "https://doi.org/10.1017/s0029665123000812"
+        },
+        {
+          "chunk_id": "22c287fb776ff5b860b6a3cb9d078bc78eb23b0d",
+          "excerpt": "Abstract Extra-virgin olive oil (EVOO), a popular functional food and major source of fat in the Mediterranean diet, possesses a variety of healthful components, including monounsaturated fatty acids and bioactive phenolic compounds that,…",
+          "source_doc": "https://doi.org/10.1093/nutrit/nuaa148"
+        }
+      ]
+    },
+    {
+      "theme_id": "olive_oil-bertopic-73634b8d",
+      "label": "healthy oil and fats",
+      "label_source": "llm",
+      "chunk_count": 56,
+      "discovery_pass": "bertopic",
+      "discovered_by": "bertopic",
+      "keyword_terms": [
+        "oil",
+        "fat",
+        "fats",
+        "olive",
+        "olive oil"
+      ],
+      "foodon_id_signature": [
+        "FOODON:00001172",
+        "FOODON:00001181",
+        "FOODON:00001198",
+        "FOODON:00001233",
+        "FOODON:00001235",
+        "FOODON:00001290",
+        "FOODON:00001605",
+        "FOODON:00002456"
+      ],
+      "samples": [
+        {
+          "chunk_id": "314feaf0-d876-47a4-abe7-276ce45a92a9",
+          "excerpt": "| Legumes (beans, peas, lentils, and soy products) | ■ Keep a variety of low-sodium canned legumes, such as kidney beans, chickpeas (garbanzo beans), black beans, and others on hand. ■ Use rinsed, drained beans as salad toppers. For intere…",
+          "source_doc": "Nutrition Concepts & Controversies (16th Ed.) by Frances Sienkiewicz Sizer & Ellie Whitney.pdf"
+        },
+        {
+          "chunk_id": "9f656020-bc47-4f01-9a63-383ea47e18f4",
+          "excerpt": "6. /H18567 As easy substitutions, try modified ingredients. For example, use cholesterol-free egg products, reduced-fat cheese, or sodium-reduced chicken broth in some recipes. Follow package directions if the product needs to be prepared…",
+          "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf"
+        },
+        {
+          "chunk_id": "dc2b0a22-d952-46ad-a9f1-cc2a7fd0c2ee",
+          "excerpt": "Choose any 2 servings each day Spreads and oils provide essential fats but these are only needed in very small amounts. Choose low fat and reduced fat spreads and oils such as rapeseed or olive oil (monunsaturated) instead of hard margarin…",
+          "source_doc": "OK_Ireland_227cb9a85c3b4853982f845940a583a8_unknown_all.pdf"
+        }
+      ]
+    }
+  ]
+}

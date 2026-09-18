@@ -1,0 +1,51 @@
+{
+  "anchor": "fish",
+  "query": "What are the cardiovascular and omega-3 benefits of eating fish?",
+  "flat_ids": [
+    "d88a15c5-a728-4f06-9f60-33bdb163611d",
+    "4e1dc335-4a22-4f94-ae7a-1cdcea005e95",
+    "34adafb5-b2eb-42e7-9242-a23c6798f4ec",
+    "380af761-b277-47e9-854e-ea384c045c6b",
+    "8e42eeef75e577f8133a282e90f342ebabe27605",
+    "b86c57c0-b621-42ab-8e4d-d16bf0dda14c",
+    "44784f09-2cf6-4a86-90c5-8cdfca37de45",
+    "34d5ee82-09d8-44f1-88df-35c51b09b3c6",
+    "43ef41f3-7cd0-4b39-96ac-173857fe1865",
+    "1645122b-4e7c-44f7-9a0f-5edce102a29e"
+  ],
+  "graph_ids": [
+    "cdb73177-0195-49fa-a64f-0b93ea838cdf",
+    "d88a15c5-a728-4f06-9f60-33bdb163611d",
+    "380af761-b277-47e9-854e-ea384c045c6b",
+    "4b511ada-bc86-4603-93c1-ca27e2e47692",
+    "34adafb5-b2eb-42e7-9242-a23c6798f4ec",
+    "44784f09-2cf6-4a86-90c5-8cdfca37de45",
+    "43ef41f3-7cd0-4b39-96ac-173857fe1865",
+    "1645122b-4e7c-44f7-9a0f-5edce102a29e",
+    "70b3fb67-af67-4852-a199-46c47b2ec99f",
+    "8e42eeef75e577f8133a282e90f342ebabe27605"
+  ],
+  "delta": [
+    {
+      "chunk_id": "cdb73177-0195-49fa-a64f-0b93ea838cdf",
+      "source_doc": "Complete Food and Nutrition Guide - PDF Room.pdf",
+      "excerpt": "/H18567 Omega-3 fatty acids. 'Omega-3s' from fatty fish, such as tuna or salmon, may help reduce the risk of heart disease, although the data aren't conclusive. That's why the American Heart Association recommends eating two weekly serving…",
+      "theme_id": "fish-leiden-b3a0aabf",
+      "reason": "paraphrase"
+    },
+    {
+      "chunk_id": "4b511ada-bc86-4603-93c1-ca27e2e47692",
+      "source_doc": "OK_Hungary_60pluszegeszseg_kiadvany_web_2020_60plus.pdf",
+      "excerpt": "Specifically, fatty-fleshed deep-sea fish (such as salmon, mackerel, tuna, herring, and sardines) are particularly rich in omega-3 fatty acids, which contribute to: - proper heart function, - normal vision, - brain function, - and maintain…",
+      "theme_id": "fish-leiden-b3a0aabf",
+      "reason": "different-document"
+    },
+    {
+      "chunk_id": "70b3fb67-af67-4852-a199-46c47b2ec99f",
+      "source_doc": "OK_Ireland_10507_FSAI_Healthy-Eating-Guidelines-Accessible-FA1_unknown_all.pdf",
+      "excerpt": "Eating oily fish up to once a week is an excellent way of getting vitamin D. Oily fish also provides other nutrients which are hard to get. Oily fish provides essential fatty acids (DHA and EPA) which protect against heart disease and stro…",
+      "theme_id": "fish-leiden-e285f902",
+      "reason": "different-document"
+    }
+  ]
+}

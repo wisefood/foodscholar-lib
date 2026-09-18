@@ -1,0 +1,58 @@
+{
+  "olive_oil": {
+    "anchor": "olive_oil",
+    "n_chunks": 185,
+    "leiden_clusters": 6,
+    "bertopic_clusters": 2,
+    "leiden_coverage": 0.876,
+    "bertopic_coverage": 0.989,
+    "leiden_outlier_frac": 0.124,
+    "bertopic_outlier_frac": 0.011,
+    "leiden_silhouette": 0.085,
+    "bertopic_silhouette": 0.239,
+    "keyword_jaccard": 0.273,
+    "bertopic_min_topic_size": 15
+  },
+  "legume": {
+    "anchor": "legume",
+    "n_chunks": 187,
+    "leiden_clusters": 6,
+    "bertopic_clusters": 2,
+    "leiden_coverage": 0.888,
+    "bertopic_coverage": 0.765,
+    "leiden_outlier_frac": 0.112,
+    "bertopic_outlier_frac": 0.235,
+    "leiden_silhouette": 0.064,
+    "bertopic_silhouette": 0.235,
+    "keyword_jaccard": 0.333,
+    "bertopic_min_topic_size": 15
+  },
+  "fish": {
+    "anchor": "fish",
+    "n_chunks": 789,
+    "leiden_clusters": 15,
+    "bertopic_clusters": 9,
+    "leiden_coverage": 0.933,
+    "bertopic_coverage": 0.833,
+    "leiden_outlier_frac": 0.067,
+    "bertopic_outlier_frac": 0.167,
+    "leiden_silhouette": 0.058,
+    "bertopic_silhouette": 0.107,
+    "keyword_jaccard": 0.338,
+    "bertopic_min_topic_size": 15
+  },
+  "dietary_fibre": {
+    "anchor": "dietary_fibre",
+    "n_chunks": 1216,
+    "leiden_clusters": 14,
+    "bertopic_clusters": 13,
+    "leiden_coverage": 0.905,
+    "bertopic_coverage": 0.659,
+    "leiden_outlier_frac": 0.095,
+    "bertopic_outlier_frac": 0.341,
+    "leiden_silhouette": 0.032,
+    "bertopic_silhouette": 0.088,
+    "keyword_jaccard": 0.397,
+    "bertopic_min_topic_size": 15
+  }
+}

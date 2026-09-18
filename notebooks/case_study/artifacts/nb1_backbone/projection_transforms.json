@@ -1,0 +1,60 @@
+{
+  "description": "Graph-wide before/after for the multi-ontology projection across ALL facets. READ-ONLY (foodon_cache + persisted chunks + persisted graph). No Layer A rebuild.",
+  "method": "Raw subtree = OBO classes (all prefixes) mentioned by >=1 chunk via entity_links/foodon_ids UNION their is-a ancestors. Facet routing mirrors layer_a/facet.py PREFIX_TO_FACET (FOODON->foods, CHEBI/CDNO/ONS/UO/PR->nutrients, UBERON/PATO/MONDO/HP/NCIT/GO/OBI/HANCESTRO->health, ENVO/ECOCORE/GAZ/AGRO/FAO/PO->sustainability). Lifted support = exact union of chunk-id sets per subtree.",
+  "raw_subtree_total": {
+    "classes": 10249,
+    "is_a_edges": 12483,
+    "directly_mentioned": 7941
+  },
+  "min_support20_survivors_total": 2840,
+  "per_facet": {
+    "foods": {
+      "raw_classes": 7456,
+      "raw_directly_mentioned": 5736,
+      "min_support20_survivors": 1551,
+      "projected_shelves_with_id": 401,
+      "projected_active": 317,
+      "projected_folded": 84
+    },
+    "nutrients": {
+      "raw_classes": 1731,
+      "raw_directly_mentioned": 1428,
+      "min_support20_survivors": 802,
+      "projected_shelves_with_id": 391,
+      "projected_active": 355,
+      "projected_folded": 36
+    },
+    "health": {
+      "raw_classes": 612,
+      "raw_directly_mentioned": 553,
+      "min_support20_survivors": 286,
+      "projected_shelves_with_id": 156,
+      "projected_active": 143,
+      "projected_folded": 13
+    },
+    "sustainability": {
+      "raw_classes": 273,
+      "raw_directly_mentioned": 174,
+      "min_support20_survivors": 117,
+      "projected_shelves_with_id": 66,
+      "projected_active": 52,
+      "projected_folded": 14
+    },
+    "dietary_patterns": {
+      "raw_classes": 0,
+      "raw_directly_mentioned": 0,
+      "min_support20_survivors": 0,
+      "projected_shelves_with_id": 0,
+      "projected_active": 0,
+      "projected_folded": 0
+    },
+    "allergies": {
+      "raw_classes": 0,
+      "raw_directly_mentioned": 0,
+      "min_support20_survivors": 0,
+      "projected_shelves_with_id": 0,
+      "projected_active": 0,
+      "projected_folded": 0
+    }
+  }
+}
