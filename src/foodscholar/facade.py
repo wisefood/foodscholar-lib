@@ -38,6 +38,7 @@ from foodscholar.storage.memory import (
     InMemoryChunkStore,
     InMemoryEntityStore,
     InMemoryGraphStore,
+    InMemoryRelationStore,
 )
 from foodscholar.storage.protocols import (
     NER,
@@ -48,6 +49,7 @@ from foodscholar.storage.protocols import (
     GraphStore,
     Linker,
     LLMClient,
+    RelationStore,
 )
 from foodscholar.versioning import config_hash
 
@@ -55,7 +57,7 @@ if TYPE_CHECKING:
     from foodscholar.evaluation.audit import AuditReport
     from foodscholar.evaluation.quality import QualityReport
     from foodscholar.io.artifacts import ArtifactMeta
-    from foodscholar.io.chunk import Chunk
+    from foodscholar.io.chunk import Chunk, ChunkId
     from foodscholar.io.graph import Card
     from foodscholar.layer_a.semantic_consolidation import ConsolidationArtifact
     from foodscholar.ontology import FoodOnAPI
@@ -142,6 +144,7 @@ class FoodScholar:
         llm: LLMClient | None = None,
         entity_store: EntityStore | None = None,
         card_store: CardStore | None = None,
+        relation_store: RelationStore | None = None,
     ) -> None:
         cfg = resolve_config(config)
         self.config = cfg
@@ -160,9 +163,13 @@ class FoodScholar:
         # the adapter ctor is cheap and we want fs.entities to work without
         # extra wiring.
         self.entity_store: EntityStore = entity_store or InMemoryEntityStore()
+        # Layer 0 relation store. Same reasoning as entity_store: cheap ctor,
+        # built eagerly so fs.relations works without extra wiring.
+        self.relation_store: RelationStore = relation_store or InMemoryRelationStore()
         self.config_hash = config_hash(cfg)
         self.graph = GraphView(chunk_store, graph_store)
         self.entities = _EntityView(self)
+        self.relations = _RelationView(self)
         # Visualization view — builds VizGraphs on demand. Renderers are
         # lazy-imported behind the [viz] extra so this import is free.
         from foodscholar.viz import VizView
@@ -241,9 +248,11 @@ class FoodScholar:
 
         chunk_backend = cfg.storage.chunk_store.backend
         entity_store: EntityStore
+        relation_store: RelationStore
         if chunk_backend == "memory":
             chunk_store: ChunkStore = InMemoryChunkStore()
             entity_store = InMemoryEntityStore()
+            relation_store = InMemoryRelationStore()
         elif chunk_backend == "elastic":
             from foodscholar.storage.elastic import ElasticChunkStore
             from foodscholar.storage.elastic_entities import ElasticEntityStore
@@ -269,6 +278,23 @@ class FoodScholar:
                 password=cs.password,
                 bulk_size=cs.bulk_size,
             )
+            # Layer 0 relations. `relations.store.backend` can pin this to
+            # memory even on an Elastic deployment (useful while iterating on
+            # the extractor), so it is a separate switch rather than following
+            # the chunk backend blindly.
+            if cfg.relations.store.backend == "elastic":
+                from foodscholar.storage.elastic_relations import ElasticRelationStore
+
+                relation_store = ElasticRelationStore(
+                    url=cs.url or "http://localhost:9200",
+                    index=cfg.relations.store.es_index,
+                    api_key=cs.api_key,
+                    username=cs.username,
+                    password=cs.password,
+                    bulk_size=cs.bulk_size,
+                )
+            else:
+                relation_store = InMemoryRelationStore()
         else:
             raise ValueError(f"unknown chunk_store backend: {chunk_backend}")
 
@@ -322,6 +348,7 @@ class FoodScholar:
             embedder=embedder,
             llm=llm,
             entity_store=entity_store,
+            relation_store=relation_store,
             card_store=card_store,
         )
 
@@ -365,6 +392,12 @@ class FoodScholar:
             "ner": self.config.annotate.ner,
             "nel_backend": self.config.annotate.linker.nel_backend,
             "prompt_version": self.config.layer_c.prompt_version,
+            "relation_store": (
+                self.config.relations.store.backend
+                if self.config.relations.enabled
+                else "disabled"
+            ),
+            "chunk_id_strategy": self.config.chunking.chunk_id_strategy,
         }
 
     def load_chunks(self, path: str | Path) -> int:
@@ -835,6 +868,18 @@ class FoodScholar:
         )
 
     def _build_ner(self) -> NER:
+        if self.config.annotate.ner == "gliner2":
+            from foodscholar.annotate.gliner2_ner import GLiner2NER
+
+            g2 = self.config.annotate.gliner2
+            return GLiner2NER(
+                model_id=g2.model_id,
+                threshold=g2.threshold,
+                labels=g2.labels,
+                batch_size=g2.batch_size,
+                quantize=g2.quantize,
+            )
+
         from foodscholar.annotate.gliner_ner import GLinerNER
 
         gc = self.config.annotate.gliner
@@ -910,6 +955,7 @@ class FoodScholar:
         """
         self.chunk_store.init()
         self.entity_store.init()
+        self.relation_store.init()
         self.graph_store.init()
         self.card_store.init()
         self._log.info(
@@ -1004,11 +1050,12 @@ class FoodScholar:
     def audit(self) -> AuditReport:
         """Run cross-store invariant checks and return a structured report.
 
-        Read-only — never writes. Returns an `AuditReport` with five sections:
-        inventory, coverage, cross-store consistency, attach integrity, and
-        structural sanity. `report.passed` is True iff zero critical checks
-        failed; `report.critical_failures` lists the broken invariants.
-        Print `report` directly for a human-readable summary.
+        Read-only — never writes. Returns an `AuditReport` with up to six
+        sections: inventory, coverage, cross-store consistency, attach
+        integrity, structural sanity, and — when Layer 0 holds anything —
+        relations. `report.passed` is True iff zero critical checks failed;
+        `report.critical_failures` lists the broken invariants. Print `report`
+        directly for a human-readable summary.
         """
         from foodscholar.evaluation.audit import audit as _audit
 
@@ -1016,6 +1063,7 @@ class FoodScholar:
             self.chunk_store,
             self.graph_store,
             config_hash=self.config_hash,
+            relation_store=self.relation_store,
         )
 
     def quality_report(
@@ -1197,8 +1245,140 @@ class FoodScholar:
         cards = {c.card_id: c for c in self.card_store.get_many([cid for cid, _ in hits])}
         return [cards[cid] for cid, _ in hits if cid in cards]
 
+    def build_relations(
+        self,
+        *,
+        chunk_ids: list[ChunkId] | None = None,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> ArtifactMeta:
+        """Extract typed relations from chunk text and persist them as Layer 0.
+
+        Runs after `build_entities()`; independent of Layer A/B/C, which neither
+        depend on it nor are disturbed by it. Requires chunks in the store, a
+        real LLM, and a linker.
+
+        Relation ids are content-addressed, so a re-run over an unchanged corpus
+        rewrites identical records. By default chunks already covered by a
+        stored relation are skipped (the store *is* the resume log); `force`
+        re-extracts them and rebuilds from scratch.
+
+        `dry_run` extracts, grounds and reports without writing — the notebook
+        path, and the only way to run this against the mock LLM.
+        """
+        from foodscholar.relations.builder import build as build_relation_records
+        from foodscholar.relations.persist import persist as persist_relations
+        from foodscholar.versioning import make_artifact_meta
+
+        cfg = self.config.relations
+        if isinstance(self.llm, _MockLLM) and not dry_run:
+            raise RuntimeError(
+                "build_relations needs a real LLM — the in-memory facade wires a "
+                "mock whose output is meaningless, and persisting it would fill "
+                "the store with nonsense triples. Configure `llm:` in your "
+                "config, or pass dry_run=True to inspect the pipeline."
+            )
+
+        llm = self.llm
+        if cfg.llm is not None:
+            from foodscholar.config import LLMConfig
+            from foodscholar.llm import build_llm
+
+            llm = build_llm(LLMConfig(primary=cfg.llm))
+
+        relations, report = build_relation_records(
+            self.chunk_store,
+            llm=llm,
+            linker=self.linker,
+            cfg=cfg,
+            chunk_ids=chunk_ids,
+            relation_store=self.relation_store,
+            force=force,
+        )
+
+        if not dry_run:
+            persist_relations(
+                relations,
+                relation_store=self.relation_store,
+                graph_store=self.graph_store,
+                clear_first=force,
+            )
+
+        meta = make_artifact_meta(
+            phase="build_relations",
+            config=self.config,
+            record_count=len(relations),
+        )
+        self._log.info(
+            "build_relations.done",
+            dry_run=dry_run,
+            artifact_id=meta.artifact_id,
+            **report,
+        )
+        return meta
+
+    def chunk_documents(
+        self,
+        pdf_dir: str | Path,
+        *,
+        out_dir: str | Path,
+        source_type: str = "guide",
+        metadata_csv: str | Path | None = None,
+        excluded_pages: dict[str, set[int]] | str | Path | None = None,
+        force: bool = False,
+    ) -> list[Path]:
+        """PDFs -> corpus CSVs that `fs.ingest()` reads unmodified.
+
+        .. warning::
+           Re-chunking an already-ingested corpus is **destructive** under the
+           default `uuid4` id strategy: new chunk ids orphan every relation,
+           attachment and card citing the old ones. The call refuses to
+           overwrite a non-empty output directory unless `force=True`. Set
+           `chunking.chunk_id_strategy="content_hash"` to make it idempotent.
+        """
+        from foodscholar.corpus.chunker import chunk_documents as _chunk_documents
+
+        return _chunk_documents(
+            pdf_dir,
+            out_dir=out_dir,
+            source_type=source_type,  # type: ignore[arg-type]
+            cfg=self.config.chunking,
+            metadata_csv=metadata_csv,
+            excluded_pages=excluded_pages,
+            force=force,
+        )
+
+    def chunk_texts(
+        self,
+        texts: dict[str, str],
+        *,
+        out_path: str | Path,
+        source_type: str = "abstract",
+        metadata: dict[str, dict[str, object]] | None = None,
+    ) -> Path:
+        """Chunk raw texts (abstracts) into one corpus CSV.
+
+        Same sliding window as `chunk_documents`, over NLTK sentences instead
+        of Docling units — it is one algorithm, not two. Texts shorter than
+        `chunking.max_tokens` pass through as a single chunk.
+        """
+        from foodscholar.corpus.chunker import chunk_texts as _chunk_texts
+
+        return _chunk_texts(
+            texts,
+            out_path=out_path,
+            source_type=source_type,  # type: ignore[arg-type]
+            cfg=self.config.chunking,
+            metadata=metadata,
+        )
+
     def build(self) -> None:
         self.annotate()
+        if self.config.relations.enabled:
+            # Opt-in: an LLM pass over the whole corpus is not something
+            # `build()` should trigger by surprise.
+            self.build_entities()
+            self.build_relations()
         self.build_layer_a()
         self.attach()
         self.build_layer_b()
@@ -1336,3 +1516,66 @@ class _EntityView:
     def build(self, *, cap_chunk_sample: int | None = None):
         """Convenience: same as `fs.build_entities(...)`. Returns ArtifactMeta."""
         return self._fs.build_entities(cap_chunk_sample=cap_chunk_sample)
+
+
+# ---------------------------------------------------------------- relation view
+
+
+class _RelationView:
+    """`fs.relations` — read surface over the Layer 0 relation store.
+
+    Mirrors `_EntityView`. Every accessor returns `Relation` records; the graph
+    edges in Neo4j are the same data and are reached through `fs.graph_store`.
+    """
+
+    def __init__(self, fs: FoodScholar) -> None:
+        self._fs = fs
+
+    def __len__(self) -> int:
+        return len(self._fs.relation_store.scan())
+
+    def __iter__(self):
+        return iter(self._fs.relation_store.scan())
+
+    def get(self, relation_id: str):
+        return self._fs.relation_store.get(relation_id)
+
+    def for_entity(self, ontology_id: str, *, direction: str = "both", k: int = 100):
+        """Relations with `ontology_id` as subject, object, or either."""
+        return self._fs.relation_store.for_entity(
+            ontology_id, direction=direction, k=k  # type: ignore[arg-type]
+        )
+
+    def for_chunks(self, chunk_ids: list[str]):
+        """Relations extracted from any of these chunks. One round-trip."""
+        return self._fs.relation_store.for_chunks(chunk_ids)
+
+    def by_predicate(self, predicate: str, *, k: int = 100):
+        return self._fs.relation_store.by_predicate(predicate, k=k)
+
+    def predicates(self, *, k: int = 50) -> list[tuple[str, int]]:
+        """`(predicate, count)` most frequent first.
+
+        Predicate cardinality is the number to watch after the first real run:
+        a corpus yielding thousands of distinct predicates is saying the open
+        vocabulary should be closed.
+        """
+        counts: dict[str, int] = {}
+        for relation in self._fs.relation_store.scan():
+            counts[relation.predicate] = counts.get(relation.predicate, 0) + 1
+        return sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:k]
+
+    def grounded(self, *, k: int = 100):
+        """Only relations whose both endpoints resolved to real ontology ids."""
+        out = [r for r in self._fs.relation_store.scan() if r.is_fully_grounded]
+        out.sort(key=lambda r: (r.chunk_count, r.mention_count), reverse=True)
+        return out[:k]
+
+    def summary(self) -> dict[str, int]:
+        relations = self._fs.relation_store.scan()
+        return {
+            "relations": len(relations),
+            "fully_grounded": sum(1 for r in relations if r.is_fully_grounded),
+            "predicates": len({r.predicate for r in relations}),
+            "entities": len({r.subject_id for r in relations} | {r.object_id for r in relations}),
+        }

@@ -121,6 +121,71 @@ def build_layer_c(
     typer.echo(str(report))
 
 
+@app.command("build-relations")
+def build_relations(
+    config: Path = ConfigOption,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Extract and report without writing to the stores."
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-extract chunks already covered and rebuild."
+    ),
+) -> None:
+    """Build Layer 0 — typed relations between entities, grounded in FoodOn."""
+    fs = _build(config)
+    try:
+        meta = fs.build_relations(dry_run=dry_run, force=force)
+    except RuntimeError as e:
+        typer.echo(f"[foodscholar] {e}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"relations={meta.record_count} artifact={meta.artifact_id}")
+
+
+# Typer options are module-level singletons so they are constructed once, the
+# same pattern as ConfigOption above (and what B008 asks for).
+PdfDirOption = typer.Option(..., "--pdf-dir", help="Directory of source PDFs.")
+OutDirOption = typer.Option(..., "--out-dir", help="Where to write corpus CSVs.")
+MetadataCsvOption = typer.Option(
+    None, "--metadata-csv", help="Per-document metadata (required for guides)."
+)
+ExcludedPagesOption = typer.Option(
+    None, "--excluded-pages", help="removed_pages manifest."
+)
+
+
+@app.command("chunk-corpus")
+def chunk_corpus(
+    config: Path = ConfigOption,
+    pdf_dir: Path = PdfDirOption,
+    out_dir: Path = OutDirOption,
+    source_type: str = typer.Option("guide", "--source-type", help="guide|textbook."),
+    metadata_csv: Path = MetadataCsvOption,
+    excluded_pages: Path = ExcludedPagesOption,
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite an existing corpus. See the warning below."
+    ),
+) -> None:
+    """Chunk PDFs into the corpus CSVs `ingest` reads.
+
+    Re-chunking an ingested corpus assigns new chunk ids under the default
+    strategy, orphaning existing relations and attachments — hence --force.
+    """
+    fs = _build(config)
+    try:
+        written = fs.chunk_documents(
+            pdf_dir,
+            out_dir=out_dir,
+            source_type=source_type,
+            metadata_csv=metadata_csv,
+            excluded_pages=excluded_pages,
+            force=force,
+        )
+    except Exception as e:
+        typer.echo(f"[foodscholar] {e}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"wrote {len(written)} corpus CSV(s) to {out_dir}")
+
+
 @app.command("bench-layer-c")
 def bench_layer_c(
     config: Path = ConfigOption,
