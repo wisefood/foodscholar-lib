@@ -1,6 +1,11 @@
 # foodscholar
 
-**A hierarchical knowledge graph over a corpus of nutrition literature — built for grounded, citable answers.**
+[![PyPI](https://img.shields.io/pypi/v/foodscholar.svg)](https://pypi.org/project/foodscholar/)
+[![Python](https://img.shields.io/pypi/pyversions/foodscholar.svg)](https://pypi.org/project/foodscholar/)
+[![Documentation](https://readthedocs.org/projects/foodscholar-lib/badge/?version=latest)](https://foodscholar-lib.readthedocs.io/en/latest/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/wisefood/foodscholar-lib/blob/main/LICENSE)
+
+**The whole pipeline from nutrition PDFs to ranked, citable evidence — chunking, ontology linking, knowledge-graph construction, and hybrid retrieval.**
 
 FoodScholar takes dietary guides, textbooks and scientific abstracts and runs the whole
 pipeline: **chunk** the PDFs, **link** every mention to the [FoodOn](https://foodon.org)
@@ -41,7 +46,7 @@ pip install -e '.[dev]'        # extras: llm, elastic, neo4j, clustering, viz,
                                #         annotate, ontology, relations, chunking
 ```
 
-See [docs: Installation](docs/getting-started/installation.md) for the extras matrix and
+See [docs: Installation](https://foodscholar-lib.readthedocs.io/en/latest/getting-started/installation.html) for the extras matrix and
 local services.
 
 ## Quickstart
@@ -80,23 +85,23 @@ fs.relations.for_entity("FOODON:03301710")   # what the corpus asserts about oli
 hits, trace = fs.retrieve("Is olive oil heart-healthy?", k=5)
 ```
 
-[`notebooks/graph_build.ipynb`](notebooks/graph_build.ipynb) is a clean, phase-by-phase
+[`notebooks/graph_build.ipynb`](https://github.com/wisefood/foodscholar-lib/blob/main/notebooks/graph_build.ipynb) is a clean, phase-by-phase
 walk-through with an offline (`memory`) and a real (`elastic` + `neo4j`) mode.
 
 ## Documentation
 
 | | |
 |---|---|
-| [Quickstart](docs/getting-started/quickstart.md) · [Configuration](docs/getting-started/configuration.md) | get going, then configure stores/LLM/layers |
-| [Architecture](docs/concepts/architecture.md) · [Layers A](docs/concepts/layer-a-backbone.md)/[B](docs/concepts/layer-b-themes.md)/[C](docs/concepts/layer-c-cards.md) | the design and the three layers |
-| **[Extended KG-Gen](docs/concepts/extended-kg-gen.md)** | **the method: chunk → link → extract → ground → retrieve** |
-| [Layer 0 — Relations](docs/concepts/layer-0-relations.md) | typed edges under the entity graph |
-| [Retrieval](docs/concepts/retrieval.md) | the three scoring branches, the cost model and its bounds |
-| [Corpus input](docs/concepts/corpus-input.md) · [Annotation](docs/concepts/annotation.md) | the input format and the NER/linking pipeline |
-| [Chunking a corpus](docs/guides/chunking-a-corpus.md) · [Building](docs/guides/building-the-graph.md) · [Exploring](docs/guides/exploring-the-graph.md) · [Visualization](docs/guides/visualization.md) · [Tuning Layer B](docs/guides/tuning-layer-b.md) | task guides |
-| [API reference](docs/reference/index.md) | the public surface, from docstrings |
+| [Quickstart](https://foodscholar-lib.readthedocs.io/en/latest/getting-started/quickstart.html) · [Configuration](https://foodscholar-lib.readthedocs.io/en/latest/getting-started/configuration.html) | get going, then configure stores/LLM/layers |
+| [Architecture](https://foodscholar-lib.readthedocs.io/en/latest/concepts/architecture.html) · [Layers A](https://foodscholar-lib.readthedocs.io/en/latest/concepts/layer-a-backbone.html)/[B](https://foodscholar-lib.readthedocs.io/en/latest/concepts/layer-b-themes.html)/[C](https://foodscholar-lib.readthedocs.io/en/latest/concepts/layer-c-cards.html) | the design and the three layers |
+| **[Extended KG-Gen](https://foodscholar-lib.readthedocs.io/en/latest/concepts/extended-kg-gen.html)** | **the method: chunk → link → extract → ground → retrieve** |
+| [Layer 0 — Relations](https://foodscholar-lib.readthedocs.io/en/latest/concepts/layer-0-relations.html) | typed edges under the entity graph |
+| [Retrieval](https://foodscholar-lib.readthedocs.io/en/latest/concepts/retrieval.html) | the three scoring branches, the cost model and its bounds |
+| [Corpus input](https://foodscholar-lib.readthedocs.io/en/latest/concepts/corpus-input.html) · [Annotation](https://foodscholar-lib.readthedocs.io/en/latest/concepts/annotation.html) | the input format and the NER/linking pipeline |
+| [Chunking a corpus](https://foodscholar-lib.readthedocs.io/en/latest/guides/chunking-a-corpus.html) · [Building](https://foodscholar-lib.readthedocs.io/en/latest/guides/building-the-graph.html) · [Exploring](https://foodscholar-lib.readthedocs.io/en/latest/guides/exploring-the-graph.html) · [Visualization](https://foodscholar-lib.readthedocs.io/en/latest/guides/visualization.html) · [Tuning Layer B](https://foodscholar-lib.readthedocs.io/en/latest/guides/tuning-layer-b.html) | task guides |
+| [API reference](https://foodscholar-lib.readthedocs.io/en/latest/reference/index.html) | the public surface, from docstrings |
 
-`config.example.yaml` documents every config field; [`BRIEF.md`](BRIEF.md) is the
+`config.example.yaml` documents every config field; [`BRIEF.md`](https://github.com/wisefood/foodscholar-lib/blob/main/BRIEF.md) is the
 original design brief.
 
 ## Testing

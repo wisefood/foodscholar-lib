@@ -1,6 +1,6 @@
 # FoodScholar
 
-**A hierarchical knowledge graph over a corpus of nutrition literature — built for grounded, citable answers.**
+**The whole pipeline from nutrition PDFs to ranked, citable evidence — chunking, ontology linking, knowledge-graph construction, and hybrid retrieval.**
 
 FoodScholar takes dietary guides, textbooks and scientific abstracts and runs the
 whole pipeline: **chunk** the PDFs, **link** every mention to the

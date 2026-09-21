@@ -1,6 +1,6 @@
 """FoodScholar — hierarchical knowledge graph over nutrition literature."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from foodscholar.config import FoodScholarConfig, RetrievalConfig, load_config
 from foodscholar.facade import FoodScholar
