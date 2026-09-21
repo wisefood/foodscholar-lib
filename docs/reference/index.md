@@ -15,6 +15,12 @@ The surface is small and layered:
 - **[Data model](data-model.md)** — the Pydantic contracts that flow through the
   pipeline: `Chunk` (and its `ChunkProvenance` view), `Mention`, `EntityLink`,
   `Shelf`, `Theme`, `Card`, `Entity`, `Relation`.
+- **[Relations (Layer 0)](relations.md)** — the extract → dedupe → ground →
+  aggregate pipeline behind `fs.build_relations()`, ported from the kggen pipeline.
+- **[Corpus](corpus.md)** — the chunking window and PDF/text chunkers behind
+  `fs.chunk_documents()`, plus the CSV reader and its validation.
+- **[Annotation](annotate.md)** — the NER backends (GLiNER, GLiNER2), the dense
+  linker and the batched runner behind `fs.annotate()`.
 - **[Graph view](graph-view.md)** — `fs.graph`, the fluent read/write surface and its
   navigation handles.
 - **[Ontology](ontology.md)** — `fs.ontology`, the FoodOn lookup API.
@@ -27,6 +33,9 @@ The surface is small and layered:
 facade
 config
 data-model
+relations
+corpus
+annotate
 graph-view
 ontology
 viz

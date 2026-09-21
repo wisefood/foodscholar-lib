@@ -180,6 +180,16 @@ Chunking counts tokens with **`BAAI/bge-large-en-v1.5`** and
 agree, but the corpus was counted with the large model's slow tokenizer, and
 the fast and slow variants can disagree by a token. Keep both pinned.
 
+## Provenance
+
+The window and the PDF pipeline are a port of the Docling chunking notebooks in
+the **kggen** pipeline (`kggen/graph_code/chunking` in the repository), which
+produced the existing corpus. The parameters above are pinned to theirs so new
+chunks stay comparable with stored ones; the two behaviours flagged as
+warnings — whole-chunk page exclusion and first-page-only `page_number` — are
+reproduced from them deliberately. See
+[Provenance: the kggen pipeline](../concepts/kggen-provenance.md).
+
 ## See also
 
 - [Corpus input](../concepts/corpus-input.md) — the contract `ingest` expects

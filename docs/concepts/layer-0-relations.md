@@ -199,6 +199,17 @@ A corpus yielding thousands of distinct predicates is telling you to close the
 set. This also matters for retrieval: distinct predicates between the same
 pair count as parallel edges, so under-merging them biases ranking.
 
+## Provenance
+
+Layer 0 is adapted from the **kggen** pipeline developed by WiseFood colleagues
+(`kggen/graph_code` in the repository): the extraction prompts are theirs
+verbatim, the extraction steps and the provenance-preserving dedup are ports,
+and the passage-per-triple idea is the reason the layer exists. The grounding
+step is FoodScholar's addition — it is what binds kggen's free-text entities to
+this graph's ontology ids. See [Provenance: the kggen pipeline](kggen-provenance.md)
+for exactly what was taken and what changed, and the
+[relations reference](../reference/relations.md) for the ported modules.
+
 ## See also
 
 - [Annotation](annotation.md) — the NER and linker Layer 0 reuses
