@@ -9,7 +9,7 @@ Most of this package is a port of the **kggen** pipeline
 (the WiseFood pipeline), moved onto FoodScholar's
 `LLMClient`, linker and stores. Each module's docstring says what came from
 kggen and what changed; the summary is on the
-[provenance page](../concepts/kggen-provenance.md).
+[Extended KG-Gen](../concepts/extended-kg-gen.md).
 
 ## Orchestration
 

@@ -188,7 +188,7 @@ produced the existing corpus. The parameters above are pinned to theirs so new
 chunks stay comparable with stored ones; the two behaviours flagged as
 warnings — whole-chunk page exclusion and first-page-only `page_number` — are
 reproduced from them deliberately. See
-[Provenance: the kggen pipeline](../concepts/kggen-provenance.md).
+[Extended KG-Gen](../concepts/extended-kg-gen.md).
 
 ## See also
 

@@ -78,7 +78,7 @@ Layer A projects and Layer B clusters — one entity universe, not two.
 Layer 0 is **opt-in** (`relations.enabled`), because extraction costs two LLM
 calls per chunk. See [Layer 0 — Relations](layer-0-relations.md). It is adapted
 from the WiseFood **kggen** pipeline, as is the corpus chunker — see
-[Provenance](kggen-provenance.md).
+[Extended KG-Gen](extended-kg-gen.md).
 
 ## Two stores, one truth
 

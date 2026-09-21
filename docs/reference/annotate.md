@@ -6,7 +6,7 @@ The NER backends, the dense linker and the batched runner behind
 Two NER backends ship. `gliner2` and its described label set come from the
 kggen NER/NEL benchmark (see the provenance page); it is
 an option rather than the default, for the reasons on the
-[provenance page](../concepts/kggen-provenance.md#what-was-not-adopted-as-a-default).
+[Extended KG-Gen](../concepts/extended-kg-gen.md#what-was-not-adopted-as-a-default).
 
 ## NER
 

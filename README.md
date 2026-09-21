@@ -2,9 +2,14 @@
 
 **A hierarchical knowledge graph over a corpus of nutrition literature — built for grounded, citable answers.**
 
-FoodScholar chunks dietary guides, textbooks, and scientific abstracts, builds a
-**three-layer hierarchical graph** over that corpus, and serves a retrieval API on top.
-Every answer traces back to the source chunks that support it.
+FoodScholar takes dietary guides, textbooks and scientific abstracts and runs the whole
+pipeline: **chunk** the PDFs, **link** every mention to the [FoodOn](https://foodon.org)
+ontology, **construct** a three-layer hierarchical graph over the result, and **retrieve**
+over it. Every hit traces back to the source chunk it came from.
+
+The library retrieves and stops there — ranked, scored evidence. Formulating an answer
+means owning a model, a prompt registry, a citation format and an editorial policy, which
+belong to the service asking the question.
 
 - **Layer A — Backbone.** A curated, multi-facet menu of *shelves* projected from the
   [FoodOn](https://foodon.org) ontology (foods, health, nutrients, dietary patterns,
@@ -17,6 +22,13 @@ Every answer traces back to the source chunks that support it.
 Underneath all three sits **Layer 0 — Relations**: typed, ontology-grounded edges
 (`olive oil --reduces--> LDL cholesterol`) extracted from chunk text, each carrying the
 passages it came from. Opt-in, because extraction costs an LLM pass over the corpus.
+
+**Retrieval** (`fs.retrieve()`) is the Extended KG-Gen hybrid: a passage is scored on how
+it reads (0.3), on what its extracted triples assert (0.3), and on where it sits in the
+entity graph by Personalized PageRank (0.4). The graph branches make it more than vector
+search — a passage on "sodium and hypertension" surfaces for "salt and blood pressure"
+because the graph connects them, not because the words match. It reads the stores
+directly, so there is no index artifact to build, mount or keep in step with the graph.
 
 📖 **[Full documentation →](https://foodscholar-lib.readthedocs.io)**
 
@@ -77,7 +89,9 @@ walk-through with an offline (`memory`) and a real (`elastic` + `neo4j`) mode.
 |---|---|
 | [Quickstart](docs/getting-started/quickstart.md) · [Configuration](docs/getting-started/configuration.md) | get going, then configure stores/LLM/layers |
 | [Architecture](docs/concepts/architecture.md) · [Layers A](docs/concepts/layer-a-backbone.md)/[B](docs/concepts/layer-b-themes.md)/[C](docs/concepts/layer-c-cards.md) | the design and the three layers |
+| **[Extended KG-Gen](docs/concepts/extended-kg-gen.md)** | **the method: chunk → link → extract → ground → retrieve** |
 | [Layer 0 — Relations](docs/concepts/layer-0-relations.md) | typed edges under the entity graph |
+| [Retrieval](docs/concepts/retrieval.md) | the three scoring branches, the cost model and its bounds |
 | [Corpus input](docs/concepts/corpus-input.md) · [Annotation](docs/concepts/annotation.md) | the input format and the NER/linking pipeline |
 | [Chunking a corpus](docs/guides/chunking-a-corpus.md) · [Building](docs/guides/building-the-graph.md) · [Exploring](docs/guides/exploring-the-graph.md) · [Visualization](docs/guides/visualization.md) · [Tuning Layer B](docs/guides/tuning-layer-b.md) | task guides |
 | [API reference](docs/reference/index.md) | the public surface, from docstrings |
@@ -118,7 +132,7 @@ src/foodscholar/
 ├── layer_a/         # backbone projection + aliasing
 ├── layer_b/         # per-shelf theme discovery (two passes + merge)
 ├── layer_c/         # cited write-up cards
-├── retrieval/       # query API
+├── retrieval/       # Extended KG-Gen hybrid retrieval (fs.retrieve)
 ├── storage/         # protocols + memory / elastic / neo4j adapters
 ├── viz/             # renderable graph views (incl. the interactive tree)
 ├── cli/             # typer entry point

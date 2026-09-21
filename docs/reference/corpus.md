@@ -7,7 +7,7 @@ reader with its ingest-time validation. The task guide is
 
 The window and the PDF producer are a port of the kggen Docling notebooks
 (not distributed with FoodScholar) — see the
-[provenance page](../concepts/kggen-provenance.md).
+[Extended KG-Gen](../concepts/extended-kg-gen.md).
 
 ## The window
 

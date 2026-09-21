@@ -3,7 +3,7 @@
 ```{note}
 Two NER backends ship, selected by `annotate.ner`. **`gliner`** (GLiNER-bio
 v0.1) is the default. **`gliner2`** uses a described 27-label set taken verbatim
-from the kggen NER/NEL benchmark (see [Provenance](kggen-provenance.md)) and is
+from the kggen NER/NEL benchmark (see [Extended KG-Gen](extended-kg-gen.md)) and is
 opt-in: its published win comes from a benchmark scored against an LLM proxy,
 where it trades recall for precision and yields ~28% fewer mentions per
 passage. Layer A support counts and the Layer B relatedness graph key off

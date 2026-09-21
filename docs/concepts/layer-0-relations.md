@@ -206,7 +206,7 @@ Layer 0 is adapted from the **kggen** pipeline developed by WiseFood colleagues
 verbatim, the extraction steps and the provenance-preserving dedup are ports,
 and the passage-per-triple idea is the reason the layer exists. The grounding
 step is FoodScholar's addition — it is what binds kggen's free-text entities to
-this graph's ontology ids. See [Provenance: the kggen pipeline](kggen-provenance.md)
+this graph's ontology ids. See [Extended KG-Gen](extended-kg-gen.md)
 for exactly what was taken and what changed, and the
 [relations reference](../reference/relations.md) for the ported modules.
 

@@ -1,11 +1,80 @@
-# Provenance: the kggen pipeline
+# Extended KG-Gen
 
-Layer 0, the corpus chunker and the GLiNER2 option did not start life in
-FoodScholar. They are adapted from **kggen** — a pipeline developed by
-colleagues on the WiseFood project for building passage-aware knowledge graphs
-over the same nutrition corpus: an extension of KGGen that keeps the passage
-each triple came from, a hybrid retriever over that graph, an NER/NEL benchmark,
-and the Docling chunking that produced the corpus in the first place.
+**Extended KG-Gen is the method FoodScholar uses to construct its knowledge
+graph from raw documents, and to retrieve over it.** It is a pipeline developed
+by colleagues on the WiseFood project: an extension of KGGen that keeps the
+passage every triple came from, plus a hybrid retriever over the resulting
+graph, an NER/NEL benchmark, and the Docling chunking that produces the corpus.
+
+FoodScholar implements it end to end. This page is the method; the
+[Layer 0 page](layer-0-relations.md) is the extraction half in depth and
+[Retrieval](retrieval.md) is the query half.
+
+## The method, end to end
+
+```{mermaid}
+flowchart TD
+    PDF[Source PDFs] -->|Docling chunker| CH[Passages<br/>overlapping, heading-aware]
+    CH -->|GLiNER / GLiNER2| M[Mentions]
+    M -->|HNSW + BioLORD / SapBERT| EN[Entities<br/>FoodOn ids]
+    CH -->|LLM step 1| E1[Entity list per passage]
+    E1 -->|LLM step 2, endpoints constrained| TR[Triples<br/>subject, predicate, object]
+    TR -->|NFKC + singularize + semantic hash| DD[Deduplicated triples]
+    DD -->|grounding — FoodScholar's addition| R[Relations<br/>ontology-anchored, passage-carrying]
+    EN --> R
+    R --> Q[Hybrid retrieval<br/>text + triples + PageRank]
+    CH --> Q
+```
+
+**1 — Chunk.** Docling turns PDFs into overlapping, heading-aware passages. The
+passage is the unit of provenance for everything downstream: whatever a triple
+claims, the passage it came from can be shown.
+
+**2 — Link.** NER finds mentions; a dense HNSW index over FoodOn resolves each
+to an ontology id. This runs independently of extraction and produces the
+entity graph.
+
+**3 — Extract, in two constrained LLM steps.** Step 1 asks for the entities in
+a passage. Step 2 asks for relations **whose subject and object must come from
+step 1's list** — an enum constraint, not a suggestion. That constraint is the
+load-bearing idea: an unconstrained extractor invents endpoints that match
+nothing else in the graph, and the triples then sit in their own disconnected
+world. The two prompts are the benchmarked artifact and are used verbatim.
+
+**4 — Deduplicate.** Surfaces and predicates are NFKC-normalized,
+singularized per token, and collapsed by semantic hash. Predicates are where an
+open extractor sprawls (`reduces` / `lowers` / `decreases`), and under-merging
+them biases the PageRank branch later, because distinct predicates become
+parallel edges and extra votes.
+
+**5 — Ground.** *FoodScholar's addition, and the join between the two systems.*
+KG-Gen's endpoints are free text. FoodScholar resolves them through the same
+linker that produced the entity graph, so a KG-Gen triple becomes an edge
+between two **ontology-anchored** entities rather than between two strings.
+Endpoints that do not resolve are kept as `NIL:` sentinels rather than dropped
+— discarding them would delete every relation touching a concept FoodOn lacks,
+which for a nutrition corpus is most biomarkers, hormones and processes.
+
+**6 — Retrieve.** The hybrid scores a passage on how it reads (0.3), on what
+its triples assert (0.3), and on where it sits in the entity graph by
+Personalized PageRank (0.4). The graph branches are what make this more than
+vector search.
+
+Steps 1–5 are `fs.chunk_documents()` → `fs.annotate()` → `fs.build_relations()`;
+step 6 is `fs.retrieve()`.
+
+## What FoodScholar adds
+
+KG-Gen produces a graph of strings. FoodScholar anchors it:
+
+- **Ontology grounding** (step 5) — endpoints become FoodOn/CHEBI ids, so a
+  triple joins the same entity graph the annotation pipeline built.
+- **The hierarchy** — Layers A/B/C sit above the relations, so retrieval can be
+  scoped to a shelf or theme. KG-Gen has no shelf concept: it seeds PageRank
+  from all entities, where FoodScholar can seed from the entities of one shelf.
+- **Store-backed everything** — the reference kept a GraphML file and a ~520MB
+  embedding cache on disk. Here each stage reads and writes the configured
+  stores, so a rebuild is visible immediately.
 
 ## Two things are called "kggen"
 

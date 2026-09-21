@@ -23,7 +23,7 @@ for h in hits:
 ## The three branches
 
 The scoring is the **Extended KG-Gen** hybrid, ported from the WiseFood
-pipeline (see [provenance](kggen-provenance.md)):
+pipeline (see [Extended KG-Gen](extended-kg-gen.md)):
 
 | branch | weight | question it answers | reads |
 |---|---|---|---|
