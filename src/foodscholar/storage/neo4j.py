@@ -33,6 +33,7 @@ from foodscholar.io.chunk import ChunkId
 from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
 from foodscholar.io.ontology import OntologyId
+from foodscholar.io.relation import Relation
 from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
@@ -548,6 +549,63 @@ class Neo4jGraphStore:
                 rows=rows,
             )
 
+    def upsert_relations(self, relations: list[Relation]) -> None:
+        """Wire `(:Entity)-[:RELATED {predicate}]->(:Entity)` edges.
+
+        MERGE is on `(subject, predicate, object)` so re-running is idempotent.
+        NIL endpoints are materialized as `(:Entity {prefix: "NIL"})` nodes so
+        the graph stays traversable; filter them with
+        `WHERE NOT e.ontology_id STARTS WITH 'NIL:'`.
+        """
+        if not relations:
+            return
+        rows = [
+            {
+                "relation_id": r.relation_id,
+                "subject_id": r.subject_id,
+                "object_id": r.object_id,
+                "predicate": r.predicate,
+                "subject_prefix": _prefix_of(r.subject_id),
+                "object_prefix": _prefix_of(r.object_id),
+                "chunk_ids": list(r.chunk_ids),
+                "chunk_count": r.chunk_count,
+                "mention_count": r.mention_count,
+                "subject_linked": r.subject_linked,
+                "object_linked": r.object_linked,
+                "last_seen": r.last_seen.isoformat(),
+            }
+            for r in relations
+        ]
+        with self._driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (s:Entity {ontology_id: row.subject_id})
+                  ON CREATE SET s.prefix = row.subject_prefix
+                MERGE (o:Entity {ontology_id: row.object_id})
+                  ON CREATE SET o.prefix = row.object_prefix
+                MERGE (s)-[rel:RELATED {predicate: row.predicate}]->(o)
+                SET rel.relation_id = row.relation_id,
+                    rel.chunk_ids = row.chunk_ids,
+                    rel.chunk_count = row.chunk_count,
+                    rel.mention_count = row.mention_count,
+                    rel.subject_linked = row.subject_linked,
+                    rel.object_linked = row.object_linked,
+                    rel.last_seen = row.last_seen
+                """,
+                rows=rows,
+            )
+
+    def clear_relations(self) -> None:
+        """Delete every `:RELATED` edge, and any `:Entity` node left orphaned
+        that only existed as a NIL endpoint. Idempotent."""
+        with self._driver.session() as session:
+            session.run("MATCH ()-[r:RELATED]->() DELETE r")
+            session.run(
+                "MATCH (e:Entity) WHERE e.ontology_id STARTS WITH 'NIL:' "
+                "AND NOT (e)--() DELETE e"
+            )
+
     def attach_chunks_to_entity(
         self,
         ontology_id: OntologyId,
@@ -632,3 +690,8 @@ def _card_from_record(node: Any) -> Card:
         safety_flagged=bool(node.get("safety_flagged")),
         generated_at=datetime.fromisoformat(node["generated_at"]),
     )
+
+
+def _prefix_of(ontology_id: str) -> str:
+    """`FOODON:123` -> `FOODON`; `NIL:x` -> `NIL`."""
+    return ontology_id.split(":", 1)[0] if ":" in ontology_id else ""

@@ -5,6 +5,7 @@ from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
 from foodscholar.io.ontology import OntologyId
+from foodscholar.io.relation import Relation
 
 
 @runtime_checkable
@@ -355,3 +356,53 @@ class Linker(Protocol):
     linker_id: str
 
     def link(self, mention: Mention) -> EntityLink | None: ...
+
+
+@runtime_checkable
+class RelationStore(Protocol):
+    """Queryable store for Layer 0 relations.
+
+    Sibling to `EntityStore`. Local stores implement `init()` as a no-op; the
+    Elastic adapter creates a `foodscholar_relations` index alongside the
+    entity index.
+    """
+
+    def init(self) -> None: ...
+    def upsert(self, relations: Iterable[Relation]) -> None: ...
+    def get(self, relation_id: str) -> Relation | None: ...
+    def get_many(self, relation_ids: list[str]) -> list[Relation]: ...
+
+    def for_entity(
+        self,
+        ontology_id: str,
+        *,
+        direction: Literal["out", "in", "both"] = "both",
+        k: int = 100,
+    ) -> list[Relation]:
+        """Relations with `ontology_id` as subject (`out`), object (`in`), or
+        either (`both`), best-supported first."""
+        ...
+
+    def for_chunks(self, chunk_ids: list[ChunkId]) -> list[Relation]:
+        """Every relation extracted from any of these chunks.
+
+        The hot path for retrieval's mean-triplet-similarity branch, so
+        implementations must resolve this in ONE round-trip (a `terms` filter
+        on `chunk_ids` for Elastic, an inverted index in memory) rather than
+        looping per chunk.
+        """
+        ...
+
+    def by_predicate(self, predicate: str, *, k: int = 100) -> list[Relation]: ...
+
+    def scan(self) -> list[Relation]: ...
+    def iter_relations(self, batch_size: int = 1000) -> Iterable[list[Relation]]: ...
+
+    def clear(self) -> None:
+        """Drop every relation.
+
+        `fs.build_relations()` calls this at the start of a full rebuild so a
+        re-run with a changed extractor or config leaves no ghosts. Mirrors
+        `GraphStore.clear_layer_a` / `clear_themes`. Idempotent.
+        """
+        ...

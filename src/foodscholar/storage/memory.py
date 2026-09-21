@@ -17,12 +17,93 @@ from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.entity import Entity
 from foodscholar.io.graph import Card, Shelf, ShelfId, Theme, ThemeId
 from foodscholar.io.ontology import OntologyId
+from foodscholar.io.relation import Relation
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 
 
 def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text)]
+
+
+
+class InMemoryRelationStore:
+    """Dict-backed `RelationStore` with an inverted chunk index.
+
+    `for_chunks` is retrieval's hot path, so it is served from a
+    ``chunk_id -> {relation_id}`` index rather than a scan. The index is
+    rebuilt incrementally on upsert and reset by `clear`.
+    """
+
+    def __init__(self) -> None:
+        self._relations: dict[str, Relation] = {}
+        self._by_chunk: dict[ChunkId, set[str]] = defaultdict(set)
+
+    def init(self) -> None:
+        """No-op — nothing to provision in memory."""
+        return
+
+    def upsert(self, relations: Iterable[Relation]) -> None:
+        for r in relations:
+            previous = self._relations.get(r.relation_id)
+            if previous is not None:
+                # Drop stale index entries so a re-upsert with fewer sampled
+                # chunk_ids doesn't leave the relation reachable from a chunk
+                # it no longer cites.
+                for cid in previous.chunk_ids:
+                    self._by_chunk.get(cid, set()).discard(r.relation_id)
+            self._relations[r.relation_id] = r
+            for cid in r.chunk_ids:
+                self._by_chunk[cid].add(r.relation_id)
+
+    def get(self, relation_id: str) -> Relation | None:
+        return self._relations.get(relation_id)
+
+    def get_many(self, relation_ids: list[str]) -> list[Relation]:
+        return [self._relations[rid] for rid in relation_ids if rid in self._relations]
+
+    def for_entity(
+        self,
+        ontology_id: str,
+        *,
+        direction: Literal["out", "in", "both"] = "both",
+        k: int = 100,
+    ) -> list[Relation]:
+        def matches(r: Relation) -> bool:
+            if direction == "out":
+                return r.subject_id == ontology_id
+            if direction == "in":
+                return r.object_id == ontology_id
+            return ontology_id in (r.subject_id, r.object_id)
+
+        out = [r for r in self._relations.values() if matches(r)]
+        out.sort(key=lambda r: (r.chunk_count, r.mention_count), reverse=True)
+        return out[:k]
+
+    def for_chunks(self, chunk_ids: list[ChunkId]) -> list[Relation]:
+        rids: set[str] = set()
+        for cid in chunk_ids:
+            rids.update(self._by_chunk.get(cid, ()))
+        out = [self._relations[rid] for rid in rids if rid in self._relations]
+        out.sort(key=lambda r: (r.chunk_count, r.mention_count), reverse=True)
+        return out
+
+    def by_predicate(self, predicate: str, *, k: int = 100) -> list[Relation]:
+        out = [r for r in self._relations.values() if r.predicate == predicate]
+        out.sort(key=lambda r: (r.chunk_count, r.mention_count), reverse=True)
+        return out[:k]
+
+    def scan(self) -> list[Relation]:
+        return list(self._relations.values())
+
+    def iter_relations(self, batch_size: int = 1000) -> Iterable[list[Relation]]:
+        items = list(self._relations.values())
+        for start in range(0, len(items), batch_size):
+            yield items[start : start + batch_size]
+
+    def clear(self) -> None:
+        self._relations.clear()
+        self._by_chunk.clear()
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
