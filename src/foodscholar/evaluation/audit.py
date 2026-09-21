@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from foodscholar.storage.protocols import ChunkStore, GraphStore
+    from foodscholar.storage.protocols import ChunkStore, GraphStore, RelationStore
 
 
 # ---------------------------------------------------------------- data shapes
@@ -136,8 +136,13 @@ def audit(
     graph_store: GraphStore,
     *,
     config_hash: str,
+    relation_store: RelationStore | None = None,
 ) -> AuditReport:
-    """Run every check and produce a report. Read-only — no writes anywhere."""
+    """Run every check and produce a report. Read-only — no writes anywhere.
+
+    `relation_store` is optional: Layer 0 is opt-in, so its section is simply
+    absent when no store is supplied or when it holds nothing.
+    """
     inventory = _inventory(chunk_store, graph_store)
     checks: list[AuditCheck] = []
 
@@ -158,6 +163,13 @@ def audit(
 
     # Section E — structural sanity.
     checks.extend(_check_structural(graph_store))
+
+    # Section F — Layer 0 relations. Skipped entirely when the layer is unused.
+    if relation_store is not None:
+        relations = relation_store.scan()
+        if relations:
+            inventory.update(_relation_inventory(relations))
+            checks.extend(_check_relations(relations, chunks))
 
     return AuditReport(
         config_hash=config_hash,
@@ -503,3 +515,129 @@ def _check_structural(graph_store: GraphStore) -> list[AuditCheck]:
 
 
 __all__ = ["AuditCheck", "AuditReport", "audit"]
+
+
+# ---------------------------------------------------------------- F. relations
+
+
+def _relation_inventory(relations: list) -> dict[str, int]:
+    return {
+        "relations_total": len(relations),
+        "relations_fully_grounded": sum(1 for r in relations if r.is_fully_grounded),
+        "relation_predicates": len({r.predicate for r in relations}),
+        "relation_entities": len(
+            {r.subject_id for r in relations} | {r.object_id for r in relations}
+        ),
+    }
+
+
+def _check_relations(relations: list, chunks: list) -> list[AuditCheck]:
+    """Layer 0 invariants.
+
+    The load-bearing one is provenance resolution: every `chunk_id` a relation
+    cites must exist in the chunk store. Relations and chunks share one id
+    space by construction, so a miss means the corpus was re-chunked under the
+    default `uuid4` strategy and the relation graph is now orphaned — exactly
+    the failure `chunk_documents`' overwrite guard exists to prevent.
+    """
+    section = "F. Relations"
+    checks: list[AuditCheck] = []
+    chunk_ids = {c.chunk_id for c in chunks}
+
+    dangling: list[dict[str, Any]] = []
+    for relation in relations:
+        missing = [cid for cid in relation.chunk_ids if cid not in chunk_ids]
+        if missing:
+            dangling.append(
+                {
+                    "relation_id": relation.relation_id,
+                    "triple": list(relation.triple),
+                    "missing_chunk_ids": missing[:5],
+                }
+            )
+    checks.append(
+        AuditCheck(
+            name="every relation's chunk_ids resolve in the chunk store",
+            section=section,
+            severity="critical",
+            passed=not dangling,
+            metric=len(dangling),
+            threshold=0,
+            details={
+                "hint": (
+                    "dangling provenance usually means the corpus was re-chunked "
+                    "with chunk_id_strategy='uuid4'; rebuild Layer 0 or switch to "
+                    "content_hash"
+                )
+            }
+            if dangling
+            else {},
+            sample=dangling[:10],
+        )
+    )
+
+    n_grounded = sum(1 for r in relations if r.is_fully_grounded)
+    grounded_rate = n_grounded / len(relations) if relations else 0.0
+    checks.append(
+        AuditCheck(
+            name="share of relations with both endpoints grounded",
+            section=section,
+            severity="info",
+            passed=True,
+            metric=round(grounded_rate, 4),
+            details={
+                "fully_grounded": n_grounded,
+                "partial_or_nil": len(relations) - n_grounded,
+            },
+        )
+    )
+
+    # Predicate sprawl. The vocabulary is open by design, so this is a warning
+    # rather than a failure — it is the signal to consider closing the set.
+    predicates = Counter(r.predicate for r in relations)
+    ratio = len(predicates) / len(relations) if relations else 0.0
+    checks.append(
+        AuditCheck(
+            name="predicate cardinality is not sprawling",
+            section=section,
+            severity="warning",
+            passed=ratio <= 0.5,
+            metric=round(ratio, 4),
+            threshold=0.5,
+            details={"distinct_predicates": len(predicates)},
+            sample=[{"predicate": p, "count": n} for p, n in predicates.most_common(10)],
+        )
+    )
+
+    # Self-loops should have been dropped at aggregation.
+    self_loops = [r for r in relations if r.subject_id == r.object_id]
+    checks.append(
+        AuditCheck(
+            name="no self-loop relations survived aggregation",
+            section=section,
+            severity="warning",
+            passed=not self_loops,
+            metric=len(self_loops),
+            threshold=0,
+            sample=[{"triple": list(r.triple)} for r in self_loops[:5]],
+        )
+    )
+
+    # Top NIL endpoints — the ontology-gap diagnostic, reported not judged.
+    nil_counts: Counter = Counter()
+    for relation in relations:
+        if not relation.subject_linked:
+            nil_counts[relation.subject_id] += 1
+        if not relation.object_linked:
+            nil_counts[relation.object_id] += 1
+    checks.append(
+        AuditCheck(
+            name="most frequent NIL endpoints (candidate ontology gaps)",
+            section=section,
+            severity="info",
+            passed=True,
+            metric=len(nil_counts),
+            sample=[{"nil_id": n, "count": c} for n, c in nil_counts.most_common(20)],
+        )
+    )
+    return checks

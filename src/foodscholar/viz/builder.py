@@ -654,3 +654,102 @@ def _empty_layer_graph(level: str, *, title: str, reason: str) -> VizGraph:
         level=level,  # type: ignore[arg-type]
         attrs={"empty_state": True, "reason": reason},
     )
+
+
+def relation_neighborhood(
+    fs: FoodScholar,
+    ontology_id: str,
+    *,
+    hops: int = 1,
+    max_per_hop: int = 25,
+    grounded_only: bool = False,
+) -> VizGraph:
+    """Anchor entity + the Layer 0 relations radiating from it.
+
+    Unlike `entity_neighborhood`, which shows *co-mention* (two entities in the
+    same chunk), this shows **typed** edges: the predicate rides on
+    `VizEdge.kind`, so renderers colour by relation type with no model change.
+
+    `grounded_only` drops edges with a NIL endpoint — useful when the ontology
+    gaps would otherwise dominate the picture. Edge weight is `chunk_count`,
+    so better-supported relations render thicker.
+    """
+    anchor = fs.entity_store.get(ontology_id)
+    nodes: list[VizNode] = []
+    edges: list[VizEdge] = []
+    seen: set[str] = set()
+
+    def _add_entity(eid: str, *, is_anchor: bool = False) -> None:
+        if eid in seen:
+            return
+        seen.add(eid)
+        entity = fs.entity_store.get(eid)
+        if entity is not None:
+            nodes.append(_entity_node(entity, anchor=is_anchor))
+            return
+        # NIL endpoints and ids the entity store never saw still need a node,
+        # or the edge would dangle.
+        nodes.append(
+            VizNode(
+                id=eid,
+                label=eid.split(":", 1)[-1].replace("-", " ") if ":" in eid else eid,
+                kind="entity",
+                attrs={"unresolved": True, "anchor": is_anchor},
+            )
+        )
+
+    if anchor is None and fs.relation_store.for_entity(ontology_id, k=1) == []:
+        return _empty_layer_graph(
+            "L1",
+            title=f"{ontology_id}: no relations",
+            reason="entity not found and no Layer 0 edges reference it",
+        )
+
+    _add_entity(ontology_id, is_anchor=True)
+    frontier = [ontology_id]
+    for _hop in range(max(hops, 1)):
+        next_frontier: list[str] = []
+        for eid in frontier:
+            for relation in fs.relation_store.for_entity(eid, k=max_per_hop):
+                if grounded_only and not relation.is_fully_grounded:
+                    continue
+                _add_entity(relation.subject_id)
+                _add_entity(relation.object_id)
+                edges.append(
+                    VizEdge(
+                        source=relation.subject_id,
+                        target=relation.object_id,
+                        kind=relation.predicate,
+                        weight=float(max(relation.chunk_count, 1)),
+                        attrs={
+                            "relation_id": relation.relation_id,
+                            "chunk_count": relation.chunk_count,
+                            "mention_count": relation.mention_count,
+                            "fully_grounded": relation.is_fully_grounded,
+                            "chunk_ids": list(relation.chunk_ids[:10]),
+                        },
+                    )
+                )
+                other = (
+                    relation.object_id
+                    if relation.subject_id == eid
+                    else relation.subject_id
+                )
+                if other not in frontier:
+                    next_frontier.append(other)
+        frontier = next_frontier
+        if not frontier:
+            break
+
+    # Deduplicate edges: a relation reachable from both endpoints is added twice.
+    unique: dict[tuple[str, str, str], VizEdge] = {}
+    for edge in edges:
+        unique[(edge.source, edge.kind, edge.target)] = edge
+
+    return VizGraph(
+        title=f"Relations around {ontology_id}",
+        nodes=nodes,
+        edges=list(unique.values()),
+        level="L1",
+        attrs={"ontology_id": ontology_id, "hops": hops, "grounded_only": grounded_only},
+    )
