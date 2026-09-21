@@ -1,5 +1,14 @@
 # Corpus input format
 
+```{note}
+FoodScholar can now **produce** this format as well as read it:
+`fs.chunk_documents()` turns source PDFs into corpus CSVs, and
+`fs.chunk_texts()` does the same for raw text. See
+[Chunking a corpus](../guides/chunking-a-corpus.md). `Chunk.source_metadata`
+has a typed reader-side view, `chunk.provenance`, which documents the three
+per-source key sets and normalizes the `DOI`/`doi` spelling split.
+```
+
 FoodScholar ingests a **chunked** corpus — the documents are already split into
 passage-sized pieces before they reach the library. There are two inputs:
 

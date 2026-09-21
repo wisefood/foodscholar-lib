@@ -53,6 +53,9 @@ field reference, generated from the models themselves.
 ```{autopydantic_model} foodscholar.config.GLinerConfig
 ```
 
+```{autopydantic_model} foodscholar.config.GLiner2Config
+```
+
 ```{autopydantic_model} foodscholar.config.LinkerConfig
 ```
 
@@ -84,4 +87,30 @@ field reference, generated from the models themselves.
 ## Layer C
 
 ```{autopydantic_model} foodscholar.config.LayerCConfig
+```
+
+## Chunking
+
+Corpus chunking — see the [chunking guide](../guides/chunking-a-corpus.md).
+
+```{autopydantic_model} foodscholar.config.ChunkerConfig
+```
+
+```{autopydantic_model} foodscholar.config.CorpusValidationConfig
+```
+
+## Relations (Layer 0)
+
+Typed relations — see [Layer 0](../concepts/layer-0-relations.md).
+
+```{autopydantic_model} foodscholar.config.RelationsConfig
+```
+
+```{autopydantic_model} foodscholar.config.RelationGroundingConfig
+```
+
+```{autopydantic_model} foodscholar.config.RelationDedupeConfig
+```
+
+```{autopydantic_model} foodscholar.config.RelationStoreConfig
 ```

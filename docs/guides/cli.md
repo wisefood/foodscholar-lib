@@ -7,7 +7,9 @@ a thin wrapper around one phase. Every command takes `--config` (the YAML from
 ```bash
 foodscholar info          --config config.yaml   # versions + resolved backends
 foodscholar init          --config config.yaml   # provision the stores
+foodscholar chunk-corpus  --config config.yaml   # PDFs -> corpus CSVs (see below)
 foodscholar annotate      --config config.yaml   # NER + linking + embeddings
+foodscholar build-relations --config config.yaml # Layer 0 typed relations
 foodscholar build-layer-a --config config.yaml   # FoodOn-projected shelves
 foodscholar attach        --config config.yaml   # attach chunks to shelves
 foodscholar build-layer-b --config config.yaml   # per-shelf themes
@@ -16,6 +18,19 @@ foodscholar build-all     --config config.yaml   # the full pipeline, in order
 foodscholar query "Is olive oil heart-healthy?" --config config.yaml
 foodscholar version
 ```
+
+Two commands are **not** part of `build-all`:
+
+- `chunk-corpus` produces the corpus `build-all` consumes, so it runs *before*
+  the pipeline. It takes `--pdf-dir`, `--out-dir`, `--source-type`,
+  `--metadata-csv` and `--excluded-pages`. Re-chunking an ingested corpus
+  assigns new chunk ids and orphans existing relations and attachments, so it
+  refuses to overwrite without `--force`. See
+  [](chunking-a-corpus.md).
+- `build-relations` costs an LLM pass over the whole corpus, so it is opt-in
+  (`relations.enabled: true`). Use `--dry-run` to extract and report without
+  writing, and `--force` to re-extract chunks already covered. See
+  [](../concepts/layer-0-relations.md).
 
 `build-all` runs the phases end to end; the individual `build-*` commands let you re-run
 a single stage after changing its config (e.g. re-run `build-layer-b` after tuning the

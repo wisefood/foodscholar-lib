@@ -53,6 +53,31 @@ flowchart TB
 
 Every layer builds on the previous one, and every layer is queryable on its own.
 
+## Layer 0 — relations under the entity graph
+
+The three layers are about *organizing* the corpus. **Layer 0** is about what
+the corpus *asserts*: typed edges between the entities the annotate phase
+already links.
+
+```
+Layer C   cards          cited write-ups
+Layer B   themes         per-shelf topic communities
+Layer A   shelves        the FoodOn backbone
+──────────────────────────────────────────────────────────────
+Layer 0   relations      (:Entity)-[:RELATED {predicate}]->(:Entity)
+          entities       (:Entity)
+          chunks         (:Chunk)
+```
+
+It is deliberately *under* the entity graph rather than a fourth layer beside
+C: it depends on nothing above `build_entities()`, and nothing in A/B/C depends
+on it. Both endpoints of every relation are ontology ids produced by the same
+linker that annotates chunks, so a relation connects the same `Entity` records
+Layer A projects and Layer B clusters — one entity universe, not two.
+
+Layer 0 is **opt-in** (`relations.enabled`), because extraction costs two LLM
+calls per chunk. See [Layer 0 — Relations](layer-0-relations.md).
+
 ## Two stores, one truth
 
 Retrieval and graph navigation have different ideal databases, so FoodScholar uses

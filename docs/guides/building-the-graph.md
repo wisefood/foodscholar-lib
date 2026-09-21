@@ -1,5 +1,14 @@
 # Building the graph
 
+```{note}
+Two phases sit outside `build()`. **Chunking** (`fs.chunk_documents`) runs
+*before* ingest and produces the corpus — see
+[Chunking a corpus](chunking-a-corpus.md). **Layer 0 relations**
+(`fs.build_relations`) runs after `build_entities()` and is opt-in via
+`relations.enabled`, because it costs an LLM pass over the whole corpus — see
+[Layer 0](../concepts/layer-0-relations.md).
+```
+
 This is the end-to-end pipeline that turns a corpus into the three-layer graph. Each
 step is a method on the facade; each writes to the configured stores.
 

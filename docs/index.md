@@ -49,6 +49,7 @@ concepts/worked-example
 concepts/corpus-input
 concepts/annotation
 concepts/ontology
+concepts/layer-0-relations
 concepts/layer-a-backbone
 concepts/layer-b-themes
 concepts/layer-c-cards
@@ -59,6 +60,7 @@ concepts/glossary
 :caption: Guides
 :maxdepth: 2
 
+guides/chunking-a-corpus
 guides/building-the-graph
 guides/exploring-the-graph
 guides/visualization

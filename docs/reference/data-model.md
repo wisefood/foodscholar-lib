@@ -19,6 +19,32 @@ mentions and links are produced.
 ```{autopydantic_model} foodscholar.io.chunk.EntityLink
 ```
 
+`ChunkProvenance` is the typed reader-side view of `Chunk.source_metadata`,
+reached as `chunk.provenance`. It is permissive by design: the three corpus
+producers emit three different key sets (a textbook chunk carries only `file`,
+`heading` and `page_number`), and it normalizes the `DOI`/`doi` spelling split
+the corpus contains.
+
+```{autopydantic_model} foodscholar.io.chunk.ChunkProvenance
+```
+
+## Relations
+
+A `Relation` is the Layer 0 edge: one record per distinct
+`(subject_id, predicate, object_id)`, carrying the surfaces that collapsed
+into it and the chunks it came from. Endpoints are ontology ids, or `NIL:`
+sentinels paired with the `subject_linked` / `object_linked` flags. See
+[Layer 0 — Relations](../concepts/layer-0-relations.md).
+
+```{autopydantic_model} foodscholar.io.relation.Relation
+```
+
+```{eval-rst}
+.. autofunction:: foodscholar.io.relation.make_relation_id
+.. autofunction:: foodscholar.io.relation.nil_id
+.. autofunction:: foodscholar.io.relation.is_nil
+```
+
 ## Graph
 
 The nodes of the knowledge graph. A `Shelf` is a Layer A backbone node, a `Theme` is a

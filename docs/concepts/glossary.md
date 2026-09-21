@@ -8,6 +8,29 @@ chunk
   A passage-sized piece of a source document — the atom of the corpus. See
   [Corpus input](corpus-input.md).
 
+grounding
+  Mapping an extracted entity *surface form* onto an ontology id with the
+  linker, so relation endpoints join the same entity universe as the rest of
+  the graph. Without it, Layer 0 would hold free-text strings that nothing
+  else can resolve. See [Layer 0](layer-0-relations.md).
+
+NIL endpoint
+  A relation endpoint whose surface form did not clear the grounding
+  threshold, recorded as `NIL:<slug>` with `subject_linked`/`object_linked`
+  set to `False`. Kept rather than dropped — discarding them would silently
+  delete every relation touching a concept the ontology lacks. The frequent
+  ones name real ontology gaps.
+
+predicate
+  The relation type in a triple — the verb phrase linking subject to object
+  (`reduces`, `contains`, `associated with`). The vocabulary is open, so watch
+  its cardinality via `fs.relations.predicates()`.
+
+relation
+  A typed, corpus-grounded edge between two entities:
+  `(subject_id, predicate, object_id)` plus the chunks it was extracted from.
+  The unit of [Layer 0](layer-0-relations.md).
+
 facet
   One of six independent slices the graph is projected into: `foods`, `health`,
   `nutrients`, `dietary_patterns`, `allergies`, `sustainability`. A chunk's entity

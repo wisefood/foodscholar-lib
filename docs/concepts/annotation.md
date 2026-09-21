@@ -1,5 +1,14 @@
 # Annotation — NER & linking
 
+```{note}
+Two NER backends ship, selected by `annotate.ner`. **`gliner`** (GLiNER-bio
+v0.1) is the default. **`gliner2`** uses a described 27-label set and is
+opt-in: its published win comes from a benchmark scored against an LLM proxy,
+where it trades recall for precision and yields ~28% fewer mentions per
+passage. Layer A support counts and the Layer B relatedness graph key off
+mention volume, so measure downstream before switching.
+```
+
 Before any layer is built, each chunk is **annotated**: GLiNER finds food/health
 mentions, a dense linker resolves each to a FoodOn ID, and an embedder produces the
 chunk vector. You can run this live with `fs.annotate()`, or skip it entirely by

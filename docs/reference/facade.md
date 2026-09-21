@@ -9,6 +9,7 @@ The sub-surfaces hang off it as attributes:
 
 - `fs.graph` → [GraphView](graph-view.md) (read/write the graph)
 - `fs.ontology` → [FoodOnAPI](ontology.md) (FoodOn lookup)
+- `fs.relations` → Layer 0 relation reads (see [Layer 0](../concepts/layer-0-relations.md))
 - `fs.viz` → [VizView](viz.md) (renderable views)
 - `fs.config` → [FoodScholarConfig](config.md) (the live, mutable config)
 

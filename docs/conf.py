@@ -86,9 +86,14 @@ napoleon_numpy_docstring = False
 # and must NOT be mocked.
 autodoc_mock_imports = [
     "igraph", "leidenalg", "hnswlib", "sentence_transformers", "gliner",
+    "gliner2",
     "elasticsearch", "neo4j", "pronto", "rapidfuzz", "sklearn", "scikit_learn",
     "pyvis", "graphviz", "matplotlib", "hdbscan", "umap", "bertopic",
     "anthropic", "openai", "groq", "google", "ollama",
+    # [relations] — Layer 0 extraction
+    "semhash", "inflect",
+    # [chunking] — corpus production
+    "docling", "docling_core", "nltk", "transformers",
 ]
 
 # -- autodoc-pydantic: clean rendering of the config + io models --------------
