@@ -44,7 +44,7 @@ The upstream README presents them as selected production defaults. Reading the s
 
 ### Notes for next time
 
-- `kggen/graph_code/build_graph/{extract_triplets_from_chunks,aggregate_graphs}.py` each carried the **same hardcoded GPUStack API key**. The literals are stripped, but **the key itself is exposed and must be rotated**.
+- **Four hardcoded credentials came in with `kggen/`, three distinct keys — all must be rotated.** A GPUStack key in both `build_graph/*.py` drivers, a Hugging Face token in `nel_ner_evaluation.ipynb`, an OpenRouter key in `ner_benchmark_cross_dataset.ipynb`. The first scan only knew the GPUStack format and wrongly reported the history clean; GitHub push protection caught the two notebook keys on the first push attempt. The unpushed range was rewritten with `filter-branch` (messages, authors and dates preserved; the vendor commit's message corrected), backup refs and reflog purged, and every blob in the object db swept. Lesson: scan with format-specific patterns *and* a leading boundary — the unbounded version matched the `sk-` in *"the-risk-of…"* inside a URL.
 - Layer 0 is opt-in (`relations.enabled: false`) and `build()` skips it, because extraction is two LLM calls per chunk — roughly 28k calls on this corpus. Measure on a few hundred first.
 - The textbooks' excluded pages are still inline Python sets in the notebook rather than a manifest, so textbook chunking is not yet reproducible outside it.
 - Retrieval (`fs.query()`) remains a stub. `RelationStore.for_chunks` exists specifically for its mean-triplet-similarity branch.

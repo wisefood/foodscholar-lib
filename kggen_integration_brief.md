@@ -22,9 +22,19 @@
 
 `kggen/` is currently untracked. Two blockers:
 
-1. **A live GPUStack API key is hardcoded in _two_ files** — `build_graph/extract_triplets_from_chunks.py:64` **and** `build_graph/aggregate_graphs.py:78` — each with an OpenRouter placeholder alongside. **Rotate the key**; the literal defaults have been stripped to `""` in both, so nothing enters git history, but the key itself is already exposed and must be revoked. §5.4 removes the need for them entirely.
+1. **Four hardcoded credentials, three distinct keys, in four files** — all now redacted from history, **none of the keys yet rotated**:
 
-   *Status: literals stripped, `.gitignore` extended, `__pycache__`/`.pyc`/`.triage_cache.json` removed. Rotation is the remaining human step.*
+   | key | files | as committed |
+   |---|---|---|
+   | GPUStack API key | `build_graph/extract_triplets_from_chunks.py:64`, `build_graph/aggregate_graphs.py:78` | `os.environ.get(...)` default stripped to `""` |
+   | Hugging Face user access token (`hf_…`) | `ner-nel/nel_ner_evaluation.ipynb` (cell 1, `classic_token = ...`) | literal → `<HF_TOKEN_REDACTED>` |
+   | OpenRouter API key (`sk-or-v1-…`) | `ner-nel/ner_benchmark_cross_dataset.ipynb` (cell 25, beside the author's own `# ← paste key here`) | literal → `<OPENROUTER_API_KEY_REDACTED>` |
+
+   **Rotate all three.** Redaction keeps them out of git; it does not un-expose them — the notebook ones reached GitHub's servers in a rejected push.
+
+   *How this was found, recorded so the mistake is not repeated:* the first scan looked only for the GPUStack format it already knew about, and the claim "no secret in history" was made on that basis. GitHub push protection caught the other two. The scan that now gates commits (`secret_scan.py`, kept out of the repo) covers HF, OpenRouter, OpenAI, Anthropic, Groq, Google, GitHub, Slack, AWS, private keys, bearer tokens and URL-embedded credentials — with a leading word boundary on every pattern, because the first version matched the "sk-" inside *"the-risk-of…"* in a URL.
+
+   *Status: history rewritten (`filter-branch` over the unpushed range), backup refs and reflog purged, object database swept clean. Rotation is the remaining human step.*
 2. ~30 `__pycache__/*.pyc` files, `Sources_Catalogue.ods`, and generated logs (`guides_removed_pages_log.txt`, `.triage_cache.json`) are staged-adjacent. Add a scoped `.gitignore` or strip them.
 
 ---
