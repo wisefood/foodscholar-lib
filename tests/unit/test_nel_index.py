@@ -14,9 +14,11 @@ import pytest
 
 from foodscholar.annotate.nel_index import (
     ENCODER_IDS,
+    ENCODER_POOLING,
     ElasticNELIndex,
     HNSWNELIndex,
     NELIndex,
+    _cache_is_reusable,
     _ontology_signature,
     _term_text,
 )
@@ -109,3 +111,93 @@ def test_hnsw_resolve_paths_uses_signature_in_filename(tmp_path: Path) -> None:
     assert "foodon_hnsw_biolord_" in idx_path.name
     assert idx_path.suffix == ".bin"
     assert meta_path.suffix == ".json"
+
+
+# --------------------------------------------------------------------------
+# Encoder pooling. SapBERT is a plain HF checkpoint trained with a CLS
+# objective; sentence-transformers would otherwise default it to mean pooling.
+# --------------------------------------------------------------------------
+
+
+def test_sapbert_declares_cls_pooling() -> None:
+    assert ENCODER_POOLING["sapbert"] == "cls"
+
+
+def test_sentence_transformer_encoders_declare_no_override() -> None:
+    """BioLORD, MiniLM and MPNet ship their own pooling config — leave them alone."""
+    for encoder in ("biolord", "minilm", "mpnet"):
+        assert encoder not in ENCODER_POOLING
+
+
+def _meta(**overrides: object) -> dict:
+    base = {
+        "encoder": "FremyCompany/BioLORD-2023",
+        "pooling": None,
+        "signature": "sig-1",
+        "terms": [{"uri": "T:1", "label": "alpha"}],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_cache_is_reusable_when_everything_matches() -> None:
+    assert _cache_is_reusable(
+        _meta(),
+        encoder_model_id="FremyCompany/BioLORD-2023",
+        pooling=None,
+        signature="sig-1",
+    )
+
+
+def test_cache_rejected_when_pooling_differs() -> None:
+    """The regression this guards: a mean-pooled SapBERT index reused for CLS.
+
+    Both poolings are 768-dim, so the dim check downstream cannot catch it and
+    the linker would return quietly wrong links forever.
+    """
+    stale = _meta(encoder="cambridgeltl/SapBERT-from-PubMedBERT-fulltext")
+    assert stale["pooling"] is None  # written before ENCODER_POOLING existed
+
+    assert not _cache_is_reusable(
+        stale,
+        encoder_model_id="cambridgeltl/SapBERT-from-PubMedBERT-fulltext",
+        pooling="cls",
+        signature="sig-1",
+    )
+
+
+def test_cache_without_pooling_key_still_matches_encoders_with_no_override() -> None:
+    """An old BioLORD index must not be rebuilt for nothing."""
+    legacy = _meta()
+    del legacy["pooling"]
+
+    assert _cache_is_reusable(
+        legacy,
+        encoder_model_id="FremyCompany/BioLORD-2023",
+        pooling=None,
+        signature="sig-1",
+    )
+
+
+def test_cache_rejected_on_signature_or_encoder_change() -> None:
+    assert not _cache_is_reusable(
+        _meta(),
+        encoder_model_id="FremyCompany/BioLORD-2023",
+        pooling=None,
+        signature="sig-2",
+    )
+    assert not _cache_is_reusable(
+        _meta(),
+        encoder_model_id="cambridgeltl/SapBERT-from-PubMedBERT-fulltext",
+        pooling="cls",
+        signature="sig-1",
+    )
+
+
+def test_cache_rejected_when_terms_missing() -> None:
+    assert not _cache_is_reusable(
+        _meta(terms="not-a-list"),
+        encoder_model_id="FremyCompany/BioLORD-2023",
+        pooling=None,
+        signature="sig-1",
+    )

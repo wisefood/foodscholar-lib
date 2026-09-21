@@ -38,6 +38,52 @@ ENCODER_IDS: dict[str, str] = {
     "mpnet": "all-mpnet-base-v2",
 }
 
+# Encoders that are NOT sentence-transformers models and must be assembled by
+# hand, with the pooling they were actually trained for.
+#
+# `SentenceTransformer("cambridgeltl/SapBERT-...")` loads without complaint:
+# the repo is a plain HF BERT checkpoint with no `modules.json`, so
+# sentence-transformers falls back to Transformer + **mean** pooling. SapBERT
+# is trained with a CLS objective — its model card reads the `[CLS]` vector —
+# so mean pooling silently encodes it against the grain and the vectors are
+# not the ones the metric-learning objective produced.
+#
+# Nothing crashes and no index/query mismatch results (both sides use this
+# same encoder), so the failure is invisible: it shows up only as a linker
+# that quietly underperforms. That matters most for
+# `research/ner_nel_bakeoff/`, which compares SapBERT against BioLORD — a
+# mean-pooled SapBERT would lose a comparison it never actually ran.
+#
+# BioLORD, MiniLM and MPNet are real sentence-transformers repos and carry
+# their own pooling config, so they are absent here and load normally.
+ENCODER_POOLING: dict[str, str] = {
+    "sapbert": "cls",
+}
+
+
+def _cache_is_reusable(
+    meta: dict[str, Any],
+    *,
+    encoder_model_id: str,
+    pooling: str | None,
+    signature: str,
+) -> bool:
+    """Whether a cached index was built by exactly this encoder configuration.
+
+    Pooling is part of the identity, not just the model id. A SapBERT index
+    built before `ENCODER_POOLING` existed was encoded mean-pooled; querying it
+    with CLS vectors is a silent mismatch the dim check cannot catch, because
+    both poolings are 768-dim. Metadata with no recorded pooling reads as
+    `None`, which matches the encoders that have no override and correctly
+    invalidates the ones that do.
+    """
+    return (
+        meta.get("encoder") == encoder_model_id
+        and meta.get("pooling") == pooling
+        and meta.get("signature") == signature
+        and isinstance(meta.get("terms"), list)
+    )
+
 
 @runtime_checkable
 class NELIndex(Protocol):
@@ -105,6 +151,7 @@ class HNSWNELIndex:
             )
         self._encoder_name = encoder
         self._encoder_model_id = ENCODER_IDS[encoder]
+        self._pooling = ENCODER_POOLING.get(encoder)
         self._top_k = max(1, top_k)
         self._min_sim = min_sim
         self._cache: dict[str, tuple[OntologyId, float] | None] = {}
@@ -146,10 +193,11 @@ class HNSWNELIndex:
         if self._metadata_path.exists() and self._index_path.exists():
             try:
                 meta = json.loads(self._metadata_path.read_text())
-                if (
-                    meta.get("encoder") == self._encoder_model_id
-                    and meta.get("signature") == self._signature
-                    and isinstance(meta.get("terms"), list)
+                if _cache_is_reusable(
+                    meta,
+                    encoder_model_id=self._encoder_model_id,
+                    pooling=self._pooling,
+                    signature=self._signature,
                 ):
                     self._metadata = meta["terms"]
                     self._dim = int(meta["dim"])
@@ -164,6 +212,8 @@ class HNSWNELIndex:
                     "nel_index.cache_stale",
                     expected_signature=self._signature,
                     cached_signature=meta.get("signature"),
+                    expected_pooling=self._pooling,
+                    cached_pooling=meta.get("pooling"),
                 )
             except Exception as e:
                 _log.warning("nel_index.cache_unreadable", error=str(e))
@@ -218,6 +268,7 @@ class HNSWNELIndex:
             json.dumps(
                 {
                     "encoder": self._encoder_model_id,
+                    "pooling": self._pooling,
                     "signature": self._signature,
                     "dim": self._dim,
                     "terms": self._metadata,
@@ -237,13 +288,32 @@ class HNSWNELIndex:
         try:
             from sentence_transformers import (  # type: ignore[import-not-found]
                 SentenceTransformer,
+                models,
             )
         except ImportError as e:
             raise ImportError(
                 "the 'sentence-transformers' package is required for HNSWNELIndex. "
                 "Install with: pip install 'foodscholar[annotate]'"
             ) from e
-        self._encoder = SentenceTransformer(self._encoder_model_id)
+
+        pooling = ENCODER_POOLING.get(self._encoder_name)
+        if pooling is None:
+            self._encoder = SentenceTransformer(self._encoder_model_id)
+        else:
+            # Assemble the two modules explicitly rather than trusting the
+            # fallback. See ENCODER_POOLING for why.
+            transformer = models.Transformer(self._encoder_model_id)
+            pooler = models.Pooling(
+                transformer.get_word_embedding_dimension(),
+                pooling_mode=pooling,
+            )
+            self._encoder = SentenceTransformer(modules=[transformer, pooler])
+            _log.info(
+                "nel_index.encoder_pooling_override",
+                encoder=self._encoder_name,
+                model=self._encoder_model_id,
+                pooling=pooling,
+            )
         return self._encoder
 
     # ------------------------------------------------------------------ NELIndex protocol

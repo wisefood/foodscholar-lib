@@ -47,6 +47,26 @@ rate is not accuracy**. `carrots -> carrot (quick frozen)` is a link *and* an
 error, and it is exactly the failure `config.LinkBlocklistEntry` already
 exists to patch (`fish` -> aquarium fish food).
 
+## Before you trust a SapBERT number
+
+`cambridgeltl/SapBERT-from-PubMedBERT-fulltext` is a plain HF BERT checkpoint,
+not a sentence-transformers repo: it has no `modules.json`, so
+`SentenceTransformer(...)` silently assembles Transformer + **mean** pooling.
+SapBERT is trained with a CLS objective — its model card reads the `[CLS]`
+vector — so mean pooling encodes it against the grain. The kggen script says so
+in its own header, and it is the reason their linker goes through
+`HNSWNELLinker(encoder="sapbert")` rather than a bare SentenceTransformer.
+
+`annotate/nel_index.ENCODER_POOLING` now pins `sapbert` to `cls` and assembles
+the two modules explicitly. Pooling is recorded in the index metadata and is
+part of the cache identity, so any SapBERT index built before that change is
+treated as stale and rebuilt — both poolings are 768-dim, so nothing
+downstream would have caught the mismatch.
+
+**A SapBERT column produced before this fix measured a handicapped SapBERT and
+should be rerun.** BioLORD, MiniLM and MPNet are genuine sentence-transformers
+repos, carry their own pooling config, and are unaffected.
+
 ## What the bake-off must measure
 
 Four cells (2 NER × 2 encoder). Report **all** of the following — the upstream
