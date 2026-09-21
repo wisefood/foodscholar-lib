@@ -25,7 +25,7 @@ B's relatedness graph, which weights chunk pairs by *shared FoodOn ids*. That
 knows olive oil and LDL cholesterol co-occur. It cannot know that one
 **lowers** the other.
 
-```python
+```text
 # what the entity graph records
 (:Chunk)-[:MENTIONS]->(:Entity {ontology_id: "FOODON:03301710"})
 (:Chunk)-[:MENTIONS]->(:Entity {ontology_id: "CHEBI:39026"})

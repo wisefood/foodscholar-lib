@@ -68,6 +68,7 @@ This is exactly how the notebook sweeps Layer B settings.
 | `layer_a` | no | shelf projection method + prune/aliasing knobs |
 | `layer_b` | no | theme discovery passes, merge, labeling |
 | `layer_c` | no | card LLM model + grounding/safety |
+| `retrieval` | no | `fs.retrieve()` — branch weights, candidate pool, PPR walk, caches |
 
 ## `storage` — where data lives
 
@@ -241,6 +242,43 @@ Each is explained in depth in the Concepts pages —
 [Layer A](../concepts/layer-a-backbone.md), [Layer B](../concepts/layer-b-themes.md),
 [Layer C](../concepts/layer-c-cards.md) — and the repo's `config.example.yaml` lists
 **every** field with its default and rationale.
+
+## `retrieval` — `fs.retrieve()`
+
+Scoring for the [Extended KG-Gen hybrid](../concepts/retrieval.md). Every field has a
+working default, so this section is optional.
+
+```yaml
+retrieval:
+  top_k: 5
+  candidate_k: 100          # chunks the text branch pulls for the others to re-rank
+
+  w_text: 0.3               # must sum to 1.0 — the loader refuses a config that doesn't
+  w_triplet: 0.3
+  w_ppr: 0.4
+
+  seed_entities: 10         # PPR seeds: entities nearest the query
+  subgraph_depth: 1         # hops out from them; each hop is a store call per entity
+  expand_k: 50
+  max_expansion_calls: 50   # ceiling that makes a deeper walk safe to configure
+  ppr_alpha: 0.85
+  ppr_max_iter: 100
+
+  max_relations: 500        # triples embedded per query, best-supported first
+  embed_cache_size: 50000   # process-local LRU over triple/entity embeddings; 0 disables
+
+  graph_connected_only: false
+```
+
+Two things bite more often than the weights:
+
+- **`candidate_k` is the recall knob.** A passage outside the text branch's pool cannot
+  be retrieved however well it would score on the graph. Raise this before
+  `subgraph_depth`.
+- **The triplet and PPR branches read Layer 0.** With `relations.enabled: false` — or
+  with `relations.store.backend` left at `memory` in a service that only reads — they
+  have nothing to read, stay silent, and retrieval degrades to plain kNN.
+  `trace.branches_used` says which ones actually ran.
 
 ## Recipes
 

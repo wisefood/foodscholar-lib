@@ -109,7 +109,7 @@ fs.chunk_documents(
 Abstracts use the same window over NLTK sentences instead of Docling units —
 it is one algorithm, not two:
 
-```python
+```text
 fs.chunk_texts(
     {"10.1/abc": "Whole-grain intake is associated with ...", ...},
     out_path="data/chunks/abstracts/abstracts.csv",

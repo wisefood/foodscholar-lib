@@ -15,6 +15,9 @@ foodscholar attach        --config config.yaml   # attach chunks to shelves
 foodscholar build-layer-b --config config.yaml   # per-shelf themes
 foodscholar build-layer-c --config config.yaml   # cited cards
 foodscholar build-all     --config config.yaml   # the full pipeline, in order
+foodscholar sweep-layer-b  --config config.yaml  # grid-search the Layer B knobs
+foodscholar report-layer-b --config config.yaml  # Layer B coverage/quality report
+foodscholar bench-layer-c  --config config.yaml  # score Layer C cards against their chunks
 foodscholar query "Is olive oil heart-healthy?" --config config.yaml  # retrieve (see below)
 foodscholar version
 ```
@@ -38,6 +41,9 @@ Three commands are **not** part of `build-all`:
   text branch — see [](building-the-graph.md).
 - `query` reads the built graph rather than writing to it, so it runs after the
   pipeline rather than as part of it.
+
+`sweep-layer-b`, `report-layer-b` and `bench-layer-c` are tuning and evaluation tools
+rather than build phases — see [](tuning-layer-b.md) for the first two.
 
 `build-all` runs the phases end to end; the individual `build-*` commands let you re-run
 a single stage after changing its config (e.g. re-run `build-layer-b` after tuning the
