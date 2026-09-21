@@ -30,8 +30,11 @@ annotate = [
     "transformers",
     "sentence-transformers",
     "gliner",
+    "gliner2",
     "hnswlib",
 ]
+relations = ["semhash", "inflect"]
+chunking = ["docling", "docling-core", "transformers", "nltk"]
 clustering = ["leidenalg", "python-igraph", "hdbscan", "scikit-learn", "umap-learn"]
 bertopic = ["bertopic"]
 summarization = ["sumy", "nltk"]
@@ -45,7 +48,12 @@ all = [
     "transformers",
     "sentence-transformers",
     "gliner",
+    "gliner2",
     "hnswlib",
+    "semhash",
+    "inflect",
+    "docling",
+    "docling-core",
     "leidenalg",
     "python-igraph",
     "hdbscan",

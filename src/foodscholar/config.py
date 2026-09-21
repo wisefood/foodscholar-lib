@@ -35,6 +35,118 @@ _GLINER_DEFAULT_LABELS: list[str] = [
 ]
 
 
+# GLiNER2's described label set, **verbatim** from the cross-dataset benchmark
+# that selected GLiNER2 (`ner-nel/run_ner_nel_corpus_gliner2_sapbert.py`).
+# GLiNER2 consumes `{label: description}` and the descriptions are part of the
+# model input — editing them invalidates the published numbers, so treat this
+# dict as a fixture. See the integration brief §3.1.
+_GLINER2_DEFAULT_LABELS: dict[str, str] = {
+    "food": (
+        "Specific food items, ingredients, or beverages mentioned by name in scientific nutrition text (e.g. olive oil, red meat, green tea, whole grains, salmon, blueberries)"
+    ),
+    "food additive": (
+        "Substances intentionally added to food for preservation, flavouring, colouring, or texturising (e.g. sodium benzoate, aspartame, monosodium glutamate, lecithin, carrageenan)"
+    ),
+    "dietary pattern": (
+        "Structured overall eating patterns or dietary regimens studied as an intervention or exposure (e.g. Mediterranean diet, Western diet, DASH diet, plant-based diet, ketogenic diet, veganism)"
+    ),
+    "dietary supplement": (
+        "Nutritional supplements or nutraceuticals taken in addition to normal diet (e.g. fish oil capsules, multivitamins, probiotic supplements, omega-3 supplements, protein powder)"
+    ),
+    "nutrient": (
+        "General nutritional components not classified as a specific vitamin or mineral (e.g. dietary fibre, total protein, carbohydrate, polyphenol, antioxidant, omega-3 fatty acid, flavonoid)"
+    ),
+    "vitamin": (
+        "Specific vitamins identified by letter, number, or full chemical name (e.g. vitamin C, vitamin D3, retinol, alpha-tocopherol, folate, riboflavin, thiamine, niacin)"
+    ),
+    "mineral": (
+        "Specific dietary minerals or trace elements (e.g. calcium, magnesium, iron, zinc, selenium, potassium, sodium, phosphorus, iodine)"
+    ),
+    "amino acid": (
+        "Specific amino acids as building blocks of proteins or metabolic intermediates (e.g. leucine, tryptophan, glutamine, methionine, arginine, branched-chain amino acids)"
+    ),
+    "lipid": (
+        "Specific fats, fatty acids, cholesterol fractions, or lipid molecules (e.g. LDL cholesterol, triglycerides, arachidonic acid, DHA, EPA, saturated fatty acid)"
+    ),
+    "chemical": (
+        "Chemical compounds, molecules, or substances relevant to nutrition or biology that are not nutrients or drugs (e.g. resveratrol, curcumin, quercetin, ethanol, phytosterol)"
+    ),
+    "drug": (
+        "Pharmaceutical drugs, medications, or clinical interventions (e.g. metformin, statins, aspirin, insulin, orlistat)"
+    ),
+    "biomarker": (
+        "Measurable biological markers in blood, urine, or tissue used to assess metabolic or health status (e.g. HbA1c, C-reactive protein, LDL, BMI, fasting glucose, homocysteine, IL-6)"
+    ),
+    "enzyme": (
+        "Specific biological enzymes involved in metabolism, digestion, or biochemical pathways (e.g. lipase, amylase, COX-2, superoxide dismutase, glutathione peroxidase)"
+    ),
+    "hormone": (
+        "Hormones involved in metabolism, appetite regulation, or body homeostasis (e.g. insulin, leptin, ghrelin, cortisol, adiponectin, thyroid hormone)"
+    ),
+    "gene": (
+        "Named genes or gene symbols relevant to nutrition or metabolism research (e.g. APOE, FTO, PPARG, TCF7L2, MTHFR)"
+    ),
+    "genotype": (
+        "Genetic variants, single nucleotide polymorphisms, or genotypes (e.g. APOE epsilon4 allele, rs9939609, MTHFR C677T, heterozygous carriers)"
+    ),
+    "microbe": (
+        "Bacteria, viruses, fungi, or other microorganisms relevant to gut health or disease (e.g. Lactobacillus, Bifidobacterium, Helicobacter pylori, gut microbiota)"
+    ),
+    "disease": (
+        "Diagnosed medical conditions, disorders, or pathological conditions (e.g. type 2 diabetes, cardiovascular disease, obesity, metabolic syndrome, colorectal cancer)"
+    ),
+    "symptom": (
+        "Clinical symptoms, signs of disease, or physiological abnormalities reported in patients (e.g. hypertension, hyperglycaemia, systemic inflammation, fatigue, insulin resistance)"
+    ),
+    "organ or tissue": (
+        "Body organs, tissues, or anatomical structures (e.g. liver, skeletal muscle, adipose tissue, gut, colon, pancreas, small intestine)"
+    ),
+    "physiological process": (
+        "Biological or physiological processes and mechanisms in the body (e.g. oxidative stress, lipid oxidation, inflammation, gut microbiota composition, satiety signalling)"
+    ),
+    "population": (
+        "Defined human study groups or cohorts characterised by demographics, health status, or geography (e.g. postmenopausal women, elderly adults over 65, obese children, type 2 diabetic patients)"
+    ),
+    "life stage": (
+        "Specific stages of human life used as inclusion criteria or study context (e.g. infancy, childhood, adolescence, pregnancy, lactation, menopause, old age)"
+    ),
+    "exercise": (
+        "Physical exercise interventions, physical activity levels, or sport modalities (e.g. aerobic exercise, resistance training, sedentary behaviour, walking, HIIT)"
+    ),
+    "measurement": (
+        "Quantitative measurements, dosages, amounts, or clinical indices with units (e.g. 500 mg/day, 2 g/kg body weight, 30% energy from fat, 95th percentile BMI)"
+    ),
+    "time expression": (
+        "Time periods, durations, follow-up intervals, or temporal references in study design (e.g. 12 weeks, 5-year follow-up, baseline, 6 months post-intervention, 24-hour recall)"
+    ),
+    "country": (
+        "Countries, sovereign states, territories, or national geographic entities (e.g. Greece, United States, China, Japan, United Kingdom, South Korea)."
+    ),
+}
+
+
+class CorpusValidationConfig(BaseModel):
+    """Ingest-time sanity checks on incoming chunks.
+
+    The library assumes chunks are <= 512 tokens, but until `fs.chunk_documents`
+    produced them that construction happened outside the library and was never
+    verified. This makes the assumption observable. It **warns and does not
+    raise** by default: a corpus that trips a check is still a corpus, and
+    hard-failing `fs.ingest` on one long chunk is the worse outcome.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    max_chunk_tokens: int = 512
+    """Keep in sync with `ChunkerConfig.max_tokens`."""
+    token_estimate: Literal["chars", "tokenizer"] = "chars"
+    """`chars` divides character length by 4 — zero-dependency, the default.
+    `tokenizer` loads the CHUNKER's tokenizer (bge-large, not the embedder's
+    bge-base) for an exact count, at the cost of pulling transformers into the
+    ingest path."""
+    on_violation: Literal["warn", "raise"] = "warn"
+
+
 class CorpusConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     chunks_path: Path
@@ -48,6 +160,7 @@ class CorpusConfig(BaseModel):
     NEL annotations and embeddings are skipped too. The `ignore_source_types=`
     kwarg on `FoodScholar.ingest` / `FoodScholar.load_and_annotate` overrides
     this default per call."""
+    validation: CorpusValidationConfig = Field(default_factory=CorpusValidationConfig)
 
 
 class OntologyConfig(BaseModel):
@@ -73,6 +186,25 @@ class GLinerConfig(BaseModel):
     max_length: int = 2048
     batch_size: int = 16
     labels: list[str] = Field(default_factory=lambda: list(_GLINER_DEFAULT_LABELS))
+
+
+class GLiner2Config(BaseModel):
+    """GLiNER2 NER configuration. Defaults match the benchmark selection.
+
+    Note the evidence for switching to GLiNER2 is mixed (integration brief
+    §3.1.1): it wins on a GPT-4o-mini-scored cross-dataset benchmark by trading
+    ~12% recall for ~40% precision, yielding ~28% fewer mentions per passage.
+    Layer A support counts and the Layer B relatedness graph key off mention
+    volume, so this is *not* the default — measure before flipping.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    model_id: str = "fastino/gliner2-large-v1"
+    threshold: float = 0.35
+    batch_size: int = 16
+    quantize: bool = True
+    """Quantize on CUDA only; ignored on CPU."""
+    labels: dict[str, str] = Field(default_factory=lambda: dict(_GLINER2_DEFAULT_LABELS))
 
 
 class LinkerConfig(BaseModel):
@@ -102,12 +234,18 @@ class LinkerConfig(BaseModel):
 class AnnotateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    ner: Literal["gliner"] = "gliner"
-    """NER strategy. Only `gliner` is supported in v0.1 — `keyword` (deterministic
-    ontology keyword match) and `agentic` (LLM-extracted) were removed when the
-    library switched to GLiNER + HNSW + BioLORD."""
+    ner: Literal["gliner", "gliner2"] = "gliner"
+    """NER strategy.
+
+    - `gliner` (default) — GLiNER-bio v0.1, the validated prototype model.
+    - `gliner2` — GLiNER2 with a described 27-label set. Opt-in; see
+      `GLiner2Config` for why it is not the default.
+
+    `keyword` (deterministic ontology keyword match) and `agentic`
+    (LLM-extracted) were removed when the library switched to GLiNER + HNSW."""
 
     gliner: GLinerConfig = Field(default_factory=GLinerConfig)
+    gliner2: GLiner2Config = Field(default_factory=GLiner2Config)
     embedder: str = "BAAI/bge-base-en-v1.5"
     linker: LinkerConfig = Field(default_factory=LinkerConfig)
     batch_size: int = 16
@@ -742,7 +880,19 @@ class StorageConfig(BaseModel):
     card_store: CardStoreConfig = Field(default_factory=CardStoreConfig)
 
 
-LLMProvider = Literal["anthropic", "openai", "openrouter", "groq", "gemini", "ollama"]
+LLMProvider = Literal[
+    "anthropic",
+    "openai",
+    "openai_compatible",
+    "openrouter",
+    "groq",
+    "gemini",
+    "ollama",
+]
+"""`openai_compatible` targets any OpenAI-protocol endpoint via `host`:
+self-hosted vLLM, GPUStack, Ollama's OpenAI shim. Its key comes from
+`api_key` or `OPENAI_COMPATIBLE_API_KEY` — deliberately *not* `OPENAI_API_KEY`,
+so a local endpoint can never silently bill a real OpenAI account."""
 
 
 class ProviderConfig(BaseModel):
@@ -774,6 +924,101 @@ class LLMConfig(BaseModel):
     max_retries: int = 2
 
 
+
+class ChunkerConfig(BaseModel):
+    """Corpus chunking — PDFs / raw text -> the corpus CSVs `fs.ingest` reads.
+
+    Defaults are the values that produced the existing corpus. Changing any of
+    them makes new chunks incomparable with the stored ones, so they are pinned
+    rather than tuned.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_tokens: int = 512
+    overlap: int = 64
+    """A *minimum* tail, not a target — the window advances as far as it can
+    while still leaving this many tokens behind. Realized overlap is >= this."""
+    fine_max_tokens: int = 80
+    """Docling `HybridChunker` budget for the fine units the window merges."""
+
+    tokenizer: str = "BAAI/bge-large-en-v1.5"
+    """NOT the same model as `annotate.embedder` (bge-*base*). They share a
+    tokenizer so the counts agree, but the corpus was counted with bge-large
+    and this must stay pinned to it."""
+    use_fast_tokenizer: bool = False
+    """Load-bearing: the corpus was counted with the SLOW tokenizer. The fast
+    and slow bge tokenizers can disagree by a token on some inputs."""
+
+    device: str = "cpu"
+    """Docling accelerator device (`cpu`, `cuda`, `cuda:1`). The notebooks
+    hardcode `cuda:1`; `cpu` is the portable default."""
+    do_ocr: bool = False
+    generate_picture_images: bool = False
+
+    chunk_id_strategy: Literal["uuid4", "content_hash"] = "uuid4"
+    """`uuid4` reproduces the existing corpus bit-for-bit and is the default.
+    `content_hash` (sha1 over source_doc_id + normalized text) makes
+    re-chunking an unchanged document idempotent, so downstream provenance
+    survives a re-run — **recommended for any new corpus**. See the brief §6.1."""
+
+    excluded_pages_manifest: Path | None = None
+    """`filename: X.pdf | removed_pages: [1, 2]` manifest, as produced by
+    `pdf_page_triage.py`. Covers the guides; the textbooks' excluded pages were
+    inline in the notebook and must be exported here to be reproducible."""
+
+
+class RelationGroundingConfig(BaseModel):
+    """Maps extracted entity surfaces onto ontology ids via the linker."""
+
+    model_config = ConfigDict(extra="forbid")
+    min_sim: float = 0.70
+    """Deliberately separate from `annotate.linker.nel_min_sim`: an
+    LLM-emitted entity string is a different distribution from a GLiNER span,
+    and this must be tunable without disturbing `fs.annotate()`."""
+    keep_nil: bool = True
+    """Keep endpoints that did not link, as `NIL:<slug>`. Dropping them would
+    silently delete every relation touching a concept FoodOn lacks — which for
+    a nutrition corpus is most biomarkers, hormones and processes."""
+
+
+class RelationDedupeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    similarity_threshold: float = 0.95
+    predicate_threshold: float = 0.95
+    """Predicates are where an open extractor sprawls, and the retrieval PPR
+    branch treats distinct predicates as parallel edges (extra votes), so
+    under-merging them biases ranking. Its own knob for that reason."""
+    singularize: bool = True
+    """Per-token `inflect.singular_noun` before hashing, as the reference does.
+    Undocumented upstream but responsible for much of the collapse."""
+
+
+class RelationStoreConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    backend: Literal["memory", "elastic"] = "memory"
+    es_index: str = "foodscholar_relations"
+
+
+class RelationsConfig(BaseModel):
+    """Layer 0 — typed, corpus-grounded relations between entities."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    """Opt-in. `fs.build()` skips the phase while this is false — it costs an
+    LLM pass over the whole corpus."""
+    batch_size: int = 16
+    max_tokens: int = 4096
+    llm: ProviderConfig | None = None
+    """Overrides `cfg.llm.primary` for extraction only. Extraction wants a
+    cheap local model; Layer C wants a strong one. `None` inherits."""
+    grounding: RelationGroundingConfig = Field(default_factory=RelationGroundingConfig)
+    dedupe: RelationDedupeConfig = Field(default_factory=RelationDedupeConfig)
+    store: RelationStoreConfig = Field(default_factory=RelationStoreConfig)
+
+
 class FoodScholarConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     corpus: CorpusConfig
@@ -784,6 +1029,8 @@ class FoodScholarConfig(BaseModel):
     layer_c: LayerCConfig = Field(default_factory=LayerCConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig | None = None  # None → facade uses the built-in mock LLM
+    chunking: ChunkerConfig = Field(default_factory=ChunkerConfig)
+    relations: RelationsConfig = Field(default_factory=RelationsConfig)
 
 
 def _substitute_env(value: Any) -> Any:

@@ -190,8 +190,12 @@ storage:
     index: foodscholar_cards
 
 # LLM client — used only by Layer C card generation now that NER is GLiNER
-# and the linker is purely dense. Provider-agnostic: anthropic | openai |
-# groq | gemini | ollama. API keys may be supplied via `api_key:` here (use
+# and the linker is purely dense (Layer 0 relation extraction also uses it).
+# Provider-agnostic: anthropic | openai | openai_compatible | openrouter |
+# groq | gemini | ollama. `openai_compatible` targets any OpenAI-protocol
+# endpoint via `host:` (self-hosted vLLM, GPUStack, Ollama's OpenAI shim) and
+# reads OPENAI_COMPATIBLE_API_KEY — never OPENAI_API_KEY, so a local endpoint
+# cannot silently bill a real OpenAI account. API keys may be supplied via `api_key:` here (use
 # ${VAR} to read from the environment) or via the provider's standard env
 # var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY).
 llm:
@@ -205,3 +209,78 @@ llm:
       host: http://localhost:11434
   timeout_s: 30
   max_retries: 2
+
+# ---------------------------------------------------------------------------
+# Corpus chunking — PDFs / raw text -> the corpus CSVs `ingest` reads.
+#
+# Until this existed the corpus was produced by notebooks outside the library,
+# so foodscholar could not rebuild its own primary input. Defaults are the
+# values that produced the existing corpus; changing one makes new chunks
+# incomparable with the stored ones, so they are pinned rather than tuned.
+# ---------------------------------------------------------------------------
+chunking:
+  max_tokens: 512
+  # A MINIMUM tail, not a target: the window advances as far as it can while
+  # still leaving this many tokens behind, so realized overlap is >= 64.
+  overlap: 64
+  # Docling HybridChunker budget for the fine units the window merges.
+  fine_max_tokens: 80
+  # NOT the same model as annotate.embedder (bge-*base*). They share a
+  # tokenizer so counts agree, but the corpus was counted with bge-large.
+  tokenizer: BAAI/bge-large-en-v1.5
+  # Load-bearing: the corpus was counted with the SLOW tokenizer; the fast and
+  # slow bge tokenizers can disagree by a token on some inputs.
+  use_fast_tokenizer: false
+  # Docling accelerator: cpu | cuda | cuda:1
+  device: cpu
+  do_ocr: false
+  generate_picture_images: false
+  # uuid4 reproduces the existing corpus bit-for-bit and is the default.
+  # content_hash makes re-chunking an unchanged document idempotent, so
+  # relations/attachments/cards survive a re-run — recommended for NEW corpora.
+  # With uuid4, re-chunking assigns fresh ids and orphans all of that.
+  chunk_id_strategy: uuid4
+  # `filename: X.pdf | removed_pages: [1, 2]` manifest from pdf_page_triage.py.
+  # Covers the guides; the textbooks' exclusions must be exported to this form.
+  excluded_pages_manifest: null
+
+# ---------------------------------------------------------------------------
+# Layer 0 — typed relations between entities, grounded in the ontology.
+#
+# Sits UNDER the entity graph, not beside Layer C: built after build_entities,
+# independent of Layer A/B/C. Opt-in, because it costs an LLM pass over the
+# whole corpus.
+# ---------------------------------------------------------------------------
+relations:
+  enabled: false
+  batch_size: 16
+  max_tokens: 4096
+  # Overrides llm.primary for extraction only — extraction wants a cheap local
+  # model while Layer C wants a strong one. Omit or null to inherit.
+  # llm:
+  #   provider: openai_compatible     # any OpenAI-protocol endpoint (vLLM, GPUStack)
+  #   model: mistral-small-3.2-24b-instruct-2506
+  #   host: ${GPUSTACK_API_BASE}
+  #   api_key: ${GPUSTACK_API_KEY}
+  grounding:
+    # Deliberately separate from annotate.linker.nel_min_sim: an LLM-emitted
+    # entity string is a different distribution from a GLiNER span.
+    min_sim: 0.70
+    # Keep endpoints that did not link, as NIL:<slug>. Dropping them would
+    # silently delete every relation touching a concept FoodOn lacks — for a
+    # nutrition corpus that is most biomarkers, hormones and processes.
+    keep_nil: true
+  dedupe:
+    enabled: true
+    similarity_threshold: 0.95
+    # Predicates get their own knob: retrieval's PPR branch treats distinct
+    # predicates as parallel edges, so under-merging them biases ranking.
+    predicate_threshold: 0.95
+    # Per-token singularization ("whole grains" -> "whole grain") before
+    # hashing. Needs the [relations] extra for `inflect`.
+    singularize: true
+  store:
+    # memory | elastic. Separate from the chunk-store backend so the extractor
+    # can be iterated on against an Elastic deployment without writing.
+    backend: memory
+    es_index: foodscholar_relations
