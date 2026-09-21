@@ -73,8 +73,9 @@ the defaults.
 
 - **Hybrid retrieval** (`retrieval/retrieval_core.py`: text similarity + mean
   triplet similarity + Personalized PageRank over the entity subgraph).
-  Deferred; `RelationStore.for_chunks` exists specifically for its triplet
-  branch, and `fs.query()` is where it will land.
+  **Ported** — as `fs.retrieve()` / `foodscholar.retrieval.kggen`, with the
+  same 0.3/0.3/0.4 scoring read from the stores instead of a GraphML file and
+  a 520MB embedding cache. See [Retrieval](retrieval.md).
 - **Abstracts semantic clustering** (`chunking_abstracts_split_check.ipynb`,
   sections 7–11) — partitions the already-chunked corpus into files; disk
   organization rather than chunking.

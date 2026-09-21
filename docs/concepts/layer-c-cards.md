@@ -164,8 +164,8 @@ fs.graph.theme("...").card().summary       # graph lookup of a theme's card
 ```
 
 ```{note}
-`fs.search_cards` is a thin retrieval helper (embed → kNN → fetch). The full `fs.query()` with
-answer synthesis remains deferred; Stage 3 provides the searchable card store it will build on.
+`fs.search_cards` is a thin card lookup (embed → kNN → fetch), separate from `fs.retrieve()`,
+which ranks corpus passages. Neither formulates an answer: the library retrieves and stops there.
 ```
 
 ## Where Layer C sits

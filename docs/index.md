@@ -63,6 +63,7 @@ concepts/layer-0-relations
 concepts/layer-a-backbone
 concepts/layer-b-themes
 concepts/layer-c-cards
+concepts/retrieval
 concepts/kggen-provenance
 concepts/glossary
 ```

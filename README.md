@@ -62,7 +62,10 @@ fs.build_relations()              # Layer 0 — opt-in, needs a real LLM
 fs.build_layer_a(); fs.attach(); fs.build_layer_b(facet="foods"); fs.build_layer_c()
 
 fs.relations.for_entity("FOODON:03301710")   # what the corpus asserts about olive oil
-answer = fs.query("Is olive oil heart-healthy?")
+
+# Retrieval: ranked passages + the branch scores that ranked them.
+# The library retrieves; formulating an answer is your pipeline's job.
+hits, trace = fs.retrieve("Is olive oil heart-healthy?", k=5)
 ```
 
 [`notebooks/graph_build.ipynb`](notebooks/graph_build.ipynb) is a clean, phase-by-phase

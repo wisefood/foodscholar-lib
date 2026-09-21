@@ -17,6 +17,9 @@ The surface is small and layered:
   `Shelf`, `Theme`, `Card`, `Entity`, `Relation`.
 - **[Relations (Layer 0)](relations.md)** — the extract → dedupe → ground →
   aggregate pipeline behind `fs.build_relations()`, ported from the kggen pipeline.
+- **[Retrieval](retrieval.md)** — the Extended KG-Gen hybrid scoring behind
+  `fs.retrieve()`. Ranked passages and the branch scores that ranked them; the
+  library does not formulate answers.
 - **[Corpus](corpus.md)** — the chunking window and PDF/text chunkers behind
   `fs.chunk_documents()`, plus the CSV reader and its validation.
 - **[Annotation](annotate.md)** — the NER backends (GLiNER, GLiNER2), the dense
@@ -34,6 +37,7 @@ facade
 config
 data-model
 relations
+retrieval
 corpus
 annotate
 graph-view

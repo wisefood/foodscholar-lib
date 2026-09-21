@@ -287,9 +287,9 @@ flowchart LR
     KNN --> RES["nearest Cards (id, cosine)"]
 ```
 
-`fs.search_cards(text, k)` = embed → `knn_search_cards` → fetch `Card`s. It's a thin retrieval
-helper; `fs.query()` (answer synthesis) remains deferred, but Stage 3 provides the store it will
-build on.
+`fs.search_cards(text, k)` = embed → `knn_search_cards` → fetch `Card`s — a card lookup, distinct
+from `fs.retrieve()`, which ranks corpus passages. Answer synthesis is out of scope for the
+library: its consumers bring their own QA pipeline.
 
 ### 2.6 Layer C config matrix
 

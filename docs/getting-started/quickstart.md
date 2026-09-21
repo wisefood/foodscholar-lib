@@ -48,7 +48,11 @@ fs.attach()               # attach chunks to shelves
 fs.build_layer_b(facet="foods")   # per-shelf theme discovery
 fs.build_layer_c()        # cited write-up cards
 
-answer = fs.query("Is olive oil heart-healthy?")
+# Retrieval: ranked passages plus the branch scores that ranked them.
+# The library retrieves; formulating an answer is your pipeline's job.
+hits, trace = fs.retrieve("Is olive oil heart-healthy?", k=5)
+for h in hits:
+    print(round(h.score, 3), h.chunk.text[:120])
 ```
 
 ```{tip}
