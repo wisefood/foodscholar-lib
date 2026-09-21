@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 # (Country, Measurement, Population, Time expression, "other") carry no facet
 # hint and return None from `route_link_to_facet`.
 ENTITY_TYPE_TO_FACET: dict[str, Facet] = {
+    # ── GLiNER-bio vocabulary ──
     "food": "foods",
     "food component": "foods",
     "nutrient": "nutrients",
@@ -28,6 +29,28 @@ ENTITY_TYPE_TO_FACET: dict[str, Facet] = {
     "medical condition": "health",
     "biomarker": "health",
     "allergen": "allergies",
+    # ── GLiNER2 additions ──
+    # Routed to mirror PREFIX_TO_FACET below, so an entity reaching a facet via
+    # its entity_type and via its OBO prefix lands in the same place:
+    # CHEBI/PR (chemicals, proteins) -> nutrients; GO/MONDO/HP/UBERON -> health.
+    "food additive": "foods",
+    "vitamin": "nutrients",
+    "mineral": "nutrients",
+    "amino acid": "nutrients",
+    "lipid": "nutrients",
+    "chemical": "nutrients",
+    "drug": "health",
+    "enzyme": "health",
+    "hormone": "health",
+    "gene": "health",
+    "genotype": "health",
+    "microbe": "health",
+    "symptom": "health",
+    "organ or tissue": "health",
+    "physiological process": "health",
+    # Deliberately unmapped (return None), matching Country / Measurement /
+    # Population / Time expression: they describe the study, not the subject.
+    #   "life stage", "exercise"
 }
 
 
