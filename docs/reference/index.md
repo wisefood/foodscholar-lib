@@ -13,7 +13,8 @@ The surface is small and layered:
 - **[Configuration](config.md)** — the `FoodScholarConfig` model and its sections,
   with every field, type, and default.
 - **[Data model](data-model.md)** — the Pydantic contracts that flow through the
-  pipeline: `Chunk`, `Mention`, `EntityLink`, `Shelf`, `Theme`, `Card`, `Entity`.
+  pipeline: `Chunk` (and its `ChunkProvenance` view), `Mention`, `EntityLink`,
+  `Shelf`, `Theme`, `Card`, `Entity`, `Relation`.
 - **[Graph view](graph-view.md)** — `fs.graph`, the fluent read/write surface and its
   navigation handles.
 - **[Ontology](ontology.md)** — `fs.ontology`, the FoodOn lookup API.

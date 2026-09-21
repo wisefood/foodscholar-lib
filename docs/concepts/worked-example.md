@@ -23,6 +23,42 @@ embedding it (BioLORD) and taking its nearest ontology term (cosine ≥ `nel_min
 The chunk is also embedded once with BGE-base (768-d) for retrieval and Layer B Pass 1.
 See [Annotation](annotation.md).
 
+Because `tb_0421` is a **textbook** chunk, its `chunk.provenance` carries only
+`file`, `heading` and `page_number` — no title, no country. A citation renderer has to
+degrade accordingly; a guide chunk would carry nine fields. See
+[Corpus input](corpus-input.md).
+
+## 1b. Layer 0 — what the chunk *asserts* (opt-in)
+
+Annotation records what the chunk **mentions**. Layer 0 records what it **says about**
+those mentions. The extractor pulls entity surfaces and then relations between them,
+constrained to that entity list:
+
+| subject | predicate | object |
+|---|---|---|
+| `milk` | `provides` | `calcium` |
+| `lactose` | `aids` | `calcium absorption` |
+| `fortified milk` | `is a source of` | `vitamin D` |
+
+Then every endpoint goes through the **same linker** as step 1, so the relation joins
+the same entity universe as the rest of the graph:
+
+| surface | → id | linked? |
+|---|---|---|
+| `milk` | `FOODON:03310029` | yes |
+| `calcium` | `CHEBI:…` | yes |
+| `calcium absorption` | `NIL:calcium-absorption` | **no** — a physiological process; FoodOn has no term for it |
+
+The `NIL:` endpoint is **kept**, flagged `object_linked=False`. Dropping it would
+delete the `lactose --aids--> calcium absorption` claim entirely — and for a
+nutrition corpus, most biomarkers, hormones and processes look like this. The
+frequent NIL ids are the phase's best diagnostic: they name what the ontology lacks.
+
+Each relation keeps its provenance, `chunk_ids=("tb_0421",)`, and its id is
+content-addressed so a re-run over an unchanged corpus rewrites the same record.
+Reach it with `fs.relations.for_chunks(["tb_0421"])`. See
+[Layer 0](layer-0-relations.md).
+
 ## 2. Layer A — which shelves it lands on
 
 The linked id `cow milk` is walked **up** the real FoodOn is-a chain. Each class on the

@@ -43,7 +43,15 @@ need their packages installed:
 ```python
 fs.viz.backbone(facet="foods").render("cytoscape", output="backbone.html")
 fs.viz.entity_neighborhood("FOODON:03309927").render("pyvis", output="olive.html")
+fs.viz.relation_neighborhood("FOODON:03309927", hops=2).render("pyvis", output="rel.html")
 ```
+
+`entity_neighborhood` and `relation_neighborhood` answer different questions about
+the same anchor: the first shows **co-mention** (chunks and the entities that share
+them), the second shows the **typed edges** Layer 0 extracted, with the predicate on
+each edge (`VizEdge.kind`) and `chunk_count` as its weight, so better-supported
+relations render thicker. `grounded_only=True` hides edges with a `NIL:` endpoint
+when ontology gaps would otherwise dominate the picture.
 
 Each `render(backend, output=...)` returns the HTML string when `output` is omitted, or
 writes the file and returns its path otherwise.

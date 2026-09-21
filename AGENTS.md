@@ -110,6 +110,23 @@ runs over all forms; `extra="forbid"` (a typo'd key raises). Only `corpus` is re
 - **GLiNER2 (`annotate.ner: "gliner2"`) is opt-in, not better by default.** It trades
   ~12% recall for ~40% precision (~28% fewer mentions), and Layer A support counts key
   off mention volume. Measure downstream before flipping.
+- **`foodscholar.relations.persist` is a function, not the module.** The package
+  re-exports the `persist()` function, so `from foodscholar.relations import persist`
+  gives you the callable and `persist.persist` fails. Import the module path
+  explicitly: `from foodscholar.relations.persist import persist`. Same shape for
+  `build` (`relations.builder.build`).
+- **`build_relations` needs the linker before the LLM.** `fs.linker` → `fs.ontology`
+  → `ontology.foodon_path` + the `[annotate]` extra. On `in_memory()` the first error
+  is "no ontology section", not anything about the LLM; for a no-services run,
+  `fs.attach_linker(stub)` + `fs.llm = stub` + `dry_run=True` — see
+  `tests/unit/test_build_relations_e2e.py` for the stubs (they live in
+  `tests/unit/conftest_relations.py`, a plain helper module imported as
+  `tests.unit.conftest_relations`, *not* a pytest conftest).
+- **`mypy` is configured strict but is not the gate** (175 baseline errors in 40
+  files). The modules added in the kggen integration are at zero; keep them there —
+  `mypy src/foodscholar/relations src/foodscholar/corpus src/foodscholar/io/relation.py`.
+- **`fs.viz.relation_neighborhood` is empty until `build_relations` has run**, and
+  `fs.relations` is a `_RelationView` (records, not handles — unlike `fs.graph`).
 - **`research/`** holds the archived Layer A method bake-off — provenance, not shipped, not
   in the main test gate (it imports as `bakeoff`, with its own `conftest.py`).
 

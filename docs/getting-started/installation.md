@@ -25,17 +25,27 @@ The core install is light. Heavier capabilities are opt-in via
 |---|---|---|
 | `dev` | pytest, ruff, mypy, … | development & tests |
 | `ontology` | pronto | loading FoodOn from OWL |
-| `llm` | anthropic, openai, groq, google-genai, ollama | the LLM linker tier & Layer C cards |
-| `elastic` | elasticsearch | the Elasticsearch chunk store |
+| `annotate` | torch, transformers, gliner, gliner2, hnswlib, … | live NER + the dense HNSW linker (also needed by `build_relations`) |
+| `llm` | anthropic, openai, groq, google-genai, ollama | Layer C cards, Layer 0 extraction, theme labels |
+| `relations` | semhash, inflect | Layer 0 dedup (semantic + plural collapsing) |
+| `chunking` | docling, docling-core, nltk | `fs.chunk_documents` / `chunk-corpus` — PDFs → corpus CSVs |
+| `elastic` | elasticsearch | the Elasticsearch chunk / entity / relation stores |
 | `neo4j` | neo4j | the Neo4j graph store |
 | `clustering` | leidenalg, python-igraph, scikit-learn, … | Layer B community detection |
+| `bertopic` | bertopic | the BERTopic Layer B method |
+| `summarization` | sumy, nltk | Layer C extractive stage |
 | `viz` | pyvis, graphviz, matplotlib | `fs.viz` renderers |
 
 Combine as needed, e.g. a full local stack:
 
 ```bash
-pip install -e '.[dev,ontology,llm,elastic,neo4j,clustering,viz]'
+pip install -e '.[dev,ontology,annotate,llm,elastic,neo4j,clustering,viz]'
+# add relations,chunking for Layer 0 and for producing a corpus from PDFs
 ```
+
+`chunking` is the heavy one — Docling pulls layout models. Every extra is lazily
+imported, so a missing one fails with an `ImportError` naming the extra to install,
+never at import time.
 
 ```{tip}
 Zero extras are required to get started — `FoodScholar.in_memory()` runs entirely

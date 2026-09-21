@@ -24,6 +24,28 @@ A handle exposes the model's fields directly (`shelf.label`, `shelf.chunk_count`
 `.themes()`, `.chunks()`, `.card()`). Reach the raw Pydantic model any time via
 `handle.model`.
 
+### Entities and relations
+
+Two sibling namespaces sit beside `fs.graph`, one per layer of the entity graph.
+They return plain Pydantic records rather than handles:
+
+```python
+fs.entities.get("FOODON:03301710")             # Entity | None
+fs.entities.chunks_for("FOODON:03301710")      # chunks that mention it
+fs.entities.search("olive")                    # BM25-ish over label + synonyms
+
+fs.relations.for_entity("FOODON:03301710")     # Layer 0 edges touching it (both directions)
+fs.relations.for_entity("FOODON:03301710", direction="out")
+fs.relations.for_chunks(["tb_0421"])           # what one passage asserts — one round-trip
+fs.relations.by_predicate("reduces")
+fs.relations.grounded()                        # only edges with both endpoints real ids
+fs.relations.predicates()                      # [(predicate, count), ...] — watch this sprawl
+fs.relations.summary()                         # {"relations", "fully_grounded", ...}
+```
+
+`fs.relations` is empty until `fs.build_relations()` has run — see
+[Layer 0](../concepts/layer-0-relations.md).
+
 ## Writing
 
 The same surface builds the graph by hand — handy in tests and notebooks:

@@ -8,6 +8,17 @@ chunk
   A passage-sized piece of a source document — the atom of the corpus. See
   [Corpus input](corpus-input.md).
 
+Layer 0
+  The relation layer *under* the entity graph: typed, corpus-grounded edges between
+  entities, built by `fs.build_relations()` after `build_entities()`. Independent of
+  Layer A/B/C in both directions, and opt-in. See [Layer 0](layer-0-relations.md).
+
+chunk id strategy
+  How `chunk_documents` assigns `chunk_id`s. `uuid4` (default) reproduces the
+  historical corpus but re-assigns ids on every run, so re-chunking orphans
+  downstream provenance; `content_hash` makes re-chunking an unchanged document
+  idempotent. See [Chunking a corpus](../guides/chunking-a-corpus.md#chunk-ids).
+
 grounding
   Mapping an extracted entity *surface form* onto an ontology id with the
   linker, so relation endpoints join the same entity universe as the rest of

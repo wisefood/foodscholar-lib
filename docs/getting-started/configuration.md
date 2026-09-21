@@ -62,7 +62,9 @@ This is exactly how the notebook sweeps Layer B settings.
 | `storage` | no | the chunk store (Elasticsearch/memory) and graph store (Neo4j/memory) |
 | `llm` | no | provider + fallback chain (omit → built-in mock) |
 | `ontology` | no\* | the FoodOn OWL path + cache (\*required for real annotation/Layer A) |
-| `annotate` | no | NER (GLiNER) + embedder + the entity linker |
+| `annotate` | no | NER (`gliner` \| `gliner2`) + embedder + the entity linker |
+| `chunking` | no | PDFs/text → corpus CSVs: window size, tokenizer, chunk-id strategy |
+| `relations` | no | Layer 0 — opt-in (`enabled: false`); extraction LLM, grounding, dedup, store |
 | `layer_a` | no | shelf projection method + prune/aliasing knobs |
 | `layer_b` | no | theme discovery passes, merge, labeling |
 | `layer_c` | no | card LLM model + grounding/safety |
@@ -145,10 +147,13 @@ ontologies. See [](../concepts/corpus-input.md) for the chunk/NEL input format.
 
 ```yaml
 annotate:
-  ner: gliner                                   # GLiNER-bio NER (the only strategy)
+  ner: gliner                                   # gliner (default) | gliner2
   gliner:
     model_id: urchade/gliner_large_bio-v0.1
     threshold: 0.4
+  # gliner2:                                    # opt-in; see the note below
+  #   model_id: fastino/gliner2-large-v1
+  #   threshold: 0.35
   embedder: BAAI/bge-base-en-v1.5               # 768-d chunk embeddings
   linker:
     nel_backend: hnsw                            # local hnswlib index (or: elastic)
@@ -159,6 +164,59 @@ annotate:
 
 See [](../concepts/annotation.md) for how these pieces fit together. You can skip live
 annotation entirely by supplying pre-computed NEL CSVs at ingest time.
+
+```{note}
+`ner: gliner2` uses a described 27-label set and is **not** the default on purpose:
+it trades recall for precision (~28% fewer mentions per passage), and Layer A shelf
+support counts key off mention volume. Measure downstream with
+`research/ner_nel_bakeoff/` before switching.
+```
+
+## `chunking` — producing the corpus
+
+Only needed if you build the corpus from PDFs yourself
+([guide](../guides/chunking-a-corpus.md)). Defaults reproduce the existing corpus,
+so they are pinned rather than tuned:
+
+```yaml
+chunking:
+  max_tokens: 512
+  overlap: 64                       # a MINIMUM tail — realized overlap is >= 64
+  tokenizer: BAAI/bge-large-en-v1.5 # bge-LARGE, deliberately not the embedder's bge-base
+  use_fast_tokenizer: false         # the corpus was counted with the slow tokenizer
+  device: cpu                       # docling accelerator: cpu | cuda | cuda:1
+  chunk_id_strategy: uuid4          # uuid4 | content_hash — see below
+```
+
+`chunk_id_strategy` is the one to think about. `uuid4` matches the historical
+corpus bit-for-bit but assigns *new* ids on every run, so re-chunking orphans every
+relation, attachment and card citing the old ids. `content_hash` makes re-chunking
+an unchanged document idempotent — **use it for any new corpus**.
+
+## `relations` — Layer 0
+
+Opt-in, because extraction is two LLM calls per chunk:
+
+```yaml
+relations:
+  enabled: true
+  llm:                              # optional override of llm.primary — extraction
+    provider: openai_compatible     # wants a cheap local model; Layer C wants a strong one
+    model: mistral-small-3.2-24b-instruct-2506
+    host: ${GPUSTACK_API_BASE}
+    api_key: ${GPUSTACK_API_KEY}
+  grounding:
+    min_sim: 0.70                   # separate from annotate.linker.nel_min_sim
+    keep_nil: true                  # keep unlinked endpoints as NIL:<slug>
+  dedupe:
+    similarity_threshold: 0.95
+    predicate_threshold: 0.95       # predicates sprawl; PPR treats them as parallel edges
+  store:
+    backend: memory                 # memory | elastic
+```
+
+`build_relations` also needs the **linker**, which needs `ontology` and the
+`[annotate]` extra. See [Layer 0](../concepts/layer-0-relations.md#prerequisites).
 
 ## `layer_a`, `layer_b`, `layer_c` — building the graph
 

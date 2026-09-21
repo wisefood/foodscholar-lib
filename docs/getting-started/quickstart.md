@@ -42,6 +42,7 @@ fs.init()                 # provision the stores (idempotent)
 fs.ingest("data/corpus", nel_dir="data/ner")   # load corpus + annotations
 fs.embed()                # chunk-text embeddings (for Layer B Pass 1 + kNN)
 fs.build_entities()       # dedupe entity links into first-class entities
+fs.build_relations()      # Layer 0 typed relations — opt-in, needs a real LLM + linker
 fs.build_layer_a()        # FoodOn-projected backbone shelves
 fs.attach()               # attach chunks to shelves
 fs.build_layer_b(facet="foods")   # per-shelf theme discovery

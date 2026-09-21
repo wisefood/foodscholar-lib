@@ -137,8 +137,33 @@ fs.relations.predicates()                  # [(predicate, count), ...]
 fs.relations.summary()
 ```
 
-`fs.build_relations(dry_run=True)` extracts and reports without writing — the
-notebook path, and the only way to run against the mock LLM.
+`fs.build_relations(dry_run=True)` extracts, grounds and reports without writing —
+the notebook path, and the only way the mock LLM is allowed near this phase.
+
+### Prerequisites
+
+`build_relations` needs three things, and the error you hit tells you which is
+missing:
+
+| needs | provided by | otherwise |
+|---|---|---|
+| chunks in the chunk store | `fs.ingest(...)` | nothing to extract |
+| an **LLM** | `llm:` in config | refuses with *"needs a real LLM"* (the mock's output is meaningless); `dry_run=True` overrides |
+| the **linker** (for grounding) | `ontology.foodon_path` + the `[annotate]` extra — or `fs.attach_linker(...)` | *"no ontology section in config"* |
+
+So on a bare `FoodScholar.in_memory()` the first thing you hit is the **ontology**,
+not the LLM. For a no-services smoke test, attach stubs — this is exactly what the
+end-to-end unit test does:
+
+```python
+fs = FoodScholar.in_memory()
+fs.attach_linker(my_stub_linker)   # anything implementing `Linker`
+fs.llm = my_stub_llm               # anything implementing `LLMClient`
+fs.build_relations(dry_run=True)
+```
+
+The first real run also pays for building the HNSW index over FoodOn (minutes);
+later runs load it from the cached `nel_index_path`.
 
 Re-runs skip chunks already covered: **the store is the resume log**, so an
 interrupted corpus run continues where it stopped. `force=True` re-extracts
