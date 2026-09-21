@@ -72,7 +72,7 @@ all = [
     "graphviz>=0.20",
     "matplotlib>=3.7",
 ]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pytest-asyncio", "pronto", "hatch", "twine"]
 
 [project.urls]
 Homepage = "https://github.com/wisefood/foodscholar-lib"
@@ -86,12 +86,15 @@ foodscholar = "foodscholar.cli.main:app"
 packages = ["src/foodscholar"]
 
 [tool.hatch.build.targets.sdist]
+# Patterns use gitignore semantics: a bare "README.md" matches at ANY depth, which
+# pulled kggen/**/README.md (and research/, scripts/) into the sdist. A leading "/"
+# anchors each to the project root.
 include = [
     "src/foodscholar",
-    "README.md",
-    "LICENSE",
-    "config.example.yaml",
-    "pyproject.toml",
+    "/README.md",
+    "/LICENSE",
+    "/config.example.yaml",
+    "/pyproject.toml",
 ]
 
 [tool.pytest.ini_options]
