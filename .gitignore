@@ -227,3 +227,11 @@ __marimo__/
 
 # Notebook-generated artifacts (BERTopic viz, etc.)
 notebooks/out/
+
+# kggen/ is committed as provenance of the colleague-authored pipeline.
+# Keep its generated artifacts and local caches out.
+kggen/**/__pycache__/
+kggen/**/*.pyc
+kggen/**/.cache/
+kggen/**/.triage_cache.json
+kggen/graph_code/data/
