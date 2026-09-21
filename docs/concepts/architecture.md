@@ -121,22 +121,29 @@ pipeline (and the test suite) runs with zero services. See
 Tracing *"Is olive oil good for cardiovascular disease?"* shows why the structure
 earns its keep:
 
-1. **Hybrid retrieval (Elasticsearch).** BM25 over `text` + kNN over `embedding`
-   (query vector = `BGE_base("olive oil cardiovascular")`), fused by reciprocal
-   rank, filtered to `shelf_ids ∋ olive_oil` (optionally also a health shelf).
-   Returns the top-k chunks.
-2. **Theme expansion (Neo4j → Elasticsearch).** Take those chunks' `theme_ids`;
-   for each theme, pull sibling chunks via the `THEME_OF` edge. This adds
-   *complementary* evidence — Mediterranean-diet passages, MUFA biochemistry —
-   that pure kNN missed because the **phrasing** differed.
-3. **Re-rank & present.** Combine retrieval score, theme-membership weight, and
-   (from Layer C) evidence quality. The output is a small set of chunks with full
-   provenance — source doc, section, FoodOn IDs, theme labels — ready for an LLM to
-   ground an answer on.
+1. **Candidate generation (Elasticsearch).** kNN over `embedding`
+   (query vector = `BGE_base("olive oil cardiovascular")`) returns
+   `retrieval.candidate_k` chunks. This is the only branch that touches the whole
+   corpus; the other two re-rank what it returns.
+2. **What the passages assert (Layer 0).** Pull the triples extracted from those
+   chunks and score each chunk by the mean similarity of its triples to the query.
+   A passage that *states* `olive oil --reduces--> LDL cholesterol` scores here even
+   if its wording is nothing like the question.
+3. **Where they sit in the graph (Personalized PageRank).** Seed PageRank at the
+   entities nearest the query, walk the relation graph, and propagate the mass back
+   onto the passages that evidence those entities. This is what surfaces
+   Mediterranean-diet passages and MUFA biochemistry — reached through the graph,
+   not through phrasing.
 
-Pure kNN returns near-duplicates; pure BM25 misses paraphrase; filtering by shelf
-gives scope; hopping by theme gives complementary evidence. The provenance trail
-**chunk → shelf → theme → source doc** is what makes a downstream answer auditable.
+The three are min-max normalized and summed at 0.3 / 0.3 / 0.4. The output is a small
+set of chunks with full provenance — source doc, section, FoodOn IDs — plus the branch
+scores that ranked them, ready for a caller to ground an answer on. The library stops
+there; see [Retrieval](retrieval.md).
+
+Pure kNN returns near-duplicates and misses paraphrase; the graph branches are what fix
+that, and they need Layer 0 — without it, retrieval falls back to branch 1 alone. The
+provenance trail **chunk → shelf → theme → source doc** is what makes a downstream
+answer auditable.
 
 ## Design lessons baked into the pipeline
 

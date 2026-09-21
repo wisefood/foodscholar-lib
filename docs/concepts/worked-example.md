@@ -115,20 +115,29 @@ in member chunks — including ours:
 
 See [Layer C](layer-c-cards.md).
 
-## 5. Retrieval — answering a query
+## 5. Retrieval — ranking the evidence
 
-Now a user asks *"Is dairy a good source of calcium?"*:
+Now a user asks *"Is dairy a good source of calcium?"*. `fs.retrieve()` scores every
+candidate on three branches and sums them at 0.3 / 0.3 / 0.4:
 
-1. **Hybrid search (Elasticsearch):** BM25 + kNN over the query, fused by RRF, filtered to
-   `shelf_ids ∋ mammalian milk product`. `tb_0421` ranks high.
-2. **Theme expansion (Neo4j → ES):** follow `tb_0421`'s `theme_ids` to the
-   *milk calcium lactose* theme and pull its sibling chunks — adding complementary
-   evidence (absorption studies, fortification) that worded things differently.
-3. **Present:** the chunks, plus the shelf's Layer C card, with full provenance
-   `chunk → shelf → theme → source doc`.
+1. **Text (0.3):** kNN over the query embedding returns the candidate pool. `tb_0421`
+   ranks high — its wording is close to the question.
+2. **Triples (0.3):** the Layer 0 relations extracted from each candidate, scored by
+   mean similarity to the query. `tb_0421` asserts
+   `milk --source_of--> calcium`, so it scores here too.
+3. **PageRank (0.4):** seeded at the entities nearest the query and walked over the
+   relation graph, then propagated back onto passages. This is what surfaces the
+   absorption and fortification passages that worded things differently — reached
+   through the graph, not through phrasing.
 
-That provenance trail is the whole point: the answer can cite exactly where every claim
-came from. See [Architecture](architecture.md) for the two-store machinery underneath.
+The result is a ranked list of chunks, each carrying its branch scores and full
+provenance `chunk → source doc`.
+
+**The library stops here.** It returns evidence, not prose: formulating an answer
+belongs to the service asking the question. That provenance trail is the point — whoever
+writes the answer can cite exactly where every claim came from. See
+[Retrieval](retrieval.md) for the scoring in full and [Architecture](architecture.md)
+for the two-store machinery underneath.
 ```{note}
 Steps 1–3 use the values shown above verbatim from a real `foods` build; the chunk text
 and the card are representative (Layer C wasn't built in this snapshot), but the shelf,

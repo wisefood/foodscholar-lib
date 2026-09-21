@@ -63,14 +63,20 @@ fs.graph.add_theme(theme_id="t-olive", label="Olive oil", shelf_ids=["s-med"],
 keeps the Elasticsearch denormalization (`shelf_ids` / `theme_ids`) in lockstep with the
 Neo4j edges automatically.
 
-## Retrieval
+## Scoped chunk search
 
 ```python
-fs.graph.search("olive oil", shelf="s-med", k=5)   # hybrid BM25 + kNN, shelf-filtered
+fs.graph.search("olive oil", shelf="s-med", k=5)   # BM25 + kNN, shelf-filtered
 ```
 
-This is the retrieval path from [](../concepts/architecture.md): hybrid search over
-Elasticsearch, optionally scoped to a shelf or theme.
+This is chunk-store search — BM25 and kNN over Elasticsearch, optionally scoped to one
+shelf or theme. It is the tool for *exploring* a branch of the graph, and it is **not**
+`fs.retrieve()`: it does not read Layer 0, so it has no triple-similarity or PageRank
+branch, and it takes no advantage of the entity graph.
+
+Reach for `fs.graph.search()` when you want to look inside a known shelf, and for
+[`fs.retrieve()`](../concepts/retrieval.md) when you have a question and want the best
+evidence across the corpus.
 
 ```{tip}
 Everything here works identically on the in-memory backend, so you can prototype graph
