@@ -215,15 +215,45 @@ def build_all(config: Path = ConfigOption) -> None:
 def query(
     text: str = typer.Argument(..., help="Free-text question to ask the graph."),
     config: Path = ConfigOption,
+    k: int = typer.Option(5, "--top-k", "-k", help="Passages to return."),
 ) -> None:
-    """Interactive retrieval against the built graph."""
+    """Retrieve passages for a question — ranked evidence, not an answer.
+
+    The library retrieves and stops there; formulating an answer is the
+    consuming QA pipeline's job. Each row carries the three branch scores so a
+    ranking can be inspected rather than taken on trust.
+    """
+    import json
+
     fs = _build(config)
-    try:
-        answer = fs.query(text)
-    except NotImplementedError as e:
-        typer.echo(f"[foodscholar] {e}", err=True)
-        raise typer.Exit(code=1) from None
-    typer.echo(answer.model_dump_json(indent=2))
+    hits, trace = fs.retrieve(text, k=k)
+    if trace.degraded:
+        typer.echo(f"[foodscholar] degraded: {'; '.join(trace.degraded)}", err=True)
+    typer.echo(
+        json.dumps(
+            {
+                "query": text,
+                "trace": {
+                    "candidates": trace.candidates,
+                    "relations": trace.relations,
+                    "subgraph_nodes": trace.subgraph_nodes,
+                    "branches": trace.branches_used,
+                },
+                "hits": [
+                    {
+                        "chunk_id": h.chunk_id,
+                        "score": round(h.score, 4),
+                        "text_sim": round(h.text_sim, 4),
+                        "triplet_sim": round(h.triplet_sim, 4),
+                        "ppr_score": round(h.ppr_score, 4),
+                        "text": h.text[:300],
+                    }
+                    for h in hits
+                ],
+            },
+            indent=2,
+        )
+    )
 
 
 @app.command()

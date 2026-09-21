@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from foodscholar.io.chunk import SourceType
 from foodscholar.io.graph import Facet
@@ -1019,6 +1019,95 @@ class RelationsConfig(BaseModel):
     store: RelationStoreConfig = Field(default_factory=RelationStoreConfig)
 
 
+class RetrievalConfig(BaseModel):
+    """Hybrid passage retrieval over Layer 0 — the Extended KG-Gen scoring.
+
+    Three branches are scored independently, min-max normalized, then summed
+    by the weights below::
+
+        w_text    cosine(query, chunk embedding)
+        w_triplet mean cosine(query, the triples extracted from that chunk)
+        w_ppr     Personalized PageRank over the entity graph, seeded at the
+                  entities nearest the query, propagated back onto chunks
+
+    The branches read `ChunkStore`, `RelationStore` and the entity endpoints
+    of those relations respectively, so the retriever works on any backend
+    combination the storage config produces — there is no separate on-disk
+    graph artifact to keep in sync.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    top_k: int = 5
+    """Passages returned to the caller."""
+
+    candidate_k: int = 100
+    """Chunks pulled by the text branch and scored by the other two. The
+    triplet and PPR branches only ever see this pool, so it bounds every
+    store round-trip after the first — but a chunk outside it cannot be
+    retrieved however well it scores on the graph. Raise it before raising
+    `subgraph_depth` if recall is the problem."""
+
+    w_text: float = 0.3
+    w_triplet: float = 0.3
+    w_ppr: float = 0.4
+
+    seed_entities: int = 10
+    """Entities that seed the PPR personalization vector, chosen by cosine to
+    the query over their surface forms."""
+
+    subgraph_depth: int = 1
+    """Hops expanded out from the seed entities via `RelationStore.for_entity`.
+    Each hop costs one store call per frontier entity, so this is deliberately
+    not the reference implementation's 5: the reference walked an in-memory
+    GraphML, this walks a store."""
+
+    expand_k: int = 50
+    """Relations pulled per entity during subgraph expansion."""
+
+    max_expansion_calls: int = 50
+    """Hard ceiling on `RelationStore.for_entity` calls per query.
+
+    Without it `subgraph_depth > 1` is a live hazard: hop 2's frontier is up
+    to `seed_entities * expand_k * 2` entities, so a depth of 2 on the
+    defaults would issue a thousand store calls for one question. The walk
+    stops at this many calls and scores the subgraph it has, which degrades
+    the PPR branch rather than the request."""
+
+    max_relations: int = 500
+    """Cap on the triples embedded for the triplet branch, best-supported
+    first (`for_chunks` returns them sorted by chunk and mention count).
+
+    A candidate pool of 100 chunks can carry a few thousand triples, and
+    embedding all of them is the slowest thing in the query. The tail of that
+    list is single-mention noise that moves no ranking."""
+
+    embed_cache_size: int = 50_000
+    """Entries in the process-local LRU over triple and entity-label
+    embeddings. The corpus's relations are a fixed set, so the same triples
+    recur across queries: this turns the embedding step from the dominant
+    per-query cost into a near-free lookup once a replica is warm. Set to 0
+    to disable."""
+
+    ppr_alpha: float = 0.85
+    ppr_max_iter: int = 100
+
+    graph_connected_only: bool = False
+    """The reference scored only passages appearing in at least one triple.
+    Off here: a corpus whose Layer 0 pass is partial would otherwise silently
+    retrieve nothing, and the text branch alone is still a usable ranking."""
+
+    @model_validator(mode="after")
+    def _weights_sum_to_one(self) -> RetrievalConfig:
+        total = self.w_text + self.w_triplet + self.w_ppr
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(
+                f"retrieval weights must sum to 1.0 (got {total}: "
+                f"text={self.w_text}, triplet={self.w_triplet}, ppr={self.w_ppr})"
+            )
+        return self
+
+
 class FoodScholarConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     corpus: CorpusConfig
@@ -1031,6 +1120,7 @@ class FoodScholarConfig(BaseModel):
     llm: LLMConfig | None = None  # None → facade uses the built-in mock LLM
     chunking: ChunkerConfig = Field(default_factory=ChunkerConfig)
     relations: RelationsConfig = Field(default_factory=RelationsConfig)
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
 
 
 def _substitute_env(value: Any) -> Any:

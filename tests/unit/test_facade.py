@@ -117,10 +117,17 @@ def test_build_layer_c_runs_on_empty_stores() -> None:
     assert report.n_cards == 0
 
 
-def test_query_raises_until_retrieval_lands() -> None:
+def test_retrieval_is_the_only_query_surface() -> None:
+    """The library retrieves; answer synthesis belongs to the caller.
+
+    `fs.query()` was a planned answer-formulation phase and is gone: the one
+    consumer has its own answering stack, so a second one here would fork it.
+    """
     fs = FoodScholar.in_memory()
-    with pytest.raises(NotImplementedError, match="'query'"):
-        fs.query("anything")
+    assert not hasattr(fs, "query")
+    hits, trace = fs.retrieve("anything")
+    assert hits == []
+    assert trace.candidates == 0
 
 
 def test_init_in_memory_is_noop() -> None:

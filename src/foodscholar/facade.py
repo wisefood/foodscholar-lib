@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from foodscholar.io.graph import Card
     from foodscholar.layer_a.semantic_consolidation import ConsolidationArtifact
     from foodscholar.ontology import FoodOnAPI
-    from foodscholar.retrieval import Answer
+    from foodscholar.retrieval import RetrievalHit, RetrievalTrace
 
 ConfigSource = str | Path | dict[str, Any] | FoodScholarConfig
 
@@ -1384,8 +1384,35 @@ class FoodScholar:
         self.build_layer_b()
         self.build_layer_c()
 
-    def query(self, text: str) -> Answer:
-        raise _deferred("query")
+    def retrieve(
+        self,
+        text: str,
+        *,
+        k: int | None = None,
+    ) -> tuple[list[RetrievalHit], RetrievalTrace]:
+        """Rank passages for `text` with Extended KG-Gen hybrid retrieval.
+
+        This is the library's retrieval contract, and the whole of it. It
+        returns ranked chunks with the branch scores that ranked them, and
+        formulates nothing: prompting, citation, safety and answer synthesis
+        belong to the caller's QA pipeline, which owns the model, the prompt
+        registry and the editorial rules the library has no view of.
+
+        Reads `chunk_store`, `relation_store` and the embedder. Layer A/B/C
+        are not consulted: retrieval runs on Layer 0, so it works on a corpus
+        that has been ingested, embedded and had `build_relations()` run,
+        without waiting for the shelf/theme build.
+        """
+        from foodscholar.retrieval.kggen import KGGenRetriever
+
+        retriever = KGGenRetriever(
+            chunk_store=self.chunk_store,
+            relation_store=self.relation_store,
+            embedder=self.embedder,
+            config=self.config.retrieval,
+        )
+        return retriever.retrieve(text, k=k)
+
 
     # ------------------------------------------------------------------ helpers
 

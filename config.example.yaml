@@ -284,3 +284,53 @@ relations:
     # can be iterated on against an Elastic deployment without writing.
     backend: memory
     es_index: foodscholar_relations
+
+# ---------------------------------------------------------------------------
+# Retrieval — Extended KG-Gen hybrid passage scoring (fs.retrieve()).
+#
+# Reads the stores, not a graph file: the text branch uses the chunk store's
+# kNN, the other two use the relation store. Nothing here needs an artifact
+# mounted alongside the service, and a graph rebuild is live immediately.
+#
+# Requires Layer 0: run fs.build_relations() (relations.enabled: true) or the
+# triplet and PPR branches stay silent and retrieval degrades to plain kNN.
+# ---------------------------------------------------------------------------
+retrieval:
+  top_k: 5
+  # Chunks pulled by the text branch and re-ranked by the other two. A chunk
+  # outside this pool cannot be retrieved however well it scores on the graph,
+  # so raise this before raising subgraph_depth if recall is the problem.
+  candidate_k: 100
+
+  # Must sum to 1.0 — the loader refuses the config otherwise. These are the
+  # weights the reference implementation was benchmarked at.
+  w_text: 0.3
+  w_triplet: 0.3
+  w_ppr: 0.4
+
+  # PPR seeds: the entities of the candidate pool nearest the query.
+  seed_entities: 10
+  # Hops out from those seeds. One store call per frontier entity per hop, so
+  # this is 1 and not the reference's 5 — the reference walked an in-memory
+  # graph where a hop was free.
+  subgraph_depth: 1
+  expand_k: 50
+  # The ceiling that makes a deeper walk safe to configure: hop 2's frontier
+  # is up to seed_entities * expand_k * 2 entities. The walk stops here and
+  # scores what it has.
+  max_expansion_calls: 50
+  ppr_alpha: 0.85
+  ppr_max_iter: 100
+
+  # Triples embedded per query, best-supported first. Embedding is the slowest
+  # step and the tail of that list is single-mention noise.
+  max_relations: 500
+  # Process-local LRU over triple and entity-label embeddings. The corpus's
+  # relations are a fixed set, so a warm replica encodes almost nothing per
+  # query. 0 disables it.
+  embed_cache_size: 50000
+
+  # The reference scored only passages appearing in at least one triple. Off
+  # here: a corpus with a partial Layer 0 pass would otherwise retrieve
+  # nothing, and the text branch alone is still a usable ranking.
+  graph_connected_only: false

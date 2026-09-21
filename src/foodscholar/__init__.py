@@ -2,7 +2,7 @@
 
 __version__ = "0.1.0"
 
-from foodscholar.config import FoodScholarConfig, load_config
+from foodscholar.config import FoodScholarConfig, RetrievalConfig, load_config
 from foodscholar.facade import FoodScholar
 from foodscholar.graph_view import CardHandle, GraphView, ShelfHandle, ThemeHandle
 from foodscholar.io import (
@@ -17,6 +17,7 @@ from foodscholar.io import (
 )
 from foodscholar.llm import FallbackLLMClient, build_llm
 from foodscholar.ontology import FoodOnAPI, load_ontology
+from foodscholar.retrieval import KGGenRetriever, RetrievalHit, RetrievalTrace
 from foodscholar.storage import (
     ChunkStore,
     Embedder,
@@ -43,9 +44,13 @@ __all__ = [
     "GraphView",
     "InMemoryChunkStore",
     "InMemoryGraphStore",
+    "KGGenRetriever",
     "LLMClient",
     "Mention",
     "OntologyTerm",
+    "RetrievalConfig",
+    "RetrievalHit",
+    "RetrievalTrace",
     "Shelf",
     "ShelfHandle",
     "Theme",
