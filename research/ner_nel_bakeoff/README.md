@@ -83,6 +83,11 @@ Flip a default only in a follow-up commit citing these numbers. **If a switch
 wins upstream and loses downstream, it ships as an option and the default
 stands.** That is a result, not a failure.
 
+> **Note:** `kggen/` is no longer tracked in Git — it is a fork of an external
+> project whose licence is not reproduced, so it is kept locally rather than
+> redistributed. Paths below refer to that local reference snapshot; ask the
+> WiseFood team if you need it.
+
 ## Provenance
 
 The original notebooks live in `kggen/graph_code/ner-nel/`:

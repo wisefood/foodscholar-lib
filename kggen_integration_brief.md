@@ -8,6 +8,11 @@
 
 ---
 
+> **Note:** `kggen/` is no longer tracked in Git — it is a fork of an external
+> project whose licence is not reproduced, so it is kept locally rather than
+> redistributed. Paths below refer to that local reference snapshot; ask the
+> WiseFood team if you need it.
+
 ## 0. Ground truth and conventions
 
 `AGENTS.md` is authoritative for environment, naming, and the test gate. This brief specifies construction only.

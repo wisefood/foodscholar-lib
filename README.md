@@ -126,5 +126,4 @@ notebooks/graph_build.ipynb   # phase-by-phase build + interactive tree
 docs/                         # Sphinx docs (published on Read the Docs)
 research/                     # archived method bake-offs (not shipped)
 scripts/corpus/               # corpus-prep tools that run upstream of the library
-kggen/                        # provenance: the source pipeline this integrates
 ```

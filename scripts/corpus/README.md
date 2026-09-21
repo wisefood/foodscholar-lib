@@ -3,6 +3,11 @@
 Tools that run **upstream of the library**, producing the inputs `fs.ingest()`
 reads. They are not part of the package.
 
+> **Note:** `kggen/` is no longer tracked in Git — it is a fork of an external
+> project whose licence is not reproduced, so it is kept locally rather than
+> redistributed. Paths below refer to that local reference snapshot; ask the
+> WiseFood team if you need it.
+
 ## Superseded by the library
 
 The guides and textbooks chunking notebooks

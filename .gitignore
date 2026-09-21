@@ -235,3 +235,8 @@ kggen/**/*.pyc
 kggen/**/.cache/
 kggen/**/.triage_cache.json
 kggen/graph_code/data/
+
+# Vendored reference pipeline (a fork of the external KGGen project, whose
+# licence is not reproduced here). Kept locally for provenance; not tracked and
+# not redistributed. See docs/concepts/kggen-provenance.md.
+kggen/

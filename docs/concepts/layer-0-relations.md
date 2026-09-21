@@ -202,7 +202,7 @@ pair count as parallel edges, so under-merging them biases ranking.
 ## Provenance
 
 Layer 0 is adapted from the **kggen** pipeline developed by WiseFood colleagues
-(`kggen/graph_code` in the repository): the extraction prompts are theirs
+(not distributed with FoodScholar): the extraction prompts are theirs
 verbatim, the extraction steps and the provenance-preserving dedup are ports,
 and the passage-per-triple idea is the reason the layer exists. The grounding
 step is FoodScholar's addition — it is what binds kggen's free-text entities to

@@ -7,11 +7,35 @@ over the same nutrition corpus: an extension of KGGen that keeps the passage
 each triple came from, a hybrid retriever over that graph, an NER/NEL benchmark,
 and the Docling chunking that produced the corpus in the first place.
 
-The original is vendored, unmodified apart from credential removal, at
-`kggen/graph_code` in the repository. It is a reference snapshot: nothing
-imports from it and it is not on the package path. Its own `README.md` and the
-six sub-READMEs describe it on its own terms, and are the right place to start
-if you want to see the source rather than the port.
+## Two things are called "kggen"
+
+The name is overloaded, and the distinction matters for licensing:
+
+- **KGGen** — an external, third-party project for LLM knowledge-graph
+  extraction.
+- **`kggen_extended`** — WiseFood's *fork* of that project, adding
+  passage-level provenance to every triple.
+- **The WiseFood pipeline** — the surrounding chunking, benchmark and
+  retrieval code written by WiseFood colleagues, which uses the fork.
+
+When these docs say "the kggen pipeline" they mean the third: WiseFood's own
+code. Where a specific piece descends from the external project's fork, the
+table below says so.
+
+## Where the original lives
+
+The source pipeline is **not distributed with FoodScholar**. It is not in the
+Git repository, not in the sdist, and not in the wheel — it is kept locally by
+the team as a reference snapshot, and nothing in the package imports from it.
+
+That is deliberate. `kggen_extended` is a fork of an external project whose
+licence text is not reproduced alongside it, so redistributing it inside an
+Apache-2.0 package would put FoodScholar in an unclear position. FoodScholar
+ships its own re-implementation (Apache-2.0, like the rest of the library);
+the fork stays upstream with its authors.
+
+If you need the original, ask the WiseFood team, and observe the external
+project's own licence for anything derived from `kggen_extended`.
 
 ## What FoodScholar took
 
@@ -61,8 +85,22 @@ the defaults.
 - `utils/llm_deduplicate.py` — deferred in favour of reusing
   `layer_a/semantic_consolidation/`.
 
-## Crediting
+## Crediting and licence
+
+FoodScholar's implementation is Apache-2.0, like the rest of the library. It is
+an independent re-implementation, not a redistribution: the external project's
+code is not included in this package.
+
+Two pieces are **copied verbatim** rather than rewritten, and are the WiseFood
+team's work — the two extraction prompts (`relations/prompts/*.txt`) and the
+27-label GLiNER2 label set in `GLiner2Config`. Both are benchmarked artifacts;
+they are treated as fixtures, and editing them invalidates the published
+numbers.
 
 If you build on Layer 0, the chunker or the GLiNER2 configuration, credit the
-kggen pipeline alongside FoodScholar. The vendored tree at `kggen/graph_code`
-is the citable form; the port's module docstrings name their source file.
+WiseFood kggen pipeline alongside FoodScholar. Anything you derive from the
+`kggen_extended` fork is additionally subject to the **external KGGen
+project's own licence** — check it with the WiseFood team before
+redistributing.
+
+Each ported module's docstring names the source file it came from.

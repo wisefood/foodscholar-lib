@@ -6,7 +6,7 @@ reader with its ingest-time validation. The task guide is
 [Chunking a corpus](../guides/chunking-a-corpus.md).
 
 The window and the PDF producer are a port of the kggen Docling notebooks
-(`kggen/graph_code/chunking` in the repository) — see the
+(not distributed with FoodScholar) — see the
 [provenance page](../concepts/kggen-provenance.md).
 
 ## The window

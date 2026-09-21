@@ -183,7 +183,7 @@ the fast and slow variants can disagree by a token. Keep both pinned.
 ## Provenance
 
 The window and the PDF pipeline are a port of the Docling chunking notebooks in
-the **kggen** pipeline (`kggen/graph_code/chunking` in the repository), which
+the **kggen** pipeline (not distributed with FoodScholar), which
 produced the existing corpus. The parameters above are pinned to theirs so new
 chunks stay comparable with stored ones; the two behaviours flagged as
 warnings — whole-chunk page exclusion and first-page-only `page_number` — are

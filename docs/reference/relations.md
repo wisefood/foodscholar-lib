@@ -6,7 +6,7 @@ The Layer 0 pipeline — extract, dedupe, ground, aggregate, persist — behind
 [Layer 0 page](../concepts/layer-0-relations.md).
 
 Most of this package is a port of the **kggen** pipeline
-(`kggen/graph_code/kggen_extended` in the repository), moved onto FoodScholar's
+(the WiseFood pipeline), moved onto FoodScholar's
 `LLMClient`, linker and stores. Each module's docstring says what came from
 kggen and what changed; the summary is on the
 [provenance page](../concepts/kggen-provenance.md).

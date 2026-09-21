@@ -4,7 +4,7 @@ The NER backends, the dense linker and the batched runner behind
 `fs.annotate()`. Concepts are on the [Annotation page](../concepts/annotation.md).
 
 Two NER backends ship. `gliner2` and its described label set come from the
-kggen NER/NEL benchmark (`kggen/graph_code/ner-nel` in the repository); it is
+kggen NER/NEL benchmark (see the provenance page); it is
 an option rather than the default, for the reasons on the
 [provenance page](../concepts/kggen-provenance.md#what-was-not-adopted-as-a-default).
 
