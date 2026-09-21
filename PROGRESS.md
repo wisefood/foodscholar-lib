@@ -6,6 +6,51 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-09-18 — Iteration 11: kggen integration (Layer 0 relations, chunking, GLiNER2)
+
+**Goal:** fold a colleague-authored pipeline (`kggen/graph_code`) into the library rather than letting it live alongside it — closing two real gaps (no relation concept, no chunker) without creating a second entity universe.
+
+### What landed
+
+**Layer 0 — typed relations.** `io/relation.py` defines `Relation`: one record per `(subject_id, predicate, object_id)` carrying the surfaces that collapsed into it and the chunks it came from. `RelationStore` joins the storage protocols with memory / Elastic / Neo4j adapters, and `(:Entity)-[:RELATED {predicate}]->(:Entity)` lands in the graph store. `fs.build_relations()` runs extract → dedupe → ground → aggregate → persist; `fs.relations` is the read surface. Layer 0 sits **under** the entity graph — it depends on nothing above `build_entities()`, and Layer A/B/C are untouched.
+
+**Grounding is the join.** kggen's extractor emits free-text entity strings; foodscholar's entities are ontology ids. Every triple endpoint now goes through the *existing* `HNSWLinker`, so a relation connects the same `Entity` records Layer A projects and Layer B clusters. Endpoints that miss the threshold are kept as `NIL:<slug>` with a `*_linked` flag rather than dropped — discarding them would delete every relation touching a concept FoodOn lacks, which for a nutrition corpus is most biomarkers and hormones. The frequent NIL ids are the phase's best diagnostic: they name the ontology's gaps.
+
+**The extractor runs on `LLMClient`.** Ported kggen's two dspy/litellm steps onto `generate_json`, which keeps dspy and litellm out of the dependency set and buys provider fallback and `${ENV}` config. The relation schema constrains subject/object to an **enum of the step-1 entities** — this is load-bearing, and there is a post-filter behind it for providers that ignore the enum. Added `OpenAICompatibleClient` so any OpenAI-protocol endpoint (vLLM, GPUStack) is reachable via the existing `host` field; it reads `OPENAI_COMPATIBLE_API_KEY`, never `OPENAI_API_KEY`, so a local endpoint cannot silently bill a real account.
+
+**The library can rebuild its own corpus.** There was no chunker anywhere in the repo — `ingest` read CSVs a notebook in another repository produced. `corpus/window.py` holds the sliding window, shared by all three source types (the abstracts pipeline turned out to be the *same* algorithm over NLTK sentences, not a different one), and is pure and dependency-free so the whole algorithm tests with a stub tokenizer. `corpus/chunker.py` adds the Docling and text producers, `fs.chunk_documents()` / `fs.chunk_texts()`, and the `chunk-corpus` CLI.
+
+**`chunk_id` is a fresh UUID — now guarded.** Re-chunking a document assigns new ids and orphans every relation, attachment and card citing the old ones. `chunk_documents` refuses to overwrite a populated corpus directory without `force=True`, and `chunk_id_strategy="content_hash"` makes re-chunking idempotent for new corpora. `audit()` gained a critical check that every `Relation.chunk_ids` entry resolves in the chunk store, which is how this failure surfaces after the fact.
+
+**`ChunkProvenance` states the corpus contract.** `source_metadata`'s field names appeared nowhere in `src/` — it was a free dict whose shape lived only in a notebook README. It now has a typed reader-side view (`chunk.provenance`) documenting the three different per-source key sets, normalizing the `DOI`/`doi` split the corpus actually contains, and recording that `page_number` is the chunk's first page rather than its span. `fs.ingest` can now count oversized chunks (warn by default, never raise).
+
+**GLiNER2 ships as an option, not a default.** `EntityType` grew from 13 to 31 members with an alias map folding `disease`→`medical condition` and the case-only variants onto existing members, so GLiNER2's richer vocabulary reaches `Entity.facet_hint` instead of collapsing to `other`; 21 of its 27 labels route to a facet. The defaults did **not** move — see below.
+
+### Why GLiNER2 and SapBERT are not the new defaults
+
+The upstream README presents them as selected production defaults. Reading the saved notebook outputs, the evidence is thinner and the two notebooks disagree: on the single-passage human-scored eval, GLiNER-bio (what we ship) scores highest at F1 0.909; GLiNER2's win is on a cross-dataset benchmark scored against a **GPT-4o-mini proxy**, where it trades 12% recall for 40% precision and yields ~28% fewer mentions per passage. Layer A support counts and the Layer B relatedness graph key off mention volume, so that is not a free upgrade. The SapBERT-vs-BioLORD comparison is mixed on the same entity list (SapBERT links `carrots` to *carrot (quick frozen)*; BioLORD links `HbA1c` to *hemoglobin*), and the selection metric was link rate, which is not accuracy. `research/ner_nel_bakeoff/` holds a harness that measures the downstream effect — shelf counts, themes, faceted entities — which the original benchmark could not see. Flip the defaults from those numbers, not from the README.
+
+### Two defects found by the new tests
+
+1. **`make_relation_id` was separator-injectable.** `("A\x1fp", "x", "B")` and `("A", "p\x1fx", "B")` hashed identically. Fields are now length-prefixed. Predicates are free-text LLM output, so the colliding input is not hypothetical.
+2. **The upstream dedup was nondeterministic across processes.** It iterated a `set` and assigned `items_map[singular] = item` last-write-wins, so the canonical pick depended on `PYTHONHASHSEED` — a failure that passes in-process and fails in CI. The port sorts before normalizing and before handing records to semhash; a regression test runs the dedup in subprocesses under three hash seeds.
+
+### Verification
+
+- `pytest tests/unit`: **780 passed, 1 skipped, 1 failed**. The failure (`test_cli_init_memory_backend_is_noop`) is pre-existing and unrelated — its fixture config leaves `card_store` at the `elastic` default, so `init()` dials a nonexistent cluster.
+- `pytest tests/integration/test_relation_stores.py -m integration`: **13 passed** against live Elasticsearch 9.4.2 and Neo4j 2026.05.0, covering full-field round-trip, the `for_chunks` terms filter, idempotent `MERGE`, NIL endpoint materialization and `clear_relations`.
+- `ruff check src tests`: 1 error, pre-existing (`layer_b/builder.py:410`).
+- `sphinx-build -W docs`: clean.
+
+### Notes for next time
+
+- `kggen/graph_code/build_graph/{extract_triplets_from_chunks,aggregate_graphs}.py` each carried the **same hardcoded GPUStack API key**. The literals are stripped, but **the key itself is exposed and must be rotated**.
+- Layer 0 is opt-in (`relations.enabled: false`) and `build()` skips it, because extraction is two LLM calls per chunk — roughly 28k calls on this corpus. Measure on a few hundred first.
+- The textbooks' excluded pages are still inline Python sets in the notebook rather than a manifest, so textbook chunking is not yet reproducible outside it.
+- Retrieval (`fs.query()`) remains a stub. `RelationStore.for_chunks` exists specifically for its mean-triplet-similarity branch.
+
+---
+
 ## 2026-05-27 — Iteration 10: Layer B cross-shelf themes (M5 v0.2)
 
 **Goal:** make cross-shelf theme discovery first-class by replacing the per-shelf similarity pass with a single global Leiden run over all attached chunks, while keeping per-shelf entity coherence (Pass 2) unchanged.

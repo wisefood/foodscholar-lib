@@ -281,7 +281,7 @@ def test_build_layer_b_emits_cross_shelf_themes_when_global_finds_them(
 # ----------------------------------------------------------------------------
 
 
-def _theme(theme_id: str, facet: str) -> "object":
+def _theme(theme_id: str, facet: str) -> object:
     from foodscholar.io.graph import Theme
 
     return Theme(

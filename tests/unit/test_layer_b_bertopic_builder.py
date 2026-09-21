@@ -239,7 +239,7 @@ def test_leiden_subtree_scope_unions_descendant_chunks(monkeypatch) -> None:
 
     seen_scoped: dict[str, set] = {}
 
-    def _capture(chunk_ids, chunk_store, cfg):  # noqa: ANN001
+    def _capture(chunk_ids, chunk_store, cfg):
         # record what the fruit shelf was fed; return no candidates (we only
         # assert on the scoping, not on clustering output).
         seen_scoped[tuple(sorted(chunk_ids))] = set(chunk_ids)
