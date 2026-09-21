@@ -12,6 +12,7 @@ this boundary.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from foodscholar.io.relation import (
@@ -28,6 +29,19 @@ if TYPE_CHECKING:
     from foodscholar.relations.ground import GroundingResult
 
 _log = get_logger("foodscholar.relations.aggregate")
+
+
+@dataclass
+class _Bucket:
+    """Everything that collapses into one grounded ``(subject, predicate, object)``."""
+
+    subject_linked: bool
+    object_linked: bool
+    subject_surfaces: set[str] = field(default_factory=set)
+    object_surfaces: set[str] = field(default_factory=set)
+    predicate_surfaces: set[str] = field(default_factory=set)
+    chunk_ids: set[str] = field(default_factory=set)
+    mention_count: int = 0
 
 
 def dedupe_graph(
@@ -73,7 +87,7 @@ def build_relations(
     Provenance unions across every triple that collapses into the group — the
     property the whole pipeline exists to preserve.
     """
-    groups: dict[tuple[str, str, str], dict[str, object]] = {}
+    groups: dict[tuple[str, str, str], _Bucket] = {}
 
     for triple in sorted(graph.triples):
         subject_raw, predicate_raw, object_raw = triple
@@ -94,43 +108,32 @@ def build_relations(
             continue
 
         key = (subject_id, predicate, object_id)
-        agg = groups.setdefault(
-            key,
-            {
-                "subject_surfaces": set(),
-                "object_surfaces": set(),
-                "predicate_surfaces": set(),
-                "chunk_ids": set(),
-                "mention_count": 0,
-                "subject_linked": subject_linked,
-                "object_linked": object_linked,
-            },
+        bucket = groups.setdefault(
+            key, _Bucket(subject_linked=subject_linked, object_linked=object_linked)
         )
-        agg["subject_surfaces"].add(subject_raw)  # type: ignore[union-attr]
-        agg["object_surfaces"].add(object_raw)  # type: ignore[union-attr]
-        agg["predicate_surfaces"].add(predicate_raw)  # type: ignore[union-attr]
-        agg["chunk_ids"] |= graph.triple_chunks.get(triple, set())  # type: ignore[operator]
-        agg["mention_count"] = int(agg["mention_count"]) + graph.triple_mentions.get(
-            triple, 1
-        )
+        bucket.subject_surfaces.add(subject_raw)
+        bucket.object_surfaces.add(object_raw)
+        bucket.predicate_surfaces.add(predicate_raw)
+        bucket.chunk_ids |= graph.triple_chunks.get(triple, set())
+        bucket.mention_count += graph.triple_mentions.get(triple, 1)
 
     out: list[Relation] = []
-    for (subject_id, predicate, object_id), agg in sorted(groups.items()):
-        chunk_ids = sorted(agg["chunk_ids"])  # type: ignore[call-overload]
+    for (subject_id, predicate, object_id), bucket in sorted(groups.items()):
+        chunk_ids = sorted(bucket.chunk_ids)
         out.append(
             Relation(
                 relation_id=make_relation_id(subject_id, predicate, object_id),
                 subject_id=subject_id,
                 predicate=predicate,
                 object_id=object_id,
-                subject_surfaces=tuple(sorted(agg["subject_surfaces"])),  # type: ignore[call-overload]
-                object_surfaces=tuple(sorted(agg["object_surfaces"])),  # type: ignore[call-overload]
-                predicate_surfaces=tuple(sorted(agg["predicate_surfaces"])),  # type: ignore[call-overload]
+                subject_surfaces=tuple(sorted(bucket.subject_surfaces)),
+                object_surfaces=tuple(sorted(bucket.object_surfaces)),
+                predicate_surfaces=tuple(sorted(bucket.predicate_surfaces)),
                 chunk_ids=tuple(chunk_ids[:sample_cap]),
                 chunk_count=len(chunk_ids),
-                mention_count=int(agg["mention_count"]),
-                subject_linked=bool(agg["subject_linked"]),
-                object_linked=bool(agg["object_linked"]),
+                mention_count=bucket.mention_count,
+                subject_linked=bucket.subject_linked,
+                object_linked=bucket.object_linked,
                 extractor_version=extractor_version,
                 dedupe_version=entity_dedupe.version,
             )

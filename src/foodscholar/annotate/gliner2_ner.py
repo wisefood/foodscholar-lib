@@ -19,7 +19,7 @@ verbatim from the benchmark and should be treated as a fixture.
 
 from __future__ import annotations
 
-from typing import Any, get_args
+from typing import Any, cast, get_args
 
 from foodscholar.io.chunk import GLINER2_TO_ENTITY_TYPE, EntityType, Mention
 from foodscholar.logging import get_logger
@@ -42,7 +42,7 @@ def map_label(label: str) -> EntityType:
     `ENTITY_TYPE_TO_FACET`, which is how non-`foods` facets get populated.
     """
     mapped = GLINER2_TO_ENTITY_TYPE.get(label, label)
-    return mapped if mapped in _VALID_TYPES else "other"  # type: ignore[return-value]
+    return cast("EntityType", mapped if mapped in _VALID_TYPES else "other")
 
 
 class GLiner2NER:
@@ -73,7 +73,7 @@ class GLiner2NER:
         if self._model is not None:
             return self._model
         try:
-            from gliner2 import GLiNER2  # type: ignore[import-not-found]
+            from gliner2 import GLiNER2
         except ImportError as e:
             raise ImportError(
                 "the 'gliner2' package is required for GLiner2NER. "
@@ -146,7 +146,7 @@ class GLiner2NER:
 
     # ------------------------------------------------------------------ helpers
 
-    def _mentions_from_raw(self, text: str, raw: dict) -> list[Mention]:
+    def _mentions_from_raw(self, text: str, raw: dict[str, Any]) -> list[Mention]:
         """GLiNER2 returns `{"entities": {label: [ {text, start, end, ...} ]}}`.
 
         Deduplicated per chunk on the lowercased surface, first occurrence
@@ -198,7 +198,13 @@ class GLiner2NER:
 
 
 def _as_int(value: object, default: int) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (float, str)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    return default

@@ -59,7 +59,7 @@ class ElasticRelationStore:
             raise ValueError(f"bulk_size must be positive, got {bulk_size}")
         self._bulk_size = bulk_size
         try:
-            from elasticsearch import Elasticsearch  # type: ignore[import-not-found]
+            from elasticsearch import Elasticsearch
         except ImportError as e:
             raise ImportError(
                 "the 'elasticsearch>=8' package is required for "

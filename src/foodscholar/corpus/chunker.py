@@ -162,7 +162,7 @@ def fine_units_from_pdf(pdf_path: str | Path, cfg: ChunkerConfig) -> list[FineUn
             "Install with: pip install 'foodscholar[chunking]'"
         ) from e
 
-    class _MDTableNoImageProvider(ChunkingSerializerProvider):
+    class _MDTableNoImageProvider(ChunkingSerializerProvider):  # type: ignore[misc]
         """Tables as Markdown; images ignored entirely."""
 
         def get_serializer(self, doc: Any) -> Any:

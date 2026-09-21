@@ -141,6 +141,31 @@ class VizView:
             )
         )
 
+    def relation_neighborhood(
+        self,
+        ontology_id: str,
+        *,
+        hops: int = 1,
+        max_per_hop: int = 25,
+        grounded_only: bool = False,
+    ) -> RenderableGraph:
+        """Anchor entity + its Layer 0 relations, predicate on each edge.
+
+        Where `entity_neighborhood` shows *co-mention* (two entities in one
+        chunk), this shows the **typed** edges Layer 0 extracted. Renderers
+        colour by `VizEdge.kind`, which here is the predicate. Empty until
+        `fs.build_relations()` has run.
+        """
+        return RenderableGraph(
+            builder.relation_neighborhood(
+                self._fs,
+                ontology_id,
+                hops=hops,
+                max_per_hop=max_per_hop,
+                grounded_only=grounded_only,
+            )
+        )
+
     # ------------------------------------------------------------- L2
 
     def shelf(
