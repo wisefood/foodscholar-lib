@@ -128,6 +128,7 @@ def test_provider_registry_has_all_providers() -> None:
     assert set(PROVIDERS) == {
         "anthropic",
         "openai",
+        "openai_compatible",
         "openrouter",
         "groq",
         "gemini",
@@ -386,3 +387,47 @@ def test_factory_forwards_api_key_to_provider() -> None:
         from foodscholar.llm.providers import GroqClient
 
         PROVIDERS["groq"] = GroqClient
+
+
+def test_provider_registry_matches_the_config_literal() -> None:
+    """A provider in the config literal with no adapter fails only at runtime."""
+    from typing import get_args
+
+    from foodscholar.config import LLMProvider
+
+    assert set(PROVIDERS) == set(get_args(LLMProvider))
+
+
+def test_openai_compatible_requires_a_base_url() -> None:
+    from foodscholar.llm.providers import OpenAICompatibleClient
+
+    with pytest.raises(ValueError, match="requires a base URL"):
+        OpenAICompatibleClient("some-model", api_key="k")
+
+
+def test_openai_compatible_reads_its_own_env_var(monkeypatch) -> None:
+    """Never OPENAI_API_KEY — a local endpoint must not bill a real account."""
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "real-openai-key")
+    from foodscholar.llm.providers import OpenAICompatibleClient
+
+    with pytest.raises(RuntimeError, match="OPENAI_COMPATIBLE_API_KEY"):
+        OpenAICompatibleClient("m", base_url="http://localhost:8000/v1")
+
+
+def test_build_llm_routes_host_to_base_url_for_openai_compatible() -> None:
+    from foodscholar.config import LLMConfig, ProviderConfig
+    from foodscholar.llm import build_llm
+
+    client = build_llm(
+        LLMConfig(
+            primary=ProviderConfig(
+                provider="openai_compatible",
+                model="m",
+                host="http://gpustack:8000/v1",
+                api_key="k",
+            )
+        )
+    )
+    assert client.base_url == "http://gpustack:8000/v1"
+    assert client.model_id == "m"

@@ -11,6 +11,7 @@ from foodscholar.llm.providers import (
     GroqClient,
     OllamaClient,
     OpenAIClient,
+    OpenAICompatibleClient,
     OpenRouterClient,
 )
 
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 PROVIDERS = {
     "anthropic": AnthropicClient,
     "openai": OpenAIClient,
+    "openai_compatible": OpenAICompatibleClient,
     "openrouter": OpenRouterClient,
     "groq": GroqClient,
     "gemini": GeminiClient,
@@ -38,10 +40,11 @@ def _build_one(spec: ProviderConfig, *, timeout_s: float) -> LLMClient:
         )
     kwargs: dict[str, object] = {"timeout_s": timeout_s, "api_key": spec.api_key}
     if spec.host:
-        # `host` overloads to the ollama daemon URL and the openrouter base_url.
+        # `host` overloads to the ollama daemon URL and the base_url of the
+        # OpenAI-protocol providers (openrouter, openai_compatible).
         if spec.provider == "ollama":
             kwargs["host"] = spec.host
-        elif spec.provider == "openrouter":
+        elif spec.provider in ("openrouter", "openai_compatible"):
             kwargs["base_url"] = spec.host
     return cls(spec.model, **kwargs)  # type: ignore[arg-type]
 

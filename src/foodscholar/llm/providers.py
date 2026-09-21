@@ -140,6 +140,101 @@ class OpenAIClient:
         return _parse_json_object(resp.choices[0].message.content or "")
 
 
+class OpenAICompatibleClient:
+    """Any OpenAI-protocol endpoint reached through a custom base URL.
+
+    Covers self-hosted vLLM, GPUStack (the endpoint the kggen extraction
+    pipeline runs against) and Ollama's OpenAI shim. Configured as::
+
+        llm:
+          primary:
+            provider: openai_compatible
+            model: mistral-small-3.2-24b-instruct-2506
+            host: ${GPUSTACK_API_BASE}
+            api_key: ${GPUSTACK_API_KEY}
+
+    The key is read from `OPENAI_COMPATIBLE_API_KEY`, deliberately **not**
+    `OPENAI_API_KEY`: a misconfigured local endpoint must never silently fall
+    back to billing a real OpenAI account. Many self-hosted servers ignore the
+    key entirely, so a placeholder is accepted.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout_s: float = 30.0,
+    ) -> None:
+        try:
+            import openai
+        except ImportError as e:
+            raise ImportError(
+                "the 'openai' package is required for OpenAICompatibleClient. "
+                "Install with: pip install 'foodscholar[llm]'"
+            ) from e
+        if not base_url:
+            raise ValueError(
+                "openai_compatible requires a base URL — set `host:` on the "
+                "provider config (e.g. http://my-server:8000/v1)."
+            )
+        self.model_id = model
+        self.base_url = base_url
+        self._client = openai.OpenAI(
+            api_key=_resolve_secret(
+                api_key, "OPENAI_COMPATIBLE_API_KEY", "openai_compatible"
+            ),
+            base_url=base_url,
+            timeout=timeout_s,
+        )
+
+    def generate(self, prompt: str, max_tokens: int = 1024) -> str:
+        resp = self._client.chat.completions.create(
+            model=self.model_id,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content or ""
+
+    def generate_json(
+        self, prompt: str, schema: dict[str, object], max_tokens: int = 1024
+    ) -> dict[str, object]:
+        """Structured output, degrading to prompt-and-parse.
+
+        Self-hosted servers vary: some implement `json_schema`, some only
+        `json_object`, some neither. We try them in that order rather than
+        assuming, because the extraction pipeline's enum-constrained schema is
+        exactly the kind a partial implementation rejects.
+        """
+        messages = [{"role": "user", "content": prompt}]
+        for response_format in (
+            {
+                "type": "json_schema",
+                "json_schema": {"name": "response", "schema": schema, "strict": False},
+            },
+            {"type": "json_object"},
+        ):
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.model_id,
+                    max_tokens=max_tokens,
+                    messages=messages,  # type: ignore[arg-type]
+                    response_format=response_format,  # type: ignore[arg-type]
+                )
+                content = resp.choices[0].message.content or ""
+                if content.strip():
+                    return _parse_json_object(content)
+            except Exception:
+                continue
+        text = self.generate(
+            f"{prompt}\n\nRespond with JSON matching this schema:\n"
+            f"{json.dumps(schema)}\n\nOutput ONLY the JSON object, no prose.",
+            max_tokens=max_tokens,
+        )
+        return _parse_json_object(text)
+
+
 class GroqClient:
     """Groq (fast Llama/Mixtral inference). Needs `GROQ_API_KEY` or `api_key`."""
 

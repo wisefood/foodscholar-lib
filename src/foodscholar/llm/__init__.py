@@ -5,7 +5,8 @@ implementing the `foodscholar.storage.protocols.LLMClient` protocol, plus a
 `FallbackLLMClient` that chains them. Construction is YAML-driven via
 `build_llm(cfg.llm)`.
 
-Providers: Anthropic, OpenAI, OpenRouter, Gemini, Groq, Ollama. Each lazy-imports
+Providers: Anthropic, OpenAI, OpenAI-compatible (vLLM / GPUStack / any
+OpenAI-protocol endpoint), OpenRouter, Gemini, Groq, Ollama. Each lazy-imports
 its SDK (gated by the `[llm]` extra) and reads its API key from the environment —
 never from config files.
 """
@@ -18,6 +19,7 @@ from foodscholar.llm.providers import (
     GroqClient,
     OllamaClient,
     OpenAIClient,
+    OpenAICompatibleClient,
     OpenRouterClient,
 )
 
@@ -29,6 +31,7 @@ __all__ = [
     "GroqClient",
     "OllamaClient",
     "OpenAIClient",
+    "OpenAICompatibleClient",
     "OpenRouterClient",
     "build_llm",
 ]
