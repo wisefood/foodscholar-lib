@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foodscholar"
-version = "0.2.0"
+version = "0.3.0"
 description = "End-to-end pipeline for nutrition literature: chunking, ontology linking, knowledge-graph construction and hybrid retrieval"
 readme = "README.md"
 license = { file = "LICENSE" }
