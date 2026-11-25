@@ -55,7 +55,7 @@ class VizNode(BaseModel):
 
 
 class VizEdge(BaseModel):
-    """A directed edge between two `VizNode`s."""
+    """A directed edge between two `VizNode` objects."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

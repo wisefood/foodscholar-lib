@@ -13,7 +13,8 @@ The sub-surfaces hang off it as attributes:
 - `fs.viz` → [VizView](viz.md) (renderable views)
 - `fs.config` → [FoodScholarConfig](config.md) (the live, mutable config)
 
-```{autoclass} foodscholar.facade.FoodScholar
-:members:
-:member-order: bysource
+```{eval-rst}
+.. autoclass:: foodscholar.facade.FoodScholar
+   :members:
+   :member-order: bysource
 ```

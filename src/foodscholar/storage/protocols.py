@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.entity import Entity
@@ -134,6 +134,34 @@ class ChunkStore(Protocol):
         ...
     def scan(self) -> list[Chunk]: ...
     def iter_chunks(self, batch_size: int = 1000) -> Iterable[list[Chunk]]: ...
+    def find_by_metadata(
+        self,
+        key: str,
+        values: list[Any],
+        *,
+        source_doc_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        """Chunks whose `source_metadata[key]` equals one of `values`.
+
+        Values compare as strings (Elasticsearch maps `source_metadata` as
+        `flattened`, which indexes every leaf as a keyword); a list-valued key
+        matches when any element does. Order is unspecified. The primitive
+        behind `expand()`.
+        """
+        ...
+    def expand(
+        self,
+        chunk_id: ChunkId,
+        mode: Literal["window", "section", "page", "figure"] = "window",
+        n: int = 1,
+        *,
+        page: int | None = None,
+        asset_id: str | None = None,
+    ) -> list[Chunk]:
+        """The chunks around `chunk_id`, in reading order — the replacement for
+        overlap. See `foodscholar.storage.adjacency.expand`."""
+        ...
 
 
 @runtime_checkable

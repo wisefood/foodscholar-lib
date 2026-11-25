@@ -111,6 +111,13 @@ class ChunkProvenance(BaseModel):
     abstract     title, year, paper identifiers (doi / paperId)
     ===========  =========================================================
 
+    Chunks produced by :mod:`foodscholar.chunking` (v2) add a further set on top of
+    whichever of the above applies: ``source_id``, ``section_path``,
+    ``page_start``/``page_end``/``pages``, per-page ``regions``, printed page
+    labels, ``language``, ``licence``, ``context_header``, the adjacency links
+    (``ordinal``, ``prev_chunk_id``, ``next_chunk_id``, ``parent_id``) and the
+    identity fields (``chunk_version_id``, ``supersedes``).
+
     So every field is optional and unknown keys are preserved (``extra="allow"``):
     this documents what the library *reads*, it does not constrain what a
     producer may write. Consumers that render citations must degrade per
@@ -135,13 +142,38 @@ class ChunkProvenance(BaseModel):
     urn: str | None = None
     country: str | None = None
     audience: str | None = None
-    pages: int | None = None
+    pages: int | list[int] | None = None
+    """Guides: the document's page count (an int). v2 chunks: the pages this chunk touches."""
     # guide + abstract
     title: str | None = None
     # abstract only
     doi: str | None = None
     paper_id: str | None = None
     year: int | None = None
+    # v2 (foodscholar.chunking)
+    source_id: str | None = None
+    section_path: list[str] | None = None
+    page_start: int | None = None
+    page_end: int | None = None
+    regions: list[dict[str, Any]] | None = None
+    printed_page_start: str | None = None
+    printed_page_end: str | None = None
+    language: str | None = None
+    licence: str | None = None
+    context_header: str | None = None
+    ordinal: int | None = None
+    prev_chunk_id: str | None = None
+    next_chunk_id: str | None = None
+    parent_id: str | None = None
+    chunk_version_id: str | None = None
+    supersedes: list[str] | None = None
+    figure_ids: list[str] | None = None
+    table_ids: list[str] | None = None
+    chunker_version: str | None = None
+    section_labels: list[str] | None = None
+    """Records: the labelled sections the chunk holds, verbatim (``"Recent findings"``)."""
+    collection_id: str | None = None
+    """Records: the catalogued collection a record belongs to (``SRC-JN-003``)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -165,10 +197,10 @@ class ChunkProvenance(BaseModel):
         if not isinstance(data, dict):
             return data
         out = dict(data)
-        for key in ("page_number", "pages", "year"):
+        for key in ("page_number", "pages", "year", "page_start", "page_end", "ordinal"):
             value = out.get(key)
-            if value is None or isinstance(value, int):
-                continue
+            if value is None or isinstance(value, (int, list)):
+                continue  # a list is a v2 chunk's page set; an int is already clean
             if isinstance(value, float) and value.is_integer():
                 out[key] = int(value)
             elif isinstance(value, str) and value.strip().lstrip("-").isdigit():
@@ -185,6 +217,8 @@ class ChunkProvenance(BaseModel):
             "country": self.country,
             "heading": self.heading,
             "page_number": self.page_number,
+            "page_end": self.page_end if self.page_end != self.page_number else None,
+            "printed_page": self.printed_page_start,
             "doi": self.doi,
             "year": self.year,
         }
@@ -229,6 +263,16 @@ class Chunk(BaseModel):
 
     enrichment_version: str = "v0"
     created_at: datetime = Field(default_factory=_utcnow)
+
+    @property
+    def retrieval_text(self) -> str:
+        """The text to embed and index: the v2 context header, then the passage.
+
+        Chunks without a header (every pre-v2 chunk) return `text` unchanged, so
+        embedding `retrieval_text` is backward compatible.
+        """
+        header = self.source_metadata.get("context_header")
+        return f"{header}\n{self.text}" if isinstance(header, str) and header else self.text
 
     @cached_property
     def provenance(self) -> ChunkProvenance:

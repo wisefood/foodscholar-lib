@@ -11,7 +11,7 @@ import math
 import re
 from collections import defaultdict
 from collections.abc import Iterable
-from typing import Literal
+from typing import Any, Literal
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.entity import Entity
@@ -144,6 +144,33 @@ class InMemoryChunkStore:
 
     def get_many(self, chunk_ids: list[ChunkId]) -> list[Chunk]:
         return [self._chunks[cid] for cid in chunk_ids if cid in self._chunks]
+
+    def find_by_metadata(
+        self,
+        key: str,
+        values: list[Any],
+        *,
+        source_doc_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        from foodscholar.storage.adjacency import metadata_matches
+
+        wanted = {str(v) for v in values}
+        out = [c for c in self._chunks.values() if metadata_matches(c, key, wanted, source_doc_id)]
+        return out[:limit]
+
+    def expand(
+        self,
+        chunk_id: ChunkId,
+        mode: Literal["window", "section", "page", "figure"] = "window",
+        n: int = 1,
+        *,
+        page: int | None = None,
+        asset_id: str | None = None,
+    ) -> list[Chunk]:
+        from foodscholar.storage.adjacency import expand
+
+        return expand(self, chunk_id, mode, n, page=page, asset_id=asset_id)
 
     def search(
         self,

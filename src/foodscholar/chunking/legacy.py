@@ -1,10 +1,16 @@
-"""PDFs and raw text -> the corpus CSVs `fs.ingest()` reads.
+"""The `legacy` profile: PDFs and raw text -> the corpus CSVs `fs.ingest()` reads.
+
+This is the pipeline that produced the stored corpus, moved here unchanged from
+`foodscholar.corpus.chunker` (which still re-exports it). Its output is
+reproduced bit-for-bit; `fine_units_from_ir` and `legacy_assemble` run the same
+window over a `DocumentIR`, so the legacy behaviour can be compared with the v2
+assembler on identical extractions.
 
 Closes the loop: until this existed, foodscholar could not rebuild its own
 primary input — every `chunk_id` in Elasticsearch traced back to a notebook in
 a separate repository.
 
-The sliding window itself lives in `foodscholar.corpus.window` and is shared by
+The sliding window itself lives in `foodscholar.chunking.window` and is shared by
 every producer; this module supplies the producers and the CSV assembly.
 
 .. warning::
@@ -27,23 +33,41 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from foodscholar.corpus.window import (
+from foodscholar.chunking.window import (
     FineUnit,
     MergedChunk,
     build_overlapping_chunks,
     has_meaningful_text,
 )
+from foodscholar.chunking.writers import CORPUS_COLUMNS, write_corpus_csv
 from foodscholar.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from foodscholar.config import ChunkerConfig
-    from foodscholar.io.chunk import SourceType
+    from foodscholar.chunking.config import ChunkingConfig as ChunkerConfig
+    from foodscholar.chunking.ir import DocumentIR
 
-_log = get_logger("foodscholar.corpus.chunker")
+    SourceType = str
 
-CORPUS_COLUMNS = ["chunk_id", "chunk_text", "type", "chunk_metadata"]
+_log = get_logger("foodscholar.chunking.legacy")
+
+__all__ = [
+    "CORPUS_COLUMNS",
+    "CorpusOverwriteError",
+    "chunk_documents",
+    "chunk_texts",
+    "chunks_to_rows",
+    "fine_units_from_ir",
+    "fine_units_from_pdf",
+    "fine_units_from_text",
+    "legacy_assemble",
+    "load_document_metadata",
+    "load_excluded_pages",
+    "make_chunk_id",
+    "token_counter",
+    "write_corpus_csv",
+]
 
 # `filename: X.pdf | removed_pages: [1, 2, 3]`, as written by pdf_page_triage.py
 _MANIFEST_RE = re.compile(r"^filename:\s*(.+?)\s*\|\s*removed_pages:\s*\[([^\]]*)\]")
@@ -267,19 +291,6 @@ def chunks_to_rows(
     return rows
 
 
-def write_corpus_csv(rows: list[dict[str, str]], path: str | Path) -> Path:
-    """Write rows in the shape `corpus/csv_reader.py` reads. Atomic."""
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(out.suffix + ".tmp")
-    with tmp.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=CORPUS_COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
-    tmp.replace(out)
-    return out
-
-
 def load_document_metadata(
     metadata_csv: str | Path, *, key_column: str = "pdf_name"
 ) -> dict[str, dict[str, object]]:
@@ -451,3 +462,50 @@ def chunk_texts(
     path = write_corpus_csv(rows, out_path)
     _log.info("chunker.texts_done", n_texts=len(texts), n_rows=len(rows))
     return path
+
+
+# ------------------------------------------------------------ IR bridge
+
+
+def fine_units_from_ir(ir: DocumentIR) -> list[FineUnit]:
+    """The legacy window's input, built from a `DocumentIR`.
+
+    One fine unit per body element, grouped by the **top-level** heading only —
+    exactly the legacy grouping, which is what lets overlap bleed across
+    sub-sections. Headings themselves are not emitted as text (Docling's
+    `HybridChunker` keeps them out of `chunk.text` too), and furniture is dropped.
+    """
+    units: list[FineUnit] = []
+    top = ""
+    top_level: int | None = None
+    for el in ir.elements:
+        if el.kind == "furniture":
+            continue
+        if el.kind == "heading":
+            if top_level is None or el.level <= top_level:
+                top, top_level = " ".join(el.text.split()), el.level
+            continue
+        if el.kind == "table":
+            text = el.table.to_markdown() or el.text
+        elif el.kind == "figure":
+            text = el.caption or ""
+        else:
+            text = el.text
+        if not text.strip():
+            continue
+        units.append(FineUnit(text=text, group_key=top, page_numbers=el.pages))
+    return units
+
+
+def legacy_assemble(
+    ir: DocumentIR,
+    *,
+    count_tokens: Callable[[str], int],
+    max_tokens: int = 512,
+    overlap: int = 64,
+) -> list[MergedChunk]:
+    """The legacy 512/64 window over a `DocumentIR` — the v2 assembler's control."""
+    return build_overlapping_chunks(
+        fine_units_from_ir(ir), count_tokens=count_tokens, max_tokens=max_tokens, overlap=overlap
+    )
+

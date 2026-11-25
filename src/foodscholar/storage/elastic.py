@@ -32,7 +32,7 @@ search_after for scans, no async, no fancy DSL builders.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from typing import Any
+from typing import Any, Literal
 
 from foodscholar.io.chunk import Chunk, ChunkId, EntityLink, Mention
 from foodscholar.io.graph import Card, ShelfId, ThemeId
@@ -503,6 +503,45 @@ class ElasticChunkStore:
                     src = {**src, "embedding": embeddings[d["_id"]]}
                 out.append(_doc_to_chunk(src))
         return out
+
+    def find_by_metadata(
+        self,
+        key: str,
+        values: list[Any],
+        *,
+        source_doc_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        """Term lookup on `source_metadata.<key>`.
+
+        `source_metadata` is mapped `flattened`, so every leaf — numbers
+        included — is indexed as a keyword: values are sent as strings, and a
+        list-valued key matches on any element. Vectors are not fetched; the
+        expansion path never needs them.
+        """
+        if not values:
+            return []
+        filters: list[dict[str, Any]] = [
+            {"terms": {f"source_metadata.{key}": [str(v) for v in values]}}
+        ]
+        if source_doc_id is not None:
+            filters.append({"term": {"source_doc_id": source_doc_id}})
+        body = {"size": limit, "query": {"bool": {"filter": filters}}}
+        resp = self._es.search(index=self.index, body=body)
+        return [_doc_to_chunk(h["_source"]) for h in resp["hits"]["hits"]]
+
+    def expand(
+        self,
+        chunk_id: ChunkId,
+        mode: Literal["window", "section", "page", "figure"] = "window",
+        n: int = 1,
+        *,
+        page: int | None = None,
+        asset_id: str | None = None,
+    ) -> list[Chunk]:
+        from foodscholar.storage.adjacency import expand
+
+        return expand(self, chunk_id, mode, n, page=page, asset_id=asset_id)
 
     def knn_search_chunks(
         self,

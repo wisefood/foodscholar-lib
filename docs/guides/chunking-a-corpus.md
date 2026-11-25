@@ -1,8 +1,110 @@
 # Chunking a corpus
 
 FoodScholar reads **pre-chunked** corpus CSVs. This guide covers producing
-them from source PDFs and raw text, so the library can rebuild its own input
-rather than depending on a notebook elsewhere.
+them, so the library can rebuild its own input rather than depending on a
+notebook elsewhere. There are two pipelines:
+
+| | v2 — `foodscholar.chunking` | legacy — `fs.chunk_documents()` |
+|---|---|---|
+| Unit of packing | sections from the full heading path; paragraphs, lists, tables, figures as atomic units | Docling fine units, grouped by the top-level heading |
+| Budget | header + content + special tokens ≤ 512, counted with the embedder's tokenizer | 512 tokens of content, counted with bge-large |
+| Neighbours | adjacency links + `expand()`; overlap off | a 64-token minimum overlap |
+| Provenance | page span, per-page regions, printed labels, section path | first page and top-level heading |
+| Ids | versioned: `chunk_version_id` + persistent `chunk_id` | `uuid4` or `content_hash` |
+| Status | extracts journal abstracts; assembles any document already in its IR; the PDF heads are not implemented yet | reproduces the stored corpus bit-for-bit |
+
+The [Chunking concepts page](../concepts/chunking.md) explains the v2 model.
+
+## The v2 chunker, on its own
+
+It needs only the core install — no stores, ontology, LLM or services — and
+importing it loads nothing else from FoodScholar:
+
+```python
+from foodscholar.chunking import Chunker, ChunkingConfig, DocumentIR
+
+chunker = Chunker(ChunkingConfig.from_yaml("chunking.yaml"))
+result = chunker.assemble([DocumentIR.load(p) for p in sorted(Path("ir").glob("*.json"))])
+result.write("data/chunks/v2")    # chunks_<source type>.csv for fs.ingest, chunks.jsonl, run.json
+```
+
+`ChunkingConfig.from_yaml` accepts a standalone file holding only the chunking
+section, or a full FoodScholar config (it reads its `chunking:` key and ignores
+the rest). Token counting uses `chunking.embedder_tokenizer` and needs
+`transformers` (the `[chunking]` extra); pass
+`token_counter=WhitespaceTokenCounter()` for a model-free dry run.
+
+From the command line — the `chunk` group never builds the facade, and is also
+installed as `foodscholar-chunk`:
+
+```bash
+foodscholar chunk run --ir data/ir --out data/chunks/v2
+foodscholar chunk run --ir data/ir --out data/chunks/v2b --previous data/chunks/v2/chunks.jsonl
+foodscholar chunk inspect data/chunks/v2/chunks.jsonl
+foodscholar chunk eval --chunks data/chunks/v2/chunks.jsonl --gold gold.xlsx --registry FSKG_Sources_Extracted.xlsx
+```
+
+`--previous` carries chunk ids forward: unchanged chunks keep their id, changed
+ones get a new id that `supersedes` the old one, and the run reports what was
+reused, new, superseding and retired.
+
+```{warning}
+The v2 output is a **new corpus**, not an update of the stored one: its ids,
+boundaries and metadata differ. Re-ingesting it orphans relations, attachments
+and cards that cite legacy chunk ids. Plan it as a rebuild.
+```
+
+### Chunking journal abstracts
+
+```bash
+foodscholar chunk run sources/datasources/Sources/Journals/*/*_abstracts.json \
+    --registry sources/datasources/Sources/FSKG_Sources_Extracted.xlsx \
+    --out data/chunks/abstracts
+```
+
+The registry tells the chunker these files are `abstract` (genre `record`) and
+which journal each belongs to; without one, pass `--source-type abstract`.
+Empty abstracts are skipped and logged. The 937 non-empty abstracts in
+`sources/` produce about a thousand chunks in seconds, none over the budget —
+see [Records](../concepts/chunking.md#records-journal-abstracts).
+
+The context header is a measured trade-off. On those abstracts, with the exact
+tokenizer:
+
+| Header | Chunks | Abstracts split |
+|---|---|---|
+| none (`assembly.context_header: false`) | 1,001 | 63 |
+| title (default) | 1,036 | 98 |
+| title + keywords (`record.header: title_keywords`) | 1,092 | 150 |
+
+Every header token displaces a content token. Whether the title earns its
+place is a retrieval question; score each variant with
+`foodscholar chunk eval --queries` once a query set exists
+([Evaluating a chunker](evaluating-a-chunker.md#query-sets)).
+
+### Per-source settings
+
+```yaml
+chunking:
+  profile: v2
+  registry: sources/datasources/Sources/FSKG_Sources_Extracted.xlsx
+  sources:
+    textbook:
+      genre: long_document
+      assembly: {max_tokens: 512, target_tokens: 400, min_tokens: 120}
+    guide:
+      genre: leaflet
+      assembly: {max_tokens: 512, target_tokens: 350, min_tokens: 120}
+    abstract:
+      genre: record
+      assembly: {max_tokens: 512, target_tokens: 512}   # keep an abstract whole when it fits
+      record: {header: title, structured_sections: true}
+```
+
+Giving `sources` replaces the built-in mapping, so list every source type you
+chunk. Every field is described in the [configuration reference](../reference/chunking.md#configuration).
+
+## The legacy pipeline
 
 ```{warning}
 **Re-chunking an already-ingested corpus is destructive.** Under the default
@@ -14,7 +116,7 @@ refuses to write into a non-empty output directory unless `force=True`.
 See [Chunk ids](#chunk-ids) for the idempotent alternative.
 ```
 
-## The corpus format
+### The corpus format
 
 One CSV per document, four columns:
 
@@ -42,7 +144,7 @@ has no title and no country.
 can cover several pages, so a citation into its tail may point one page early.
 ```
 
-## Chunking PDFs
+### Chunking PDFs
 
 ```python
 from foodscholar import FoodScholar
@@ -76,7 +178,7 @@ pulls torch and layout models, so it stays optional.
 its filename stem, and a missing one raises rather than silently producing
 metadata-less chunks.
 
-### Excluded pages
+#### Excluded pages
 
 Covers, tables of contents and ad pages are dropped via a manifest:
 
@@ -104,7 +206,7 @@ fs.chunk_documents(
 )
 ```
 
-## Chunking raw text
+### Chunking raw text
 
 Abstracts use the same window over NLTK sentences instead of Docling units —
 it is one algorithm, not two:
@@ -121,7 +223,7 @@ fs.chunk_texts(
 Only texts over `max_tokens` are actually split; shorter ones pass through as
 a single chunk.
 
-## How the window works
+### How the window works
 
 Four semantics, each of which changes the output:
 
@@ -138,10 +240,11 @@ Four semantics, each of which changes the output:
    advances by one so it always makes progress.
 
 The window itself is pure and dependency-free
-(`foodscholar.corpus.window.build_overlapping_chunks`) — it takes a
+(`foodscholar.chunking.window.build_overlapping_chunks`; the old
+`foodscholar.corpus.window` path still works) — it takes a
 `count_tokens` callable, so it is testable without loading a tokenizer.
 
-## Chunk ids
+### Chunk ids
 
 ```yaml
 chunking:
@@ -154,7 +257,7 @@ chunking:
   Re-chunking an unchanged document reproduces its ids, so relations,
   attachments and cards survive. **Recommended for any new corpus.**
 
-## Validating an existing corpus
+### Validating an existing corpus
 
 The library assumes chunks are at most 512 tokens. `fs.ingest` can now check:
 
@@ -172,7 +275,7 @@ still a corpus, and failing ingest over one long chunk is the worse outcome.
 Oversized chunks are logged as `corpus.chunk_oversized`, with a summary at the
 end of the run.
 
-## Tokenizers
+### Tokenizers
 
 Chunking counts tokens with **`BAAI/bge-large-en-v1.5`** and
 `use_fast_tokenizer: false`. That is deliberately *not* the retrieval embedder
@@ -180,7 +283,7 @@ Chunking counts tokens with **`BAAI/bge-large-en-v1.5`** and
 agree, but the corpus was counted with the large model's slow tokenizer, and
 the fast and slow variants can disagree by a token. Keep both pinned.
 
-## Provenance
+### Provenance
 
 The window and the PDF pipeline are a port of the Docling chunking notebooks in
 the **kggen** pipeline (not distributed with FoodScholar), which
@@ -194,4 +297,5 @@ reproduced from them deliberately. See
 
 - [Corpus input](../concepts/corpus-input.md) — the contract `ingest` expects
 - [Building the graph](building-the-graph.md) — what happens after ingest
-- [CLI](cli.md) — `chunk-corpus`
+- [Evaluating a chunker](evaluating-a-chunker.md) — scoring v2, legacy or any other pipeline
+- [CLI](cli.md) — `chunk-corpus` and the `chunk` group

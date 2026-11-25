@@ -20,8 +20,11 @@ The surface is small and layered:
 - **[Retrieval](retrieval.md)** — the Extended KG-Gen hybrid scoring behind
   `fs.retrieve()`. Ranked passages and the branch scores that ranked them; the
   library does not formulate answers.
-- **[Corpus](corpus.md)** — the chunking window and PDF/text chunkers behind
-  `fs.chunk_documents()`, plus the CSV reader and its validation.
+- **[Chunking](chunking.md)** — `foodscholar.chunking`, usable on its own: the
+  chunker, its configuration, the document IR, the assembler, identity and
+  adjacency, the source registry, the evaluation harness and the legacy window.
+- **[Corpus](corpus.md)** — the CSV and NEL readers behind `fs.ingest()`, and
+  ingest-time validation.
 - **[Annotation](annotate.md)** — the NER backends (GLiNER, GLiNER2), the dense
   linker and the batched runner behind `fs.annotate()`.
 - **[Graph view](graph-view.md)** — `fs.graph`, the fluent read/write surface and its
@@ -38,6 +41,7 @@ config
 data-model
 relations
 retrieval
+chunking
 corpus
 annotate
 graph-view

@@ -244,6 +244,50 @@ chunking:
   # Covers the guides; the textbooks' exclusions must be exported to this form.
   excluded_pages_manifest: null
 
+  # --- v2: foodscholar.chunking (structure-first; usable on its own) --------
+  # The fields above drive the legacy profile. Everything below drives v2,
+  # which `foodscholar chunk run` and `Chunker.assemble()` use. This whole
+  # section also loads standalone: ChunkingConfig.from_yaml("chunking.yaml").
+  # Which pipeline turns source files into chunks. legacy | v2
+  profile: legacy
+  # Names the built-in `sources` mapping. Only `nutrition` ships.
+  domain: nutrition
+  # Source catalogue: the FSKG workbook, or a CSV/JSON with the same columns.
+  # Gives titles, licences, languages, content page ranges, printed-page offsets.
+  registry: null
+  # Where cached extractions, assets and reports go.
+  work_dir: null
+  # Counts the v2 budget. Must match annotate.embedder: the budget exists to
+  # stop the embedder truncating (20% of the stored abstract chunks are).
+  embedder_tokenizer: BAAI/bge-base-en-v1.5
+  # Source type -> genre (record | long_document | leaflet) + assembly.
+  # Giving `sources` REPLACES the built-in mapping: list every source type.
+  # sources:
+  #   textbook:
+  #     genre: long_document
+  #     assembly:
+  #       max_tokens: 512         # hard: header + content + special tokens
+  #       target_tokens: 400      # soft packing target for content
+  #       min_tokens: 120         # smaller chunks merge with a neighbour
+  #       overlap_sentences: 0    # off: neighbours come from expand() instead
+  #       overlap_max_tokens: 64
+  #       context_header: true    # "Short name > Section > Subsection", embedded
+  #       merge_small_sections: true
+  #   guide: {genre: leaflet}
+  #   abstract:
+  #     genre: record
+  #     assembly: {target_tokens: 512}   # keep an abstract whole whenever it fits
+  #     record:                          # the record head (JSON / JSONL of records)
+  #       text_field: abstract           # field names: map another domain's records here
+  #       title_field: title
+  #       id_field: id
+  #       doi_field: doi
+  #       keywords_field: keywords
+  #       licence_field: license
+  #       language_field: null
+  #       header: title                  # or title_keywords (an ablation)
+  #       structured_sections: true      # one paragraph per labelled section
+
 # ---------------------------------------------------------------------------
 # Layer 0 — typed relations between entities, grounded in the ontology.
 #

@@ -14,7 +14,7 @@ import ast
 import csv
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast, get_args
 
 from foodscholar.io.chunk import Chunk, SectionType, SourceType
 from foodscholar.logging import get_logger
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from foodscholar.config import CorpusValidationConfig
 
 _log = get_logger("foodscholar.corpus.csv_reader")
+
+_SECTION_TYPES = frozenset(get_args(SectionType))
 
 REQUIRED_COLUMNS = {"chunk_id", "chunk_text", "type", "chunk_metadata"}
 
@@ -150,7 +152,11 @@ def _row_to_chunk(row: dict[str, str | None]) -> Chunk:
     text = _required(row, "chunk_text")
     source_type = _source_type(_required(row, "type"))
     metadata = _parse_metadata(row.get("chunk_metadata") or "")
-    section_type = _section_type(source_type)
+    # A v2 chunk that is exactly one labelled section of a record says which.
+    declared = metadata.get("section_type")
+    section_type: SectionType = (
+        cast(SectionType, declared) if declared in _SECTION_TYPES else _section_type(source_type)
+    )
 
     return Chunk(
         chunk_id=chunk_id,
@@ -207,6 +213,11 @@ def _section_type(source_type: SourceType) -> SectionType:
 def _source_doc_id(
     source_type: SourceType, metadata: dict[str, object], chunk_id: str
 ) -> str:
+    # v2 chunks carry the registry's persistent source id; it wins, so every
+    # chunk of one document shares a doc id whatever its source type.
+    source_id = metadata.get("source_id")
+    if isinstance(source_id, str) and source_id.strip():
+        return source_id.strip()
     if source_type == "abstract":
         for key in ("DOI", "doi", "title"):
             value = metadata.get(key)

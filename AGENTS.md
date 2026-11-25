@@ -52,7 +52,7 @@ fs = FoodScholar.in_memory()          # in-memory stores + MOCK embedder + MOCK 
 fs = FoodScholar.from_config("config.yaml")   # or a dict, or a FoodScholarConfig
 
 # Build phases (run in order; each writes to the configured stores):
-fs.chunk_documents("data/pdfs", out_dir="data/corpus", source_type="guide")  # optional
+fs.chunk_documents("data/pdfs", out_dir="data/corpus", source_type="guide")  # optional, legacy
 fs.init(); fs.ingest("data/corpus", nel_dir="data/ner"); fs.embed()
 fs.build_entities(); fs.build_relations()      # Layer 0 — opt-in, needs a real LLM
 fs.build_layer_a(); fs.attach()
@@ -64,10 +64,15 @@ fs.graph.shelves(facet="foods"); fs.graph.shelf(id).themes()    # read/write gra
 fs.relations.for_entity("FOODON:03301710")                       # Layer 0 edges
 fs.ontology.id_to_ancestors("FOODON:03310029")                  # FoodOn lookup
 fs.viz.layer_a_tree("foods").render("tree", output="tree.html") # interactive tree
+fs.chunk_store.expand(chunk_id, "window", n=1)                  # neighbours (v2 chunks)
+
+# The v2 chunker, standalone (imports nothing else from foodscholar):
+from foodscholar.chunking import Chunker, ChunkingConfig, DocumentIR
+Chunker(ChunkingConfig.from_yaml("chunking.yaml")).assemble(DocumentIR.load("doc.json")).write("out/")
 fs.config.layer_b.pass1_mode = "per_shelf"                      # config is live + mutable
 ```
 
-CLI mirrors the phases: `foodscholar {init|ingest|chunk-corpus|build-relations|build-layer-a|attach|build-layer-b|build-layer-c|build-all|query|info|version} --config config.yaml`.
+CLI mirrors the phases: `foodscholar {init|ingest|chunk-corpus|build-relations|build-layer-a|attach|build-layer-b|build-layer-c|build-all|query|info|version} --config config.yaml`. The v2 chunker has its own group, `foodscholar chunk {run|inspect|eval}` (also `foodscholar-chunk`), which needs no config or services.
 
 Config: `from_config` takes a YAML path / dict / `FoodScholarConfig`; `${ENV}` substitution
 runs over all forms; `extra="forbid"` (a typo'd key raises). Only `corpus` is required.
@@ -123,10 +128,42 @@ runs over all forms; `extra="forbid"` (a typo'd key raises). Only `corpus` is re
   `tests/unit/conftest_relations.py`, a plain helper module imported as
   `tests.unit.conftest_relations`, *not* a pytest conftest).
 - **`mypy` is configured strict but is not the gate** (175 baseline errors in 40
-  files). The modules added in the kggen integration are at zero; keep them there —
-  `mypy src/foodscholar/relations src/foodscholar/corpus src/foodscholar/io/relation.py`.
+  files). These are at zero; keep them there —
+  `mypy src/foodscholar/chunking src/foodscholar/storage/adjacency.py src/foodscholar/relations src/foodscholar/io/relation.py`.
+  `src/foodscholar/corpus` carries four older errors (untyped pyarrow calls in `loader.py`,
+  `_build_counter` in `csv_reader.py`); don't add to them.
 - **`fs.viz.relation_neighborhood` is empty until `build_relations` has run**, and
   `fs.relations` is a `_RelationView` (records, not handles — unlike `fs.graph`).
+- **`foodscholar.chunking` must stay importable on its own.** Its modules may import
+  only stdlib, pydantic, pyyaml and `foodscholar.logging` — never `io`, `config`,
+  `storage`, `llm`, `ontology` or the facade. `tests/unit/test_chunking_import_boundary.py`
+  enforces it in a subprocess; `foodscholar/__init__.py` is lazy (PEP 562) for the same
+  reason, so don't add eager imports there.
+- **Two chunking pipelines.** `profile: legacy` (`fs.chunk_documents`, `chunk-corpus`,
+  `foodscholar.chunking.legacy`, re-exported from `foodscholar.corpus.chunker`) reproduces
+  the stored corpus bit-for-bit — don't change it. `profile: v2` is `Chunker.assemble()`
+  over a `DocumentIR`. Only the record head exists (journal abstracts JSON → IR,
+  `chunking/heads/record.py`); the textbook and guide PDF heads do not yet.
+- **v2 replaces overlap with adjacency.** Chunks carry `ordinal`/`prev_chunk_id`/
+  `next_chunk_id`/`parent_id`; `ChunkStore.expand(id, "window"|"section"|"page"|"figure")`
+  follows them. Overlap is off by default and stays an ablation.
+- **v2 ids are two-level.** `chunk_version_id` = content hash; `chunk_id` persists across
+  re-runs via `--previous`/`previous=`, changed chunks get `supersedes`. A v2 corpus is a
+  rebuild relative to the legacy one, not an update.
+- **The v2 budget is the embedded text**: header + content + special tokens ≤ 512 with
+  the *bge-base* tokenizer (`embedder_tokenizer`), not the legacy bge-large content count.
+  Packing is *balanced* (`assembler.balanced_groups`): a section that must be cut is cut
+  into near-equal parts, never greedy-fill plus a stray tail.
+- **Abstract chunks key on the DOI** (`source_id` → `source_doc_id`, as in the legacy
+  corpus) and carry the journal's catalogue id as `collection_id`; journal gold statements
+  are catalogued per journal and match through it.
+- **The FSAI gold pages are off by one.** In `FSKG_Dietary_Guides_Ireland.xlsx`, `SRC-IE-001`'s
+  `Page (PDF)` is one lower than the real page for most statements; score with
+  `foodscholar chunk eval --gold-page-offset SRC-IE-001=1`.
+- **API reference pages wrap autodoc in ` ```{eval-rst} ` blocks.** The MyST
+  ` ```{automodule} ` form rendered raw directive text under Sphinx 9 + MyST 5; keep new
+  reference pages in the eval-rst form, and use double backticks for literals that a letter
+  follows directly in docstrings.
 - **`research/`** holds the archived Layer A method bake-off — provenance, not shipped, not
   in the main test gate (it imports as `bakeoff`, with its own `conftest.py`).
 
@@ -136,7 +173,8 @@ runs over all forms; `extra="forbid"` (a typo'd key raises). Only `corpus` is re
 src/foodscholar/
   facade.py        FoodScholar (entry point)      graph_view.py  fs.graph + handles
   config.py        Pydantic config + YAML         io/            data contracts
-  corpus/          chunk + NEL loading + chunker  annotate/      GLiNER(2) + dense HNSW + embed
+  chunking/        v2 chunker: IR, assembler, ids annotate/      GLiNER(2) + dense HNSW + embed
+  corpus/          chunk + NEL loading (readers)  chunking/evaluation/ gold + 3-stage harness
   relations/       Layer 0 extract/ground/dedupe   io/relation.py Relation contract
   ontology/        FoodOn loader + FoodOnAPI       llm/           provider-agnostic client
   layer_a/         backbone projection + alias     layer_b/       themes (2 passes + merge)

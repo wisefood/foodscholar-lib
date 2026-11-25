@@ -106,6 +106,7 @@ Issues = "https://github.com/wisefood/foodscholar-lib/issues"
 
 [project.scripts]
 foodscholar = "foodscholar.cli.main:app"
+foodscholar-chunk = "foodscholar.chunking.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/foodscholar"]

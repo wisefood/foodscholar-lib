@@ -5,7 +5,8 @@ Storage is defined by **protocols** — interfaces every backend implements. The
 unchanged regardless of where data lives. See [](../concepts/architecture.md) for the
 two-stores design and [](../getting-started/configuration.md) for selecting backends.
 
-```{automodule} foodscholar.storage.protocols
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.storage.protocols
+   :members:
+   :member-order: bysource
 ```

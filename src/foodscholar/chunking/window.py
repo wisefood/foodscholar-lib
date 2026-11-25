@@ -1,4 +1,4 @@
-"""The shared sliding-window chunker.
+"""The shared sliding-window chunker — the `legacy` profile's algorithm.
 
 All three corpus producers — guides, textbooks and abstracts — use the *same*
 512/64 window. They differ only in how they produce the fine-grained units the
@@ -47,7 +47,7 @@ class FineUnit:
 
 @dataclass
 class MergedChunk:
-    """One emitted chunk: several `FineUnit`s merged."""
+    """One emitted chunk: several `FineUnit` objects merged."""
 
     text: str
     group_key: str = ""

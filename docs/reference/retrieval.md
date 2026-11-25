@@ -10,13 +10,15 @@ caller's.
 
 ## Retriever
 
-```{automodule} foodscholar.retrieval.kggen
-:members: KGGenRetriever, RetrievalHit, RetrievalTrace
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.retrieval.kggen
+   :members: KGGenRetriever, RetrievalHit, RetrievalTrace
+   :member-order: bysource
 ```
 
 ## Configuration
 
-```{autoclass} foodscholar.config.RetrievalConfig
-:members:
+```{eval-rst}
+.. autoclass:: foodscholar.config.RetrievalConfig
+   :members:
 ```

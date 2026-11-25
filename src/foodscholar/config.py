@@ -10,6 +10,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from foodscholar.chunking.config import ChunkingConfig
 from foodscholar.io.chunk import SourceType
 from foodscholar.io.graph import Facet
 
@@ -925,47 +926,9 @@ class LLMConfig(BaseModel):
 
 
 
-class ChunkerConfig(BaseModel):
-    """Corpus chunking — PDFs / raw text -> the corpus CSVs `fs.ingest` reads.
-
-    Defaults are the values that produced the existing corpus. Changing any of
-    them makes new chunks incomparable with the stored ones, so they are pinned
-    rather than tuned.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    max_tokens: int = 512
-    overlap: int = 64
-    """A *minimum* tail, not a target — the window advances as far as it can
-    while still leaving this many tokens behind. Realized overlap is >= this."""
-    fine_max_tokens: int = 80
-    """Docling `HybridChunker` budget for the fine units the window merges."""
-
-    tokenizer: str = "BAAI/bge-large-en-v1.5"
-    """NOT the same model as `annotate.embedder` (bge-*base*). They share a
-    tokenizer so the counts agree, but the corpus was counted with bge-large
-    and this must stay pinned to it."""
-    use_fast_tokenizer: bool = False
-    """Load-bearing: the corpus was counted with the SLOW tokenizer. The fast
-    and slow bge tokenizers can disagree by a token on some inputs."""
-
-    device: str = "cpu"
-    """Docling accelerator device (`cpu`, `cuda`, `cuda:1`). The notebooks
-    hardcode `cuda:1`; `cpu` is the portable default."""
-    do_ocr: bool = False
-    generate_picture_images: bool = False
-
-    chunk_id_strategy: Literal["uuid4", "content_hash"] = "uuid4"
-    """`uuid4` reproduces the existing corpus bit-for-bit and is the default.
-    `content_hash` (sha1 over source_doc_id + normalized text) makes
-    re-chunking an unchanged document idempotent, so downstream provenance
-    survives a re-run — **recommended for any new corpus**. See the brief §6.1."""
-
-    excluded_pages_manifest: Path | None = None
-    """`filename: X.pdf | removed_pages: [1, 2]` manifest, as produced by
-    `pdf_page_triage.py`. Covers the guides; the textbooks' excluded pages were
-    inline in the notebook and must be exported here to be reproducible."""
+ChunkerConfig = ChunkingConfig
+"""Former name of the ``chunking:`` section, kept for compatibility. The model now
+lives in :mod:`foodscholar.chunking.config` so the chunker loads without this module."""
 
 
 class RelationGroundingConfig(BaseModel):
@@ -1118,7 +1081,7 @@ class FoodScholarConfig(BaseModel):
     layer_c: LayerCConfig = Field(default_factory=LayerCConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig | None = None  # None → facade uses the built-in mock LLM
-    chunking: ChunkerConfig = Field(default_factory=ChunkerConfig)
+    chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     relations: RelationsConfig = Field(default_factory=RelationsConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
 

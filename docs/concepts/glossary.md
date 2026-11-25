@@ -13,6 +13,39 @@ Layer 0
   entities, built by `fs.build_relations()` after `build_entities()`. Independent of
   Layer A/B/C in both directions, and opt-in. See [Layer 0](layer-0-relations.md).
 
+adjacency
+  The `ordinal`, `prev_chunk_id`, `next_chunk_id` and `parent_id` keys a v2 chunk
+  carries, which `ChunkStore.expand()` follows to fetch a chunk's neighbours,
+  section, page or figure. It replaces overlap. See [Chunking](chunking.md#adjacency-instead-of-overlap).
+
+chunk version id
+  A v2 chunk's content hash (source id + section path + normalised text). It
+  changes when the evidence changes, while `chunk_id` persists across re-runs;
+  a changed chunk's new id `supersedes` the old one. See [Chunking](chunking.md#identity).
+
+document IR
+  `DocumentIR`, the intermediate representation every head emits: document
+  metadata plus typed elements in reading order, each with per-page regions.
+  See [Chunking](chunking.md#the-document-ir).
+
+genre
+  The kind of document a head handles — `record`, `long_document` or
+  `leaflet` — independent of domain. A source type maps onto a genre in
+  `chunking.sources`. See [Chunking](chunking.md#genres-heads-and-profiles).
+
+head
+  The part of the v2 chunker that turns one genre of source file into a
+  document IR. See [Chunking](chunking.md#genres-heads-and-profiles).
+
+region
+  Where an element sits on one physical page: page number, bounding box and the
+  box's coordinate space. A multi-page element has one region per page.
+
+source registry
+  `SourceRegistry`, the catalogue of source documents — titles, licences,
+  languages, content page ranges, printed-page offsets, edition pairs — read
+  from the FSKG workbook or any CSV/JSON. See [Chunking](chunking.md#the-source-registry).
+
 chunk id strategy
   How `chunk_documents` assigns `chunk_id`s. `uuid4` (default) reproduces the
   historical corpus but re-assigns ids on every run, so re-chunking orphans

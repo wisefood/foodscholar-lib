@@ -1132,6 +1132,7 @@ class FoodScholar:
         candidates greedily, labels themes (c-TF-IDF + LLM polish when
         `cfg.layer_b.labeling.strategy == "llm"`), picks a per-pass-aware
         primary chunk, and persists:
+
           - `(:Theme)` nodes + `(:Shelf)-[:IN_SHELF...]->(:Theme)` edges
           - `(:Chunk)-[:THEME_OF {primary, weight}]->(:Theme)` edges
           - ES `theme_ids` denorm via `bulk_set_theme_ids` (preserves
@@ -1160,9 +1161,9 @@ class FoodScholar:
         Pairs with `fs.audit()` (CRITICAL invariants) but answers "is the build
         *good* / well-tuned" rather than "is it correct". Reads shelves, themes,
         and attachments; mutates nothing. Returns a `LayerBQualityReport` whose
-        `__str__` is Markdown for notebook viewing — structural stats (shelves,
+        ``__str__`` is Markdown for notebook viewing — structural stats (shelves,
         depth, fanout, support ratios), theme stats (coverage, source mix,
-        duplicate/tiny/leakage counts), and a list of `LayerBWarning`s.
+        duplicate/tiny/leakage counts), and a list of `LayerBWarning` entries.
 
         Warning thresholds come from `cfg.layer_b.audit`. See
         `layer_b/quality.py` for the full metric + warning list.

@@ -6,6 +6,100 @@ For *what's next*, see [BRIEF.md](BRIEF.md) §12. For *what exists today*, run `
 
 ---
 
+## 2026-10-15 — Iteration 13: the record head (journal abstracts) and balanced packing
+
+**Goal:** let the v2 chunker extract a real source class end to end — the 939 journal abstracts in `sources/` — and fix the stored corpus's silent truncation of abstract chunks.
+
+### What landed
+
+**The record head** (`chunking/heads/record.py`, registered for genre `record`). A JSON list or JSONL of records becomes one document per record: DOI as `source_id` (so `source_doc_id` keys on the DOI as in the legacy corpus), title as the context header, the journal's catalogue id as `collection_id`, the per-article licence, and every other record field carried into metadata (`id`, `type`, `pages` renamed so they cannot collide with chunk keys). Field names are options (`RecordHeadOptions`), so another domain's records need no code.
+
+**Structured abstracts.** One paragraph per labelled section, in all three shapes the journals use: `Label: text`, `Label Text` and the glued `LabelText` (including `Recent findings156 studies…`). A record counts as structured only if it starts with a known label and has at least two. Section text is rendered `Label: text`; a test asserts that only separators change. Labels normalise to section types, and a chunk that is exactly one section declares it as its `section_type`, which the CSV reader now honours.
+
+**Balanced packing** (`assembler.balanced_groups`), for every genre. A run of units is cut into the larger of the budget-forced and target-suggested number of groups, as evenly as unit sizes allow. Greedy filling had left tiny tails: on the abstracts, 12 chunks held nothing but a registration line.
+
+**Plumbing.** The registry resolves a file through a catalogued sibling in its directory (the records JSON next to the catalogued manifest). The harness matches gold catalogued per collection through `collection_id`, and reads query sets (`--queries`) whose relevance is given by statements or by whole documents. `chunk run` takes `--registry`.
+
+### Measured on the 939 abstracts (exact bge-base counts)
+
+| What | Result |
+|---|---|
+| Documents / chunks | 937 / 1,036 (2 empty abstracts skipped and logged) |
+| Chunks over 512 embedded tokens | 0 — the stored corpus: 20 % |
+| Abstracts reconstructed exactly from their chunks | 937 / 937 |
+| Structured abstracts detected | 322, with no abstract that starts with a label left unsplit |
+| Abstracts split / smallest part | 98 / 116 tokens |
+
+Header cost, same run: no header splits 63 abstracts, the title 98, title + keywords 150. The retrieval side of that ablation needs a query set, which needs an LLM; none is configured on the dev box.
+
+### Verification
+
+- `pytest tests/unit`: **909 passed, 1 skipped** (the Elasticsearch-dependent CLI test deselected, as before), including 20 new tests (record head, the three label shapes, balanced groups, collection matching, query files, the CLI on a records file).
+- Strict mypy: `chunking/`, `storage/adjacency.py`, `relations/` and `io/relation.py` at zero. `corpus/` keeps the four errors it had on `main`; AGENTS.md said it was at zero, and now says what is true.
+- `ruff check src tests`: only the four findings present on `main`. Strict docs build: zero warnings.
+
+### Notes for next time
+
+- The journal gold workbooks (`FSKG_Journals_*`) are not on disk, so statement recall on abstracts is not measured yet.
+- Generate the abstract query set from held-out evidence with an LLM (commercial or gpt-oss — fix the empty-output gotcha first), then score the three header variants with `chunk eval --queries`.
+
+---
+
+## 2026-10-15 — Iteration 12: `foodscholar.chunking`, a chunker usable on its own
+
+**Goal:** give the library a chunker that keeps section, page and neighbour context, that runs with none of the rest of the library, and that can be scored against hand-extracted gold statements — while keeping the pipeline that produced the stored corpus bit-for-bit.
+
+### What landed
+
+**A self-contained package.** `foodscholar.chunking` holds the configuration, the document IR, the structure-first assembler, the identity scheme, the source registry, the writers and an evaluation harness. Its imports are closed (stdlib, pydantic, pyyaml, `foodscholar.logging`); a subprocess test fails if it ever loads the facade, the stores, the LLM clients, transformers or torch. `foodscholar/__init__.py` became lazy (PEP 562) to make that possible: importing the chunker went from ~6 s, with the whole library, to ~0.3 s. `from foodscholar import FoodScholar` works as before.
+
+**The legacy pipeline moved, unchanged.** `corpus/window.py` and `corpus/chunker.py` now live in `chunking/window.py` and `chunking/legacy.py`; the old paths re-export the same objects. `ChunkerConfig` became `chunking.config.ChunkingConfig`, aliased under the old name, with the legacy fields untouched and the v2 fields opt-in (`profile: v2`).
+
+**The v2 assembler.** Sections come from the full heading stack, not the top heading; paragraphs, lists, tables-with-captions, figures-with-captions and boxes are atomic; units pack within a section up to a target and never past a hard budget that counts the context header, the content and the special tokens with the embedder's tokenizer. Oversized units split at sentences, list items or table rows (header repeated). Small sibling sections merge under their parent with their titles kept. Each chunk carries a page span, one region per page, printed labels when known, and four separate texts (source, header, retrieval, and later generated).
+
+**Adjacency instead of overlap.** v2 chunks carry `ordinal`, `prev_chunk_id`, `next_chunk_id` and `parent_id`; both chunk stores gained `find_by_metadata` and `expand(chunk_id, "window" | "section" | "page" | "figure")`. Overlap is off by default and kept as an ablation.
+
+**Two-level identity.** `chunk_version_id` is a content hash; `chunk_id` persists across runs when evidence is unchanged, and a changed chunk's new id `supersedes` the old one. Runs report reused, new, superseding and retired ids.
+
+**Source registry.** Reads the FSKG catalogue (or a CSV/JSON) with a stdlib xlsx reader, parsing free-text page notes into content ranges and printed-page offsets, splitting bilingual edition pairs by language, and mapping gold-statement ids to sources. All 29 catalogued sources parse.
+
+**Evaluation harness.** Scores any pipeline's chunks (neutral JSONL, corpus CSV, parquet snapshot) against gold statements in three stages — extraction, assembly (single chunk / chunk + neighbour, page, section), retrieval at k and at fixed token budgets — plus hygiene. Support is deterministic content-token containment with an exact-number requirement.
+
+**CLI.** `foodscholar chunk {run,inspect,eval}`, also installed as `foodscholar-chunk`; it never builds the facade. The main CLI now imports the facade only inside commands that need it.
+
+**Docs.** New concepts page (Chunking), two guides (the rewritten Chunking a corpus; Evaluating a chunker) and a reference page. Every API reference page now wraps autodoc in `eval-rst` blocks: under Sphinx 9 + MyST 5 the previous form rendered raw `.. py:class::` text on every reference page. Four docstrings that broke strict rST were fixed.
+
+### Baseline: the stored corpus on the Irish gold set
+
+555 FSKG statements over four Irish guides; one guide (`SRC-IE-004`, 124 statements) is not in the stored corpus, so 431 are scored. Exact bge token counts.
+
+| Metric | Stored corpus (legacy window) |
+|---|---|
+| Supported by one chunk | 65.4 % |
+| Supported by a chunk + its next neighbour | 69.6 % |
+| Gold page inside the chunk's page span | 85.8 % (after the gold correction below; 38.3 % raw) |
+| Gold section matches the chunk's section | 33.0 % |
+| Chunks / median tokens / share under 120 | 407 / 55 / 80.8 % |
+| BM25 statement-as-query recall@5 (leaky smoke test) | 53.3 % |
+
+### A defect found in the gold data
+
+For `SRC-IE-001` (the FSAI guide), 152 of 178 statements located in the catalogued PDF carry a `Page (PDF)` one lower than the page they are on; the other three documents match exactly, and the stored chunks' pages are correct. `chunk eval --gold-page-offset SRC-IE-001=1` corrects it and records the correction in the report. The workbook itself is unchanged.
+
+### Verification
+
+- `pytest tests/unit` (foodscholar env): **889 passed, 1 skipped**, with `test_cli_init_memory_backend_is_noop` deselected (needs a live Elasticsearch, pre-existing). `main` at the start: 811 passed, 2 skipped on the same selection (one skip is `kggen/`-dependent). 77 new tests.
+- `ruff check` clean on every touched module. Four findings remain in untouched files (`layer_b/builder.py`, `tests/unit/test_retrieval_kggen.py`), all present on `main`.
+- `sphinx-build -b html -W docs`: zero warnings; every reference page renders its API objects.
+
+### Notes for next time
+
+- No head is implemented: v2 assembles an existing `DocumentIR` only. `Chunker.extract()` and `chunk run <files>` say which head is missing.
+- The stored corpus's abstract chunks exceed 512 bge tokens 20 % of the time; a v2 abstract run must handle overflow, not inherit it.
+- `fs.embed()` still embeds `Chunk.text`; `Chunk.retrieval_text` (header + text) exists for when the embedder should use it.
+
+---
+
 ## 2026-09-18 — Iteration 11: kggen integration (Layer 0 relations, chunking, GLiNER2)
 
 **Goal:** fold a colleague-authored pipeline (`kggen/graph_code`) into the library rather than letting it live alongside it — closing two real gaps (no relation concept, no chunker) without creating a second entity universe.

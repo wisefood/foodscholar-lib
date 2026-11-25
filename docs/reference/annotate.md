@@ -10,31 +10,36 @@ an option rather than the default, for the reasons on the
 
 ## NER
 
-```{automodule} foodscholar.annotate.gliner_ner
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.annotate.gliner_ner
+   :members:
+   :member-order: bysource
 ```
 
-```{automodule} foodscholar.annotate.gliner2_ner
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.annotate.gliner2_ner
+   :members:
+   :member-order: bysource
 ```
 
 ## Linking
 
-```{automodule} foodscholar.annotate.linker
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.annotate.linker
+   :members:
+   :member-order: bysource
 ```
 
-```{automodule} foodscholar.annotate.nel_index
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.annotate.nel_index
+   :members:
+   :member-order: bysource
 ```
 
 ## Runner
 
-```{automodule} foodscholar.annotate.runner
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.annotate.runner
+   :members:
+   :member-order: bysource
 ```

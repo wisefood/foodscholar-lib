@@ -56,7 +56,7 @@ own:
 
 | stage | what it does | entry point |
 |---|---|---|
-| [Chunking](guides/chunking-a-corpus.md) | PDFs → overlapping, heading-aware passages (Docling) | `fs.chunk_documents()` |
+| [Chunking](concepts/chunking.md) | documents → section-aware chunks with page regions and neighbour links; usable on its own | `foodscholar.chunking.Chunker` / `fs.chunk_documents()` |
 | [Annotation](concepts/annotation.md) | NER (GLiNER / GLiNER2) + dense linking to FoodOn | `fs.annotate()` |
 | [Entities](concepts/annotation.md) | mentions deduped into first-class ontology-anchored entities | `fs.build_entities()` |
 | [Layer 0 — Relations](concepts/layer-0-relations.md) | LLM triple extraction, deduped and ontology-grounded | `fs.build_relations()` |
@@ -87,6 +87,7 @@ concepts/architecture
 concepts/extended-kg-gen
 concepts/worked-example
 concepts/corpus-input
+concepts/chunking
 concepts/annotation
 concepts/ontology
 concepts/layer-0-relations
@@ -102,6 +103,7 @@ concepts/glossary
 :maxdepth: 2
 
 guides/chunking-a-corpus
+guides/evaluating-a-chunker
 guides/building-the-graph
 guides/exploring-the-graph
 guides/visualization

@@ -7,24 +7,28 @@
 
 ## GraphView
 
-```{autoclass} foodscholar.graph_view.GraphView
-:members:
-:member-order: bysource
+```{eval-rst}
+.. autoclass:: foodscholar.graph_view.GraphView
+   :members:
+   :member-order: bysource
 ```
 
 ## Handles
 
-```{autoclass} foodscholar.graph_view.ShelfHandle
-:members:
-:member-order: bysource
+```{eval-rst}
+.. autoclass:: foodscholar.graph_view.ShelfHandle
+   :members:
+   :member-order: bysource
 ```
 
-```{autoclass} foodscholar.graph_view.ThemeHandle
-:members:
-:member-order: bysource
+```{eval-rst}
+.. autoclass:: foodscholar.graph_view.ThemeHandle
+   :members:
+   :member-order: bysource
 ```
 
-```{autoclass} foodscholar.graph_view.CardHandle
-:members:
-:member-order: bysource
+```{eval-rst}
+.. autoclass:: foodscholar.graph_view.CardHandle
+   :members:
+   :member-order: bysource
 ```

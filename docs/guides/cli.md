@@ -7,7 +7,8 @@ a thin wrapper around one phase. Every command takes `--config` (the YAML from
 ```bash
 foodscholar info          --config config.yaml   # versions + resolved backends
 foodscholar init          --config config.yaml   # provision the stores
-foodscholar chunk-corpus  --config config.yaml   # PDFs -> corpus CSVs (see below)
+foodscholar chunk-corpus  --config config.yaml   # PDFs -> corpus CSVs, legacy pipeline (see below)
+foodscholar chunk run|inspect|eval               # the v2 chunker; no config or services needed
 foodscholar annotate      --config config.yaml   # NER + linking + embeddings
 foodscholar build-relations --config config.yaml # Layer 0 typed relations
 foodscholar build-layer-a --config config.yaml   # FoodOn-projected shelves
@@ -25,6 +26,18 @@ foodscholar version
 `query` retrieves; it does not answer. It prints the ranked passages as JSON, each with
 its three branch scores and the retrieval trace, and takes `--top-k/-k`. Formulating an
 answer is the calling application's job — see [](../concepts/retrieval.md).
+
+The `chunk` group is the [v2 chunker](chunking-a-corpus.md#the-v2-chunker-on-its-own).
+It never builds the facade, takes an optional `--config` holding only a
+`chunking:` section, and is also installed as `foodscholar-chunk`:
+
+```bash
+foodscholar chunk run --ir data/ir --out data/chunks/v2 [--previous old/chunks.jsonl]
+foodscholar chunk inspect data/chunks/v2/chunks.jsonl
+foodscholar chunk eval --chunks data/chunks/v2/chunks.jsonl --gold gold.xlsx --registry catalogue.xlsx
+```
+
+See [](evaluating-a-chunker.md) for `eval`.
 
 Three commands are **not** part of `build-all`:
 

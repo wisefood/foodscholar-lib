@@ -28,7 +28,7 @@ The core install is light. Heavier capabilities are opt-in via
 | `annotate` | torch, transformers, gliner, gliner2, hnswlib, … | live NER + the dense HNSW linker (also needed by `build_relations`) |
 | `llm` | anthropic, openai, groq, google-genai, ollama | Layer C cards, Layer 0 extraction, theme labels |
 | `relations` | semhash, inflect | Layer 0 dedup (semantic + plural collapsing) |
-| `chunking` | docling, docling-core, nltk | `fs.chunk_documents` / `chunk-corpus` — PDFs → corpus CSVs |
+| `chunking` | docling, docling-core, transformers, nltk | `fs.chunk_documents` / `chunk-corpus` (PDFs → corpus CSVs), and exact token counts for the v2 chunker |
 | `elastic` | elasticsearch | the Elasticsearch chunk / entity / relation stores |
 | `neo4j` | neo4j | the Neo4j graph store |
 | `clustering` | leidenalg, python-igraph, scikit-learn, … | Layer B community detection |
@@ -42,6 +42,10 @@ Combine as needed, e.g. a full local stack:
 pip install -e '.[dev,ontology,annotate,llm,elastic,neo4j,clustering,viz]'
 # add relations,chunking for Layer 0 and for producing a corpus from PDFs
 ```
+
+The v2 chunker (`foodscholar.chunking`) needs only the core install to
+assemble, register and evaluate; it uses `transformers` from `chunking` to count
+tokens exactly, and imports nothing else from the library.
 
 `chunking` is the heavy one — Docling pulls layout models. Every extra is lazily
 imported, so a missing one fails with an `ImportError` naming the extra to install,

@@ -240,3 +240,14 @@ kggen/graph_code/data/
 # licence is not reproduced here). Kept locally for provenance; not tracked and
 # not redistributed. See docs/concepts/kggen-provenance.md.
 kggen/
+# The same pipeline's chunking notebooks, which chunking/legacy.py and
+# chunking/window.py were ported from. Local provenance only, like kggen/.
+/chunking/
+
+# Planning documents stay local — never commit briefs, plans or research reports.
+/chunker_v2_*.md
+/*_brief.md
+/*_plan.md
+/*_research_report.md
+# Source documents (582 MB, licensed PDFs) are not repository content.
+/sources/

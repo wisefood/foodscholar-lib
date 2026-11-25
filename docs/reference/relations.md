@@ -13,45 +13,52 @@ kggen and what changed; the summary is on the
 
 ## Orchestration
 
-```{automodule} foodscholar.relations.builder
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.builder
+   :members:
+   :member-order: bysource
 ```
 
 ## Extraction
 
-```{automodule} foodscholar.relations.extract
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.extract
+   :members:
+   :member-order: bysource
 ```
 
-```{automodule} foodscholar.relations.extracted
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.extracted
+   :members:
+   :member-order: bysource
 ```
 
 ## Deduplication
 
-```{automodule} foodscholar.relations.dedupe
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.dedupe
+   :members:
+   :member-order: bysource
 ```
 
 ## Grounding
 
-```{automodule} foodscholar.relations.ground
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.ground
+   :members:
+   :member-order: bysource
 ```
 
 ## Aggregation and persistence
 
-```{automodule} foodscholar.relations.aggregate
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.aggregate
+   :members:
+   :member-order: bysource
 ```
 
-```{automodule} foodscholar.relations.persist
-:members:
-:member-order: bysource
+```{eval-rst}
+.. automodule:: foodscholar.relations.persist
+   :members:
+   :member-order: bysource
 ```

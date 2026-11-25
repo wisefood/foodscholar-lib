@@ -8,10 +8,15 @@ exercise the exact same code path. Phase commands whose facade methods raise
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
-from foodscholar import FoodScholar, __version__
+from foodscholar import __version__
+from foodscholar.chunking.cli import app as chunk_app
+
+if TYPE_CHECKING:
+    from foodscholar import FoodScholar
 
 app = typer.Typer(
     name="foodscholar",
@@ -19,6 +24,8 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+app.add_typer(chunk_app, name="chunk")
 
 ConfigOption = typer.Option(
     ...,
@@ -32,6 +39,9 @@ ConfigOption = typer.Option(
 
 
 def _build(config: Path) -> FoodScholar:
+    # Imported here so `foodscholar chunk …` never loads the facade or the stores.
+    from foodscholar import FoodScholar
+
     try:
         return FoodScholar.from_config(config)
     except NotImplementedError as e:

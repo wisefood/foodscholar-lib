@@ -44,6 +44,11 @@ ab_001,"Mediterranean diet reduces cardiovascular risk...",abstract,"{'DOI': '10
 tb_014,"Saturated fats raise LDL cholesterol...",textbook,"{'file': 'nutrition_textbook.pdf', 'page': 88}"
 ```
 
+Chunks produced by the [v2 chunker](chunking.md#provenance) add their own keys —
+`source_id`, `section_path`, page span and regions, adjacency and identity — on
+top of the per-source ones; `source_id`, when present, becomes the chunk's
+`source_doc_id`.
+
 `chunk_metadata` is parsed with `ast.literal_eval` and preserved verbatim as
 `Chunk.source_metadata`. A few core fields are **derived** from it:
 

@@ -72,6 +72,8 @@ fs = FoodScholar.from_config("config.yaml")
 
 # Optional: produce the corpus from source PDFs (needs the [chunking] extra).
 fs.chunk_documents("data/pdfs/guides", out_dir="data/corpus", source_type="guide")
+# The v2 chunker (foodscholar.chunking) also runs on its own, with no stores or
+# services: section-aware chunks, page regions, neighbour links, versioned ids.
 
 fs.init(); fs.ingest("data/corpus", nel_dir="data/ner"); fs.embed()
 fs.build_entities()
