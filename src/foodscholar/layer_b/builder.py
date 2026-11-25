@@ -407,7 +407,7 @@ def build_layer_b(
     # 3. Per-shelf Pass 2 (relatedness) — LEIDEN MODE ONLY.
     #    Pass 2 (entity co-occurrence) and Pass 1 (embedding similarity) are
     #    only complementary when both are graph/entity-flavoured, as in the
-    #    leiden×leiden design. BERTopic clusters embeddings on an axis
+    #    leiden-with-leiden design. BERTopic clusters embeddings on an axis
     #    orthogonal to FoodOn entities, so its Pass-1 topics and Pass-2
     #    relatedness communities never merge. So in bertopic mode we skip Pass 2
     #    AND the merge entirely (step 4): BERTopic is strictly single-pass —

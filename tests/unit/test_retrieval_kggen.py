@@ -185,7 +185,7 @@ def test_graph_connected_only_drops_chunks_with_no_triples(stores, embedder):
 
 
 def test_weights_must_sum_to_one():
-    with pytest.raises(ValueError, match="sum to 1.0"):
+    with pytest.raises(ValueError, match=r"sum to 1\.0"):
         RetrievalConfig(w_text=0.5, w_triplet=0.5, w_ppr=0.5)
 
 
@@ -286,8 +286,7 @@ def test_embed_cache_can_be_disabled(stores):
     assert len(embedder.encoded) == first * 2
 
 
-def test_embed_cache_evicts_at_capacity(stores, embedder):
-    chunk_store, relation_store = stores
+def test_embed_cache_evicts_at_capacity(embedder):
     from foodscholar.retrieval.kggen import _EmbeddingCache
 
     cache = _EmbeddingCache(embedder, capacity=2)
